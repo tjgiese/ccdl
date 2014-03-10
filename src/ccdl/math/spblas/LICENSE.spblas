@@ -1,0 +1,6 @@
+The following files are provided using the license described below:
+dcscmm_c.c dcsrmm_c.c dcscvml.c dcsrvml.c dutil.c dcscmml.c dcsrmml.c dcscmml.h spblas.h dcsrvml.h dcsrmml.h dcscvml.h
+
+
+
+Pursuant to Title 17 Section 105 of the United States Code, this software is not subject to copyright protection and is in the public domain. NIST assumes no responsibility whatsoever for use by other parties of its source code or open source server, and makes no guarantees, expressed or implied, about its quality, reliability, or any other characteristic.

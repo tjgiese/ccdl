@@ -1,0 +1,3 @@
+The python library/libraries in this directory is intended to be gpl
+and it is thus safe to include reference to both ccxl and ccdl-proper
+and any other gpl code
