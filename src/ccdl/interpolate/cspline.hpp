@@ -577,161 +577,281 @@ namespace test
 
 
 
-
-
-template <int XPOW>
-double cspline_integral_bak
-( double const a, double const b,
-  int const n, double const * X, double const * spldata )
+/*
+template <int L>
+double cspline_lmpotential
+( int const n, double const * X, 
+  std::vector<double> const * spldata,
+  std::vector<double> * pots )
 {
-  double TotInteg = 0.0;
+  for ( int m=0; m<2*L+1; ++m )
+    pots[m].resize(2*n);
+
   int const nm1 = n-1;
 
   double ai,bi;
-  double an1,an2,an3,an4;
-  double bn1,bn2,bn3,bn4;
 
-  int jlo = nm1;
-  for ( int j=0; j<nm1; ++j )
-    {
-      if ( X[j+1] >= a )
-	{
-	  jlo = j;
-	  break;
-	};
-    };
+  bi = X[0];
 
-  if ( X[jlo] < a ) bi = a;
-
-  double an[4];
-  double bn[4];
+  double am[4],ap[4];
+  double bm[4] = {0.,0.,0.,0.};
+  double bp[4] = {0.,0.,0.,0.};
   double xa[3],xb[3];
 
-  xb[0] = X[jlo];
-  xb[1] = xb[0]*X[jlo];
-  xb[2] = xb[1]*X[jlo];
-
-  bn[0] = std::pow(bi,XPOW+1);
-  bn[1] = bn[0]*bi;
-  bn[2] = bn[1]*bi;
-  bn[3] = bn[2]*bi;
-  bn[0] /= (XPOW+1);
-  bn[1] /= (XPOW+2);
-  bn[2] /= (XPOW+3);
-  bn[3] /= (XPOW+4);
+  xb[0] = bi;
+  xb[1] = xb[0]*bi;
+  xb[2] = xb[1]*bi;
 
   if ( bi > 0. )
     {
-      if ( XPOW == -1 )
+
+      bm[0] = std::pow(bi,(1-L)+1);
+      bm[1] = bm[0]*bi;
+      bm[2] = bm[1]*bi;
+      bm[3] = bm[2]*bi;
+
+      bp[0] = std::pow(bi,(2+L)+1);
+      bp[1] = bp[0]*bi;
+      bp[2] = bp[1]*bi;
+      bp[3] = bp[2]*bi;
+
+      if ( (1-L) == -1 )
 	{
-	  bn[0] = std::log( bi );
+	  bm[0] = std::log( bi );
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
 	}
-      else if ( XPOW == -2 )
+      else if ( (1-L) == -2 )
 	{
-	  bn[1] = std::log( bi );
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] = std::log( bi );
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
 	}
-      else if ( XPOW == -3 )
+      else if ( (1-L) == -3 )
 	{
-	  bn[2] = std::log( bi );
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] = std::log( bi );
+	  bm[3] /= ((1-L)+4.);
 	}
-      else if ( XPOW == -4 )
+      else if ( (1-L) == -4 )
 	{
-	  bn[3] = std::log( bi );
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] = std::log( bi );
+	}
+      else
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
 	};
+
+
+      if ( (2+L) == -1 )
+	{
+	  bp[0] = std::log( bi );
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] /= ((2+L)+4.);
+	}
+      else if ( (2+L) == -2 )
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] = std::log( bi );
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] /= ((2+L)+4.);
+	}
+      else if ( (2+L) == -3 )
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] = std::log( bi );
+	  bp[3] /= ((2+L)+4.);
+	}
+      else if ( (2+L) == -4 )
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] = std::log( bi );
+	}
+      else
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] /= ((2+L)+4.);
+	};
+
     };
       
   for ( int j=jlo; j<nm1; ++j )
     {
-      if ( X[j] > b ) break;
-
-      double del = X[j+1] - X[j];
+      ai = bi;
+      bi = X[j+1]; 
+      double del = bi-ai;
       double del2 = del*del;
-      double del3 = del2*del;
 
       xa[0] = xb[0];
       xa[1] = xb[1];
       xa[2] = xb[2];
 
-      xb[0] = X[j+1];
-      xb[1] = xb[0] * X[j+1];
-      xb[2] = xb[1] * X[j+1];
+      xb[0] = bi;
+      xb[1] = xb[0] * bi;
+      xb[2] = xb[1] * bi;
 
-      ai = bi;
-      an[0] = bn[0];
-      an[1] = bn[1];
-      an[2] = bn[2];
-      an[3] = bn[3];
+      am[0] = bm[0];
+      am[1] = bm[1];
+      am[2] = bm[2];
+      am[3] = bm[3];
+      ap[0] = bp[0];
+      ap[1] = bp[1];
+      ap[2] = bp[2];
+      ap[3] = bp[3];
 
-      bi = X[j+1]; 
-      if ( X[j+1] > b ) bi = b;
+      bm[0] = std::pow(bi,(1-L)+1);
+      bm[1] = bm[0]*bi;
+      bm[2] = bm[1]*bi;
+      bm[3] = bm[2]*bi;
 
-      bn[0] = std::pow(bi,XPOW+1);
-      bn[1] = bn[0]*bi;
-      bn[2] = bn[1]*bi;
-      bn[3] = bn[2]*bi;
-      bn[0] /= (XPOW+1);
-      bn[1] /= (XPOW+2);
-      bn[2] /= (XPOW+3);
-      bn[3] /= (XPOW+4);
-      
-      if ( XPOW == -1 )
+      bp[0] = std::pow(bi,(2+L)+1);
+      bp[1] = bp[0]*bi;
+      bp[2] = bp[1]*bi;
+      bp[3] = bp[2]*bi;
+
+
+      if ( (1-L) == -1 )
 	{
-	  bn[0] = std::log( bi );
+	  bm[0] = std::log( bi );
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
 	}
-      else if ( XPOW == -2 )
+      else if ( (1-L) == -2 )
 	{
-	  bn[1] = std::log( bi );
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] = std::log( bi );
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
 	}
-      else if ( XPOW == -3 )
+      else if ( (1-L) == -3 )
 	{
-	  bn[2] = std::log( bi );
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] = std::log( bi );
+	  bm[3] /= ((1-L)+4.);
 	}
-      else if ( XPOW == -4 )
+      else if ( (1-L) == -4 )
 	{
-	  bn[3] = std::log( bi );
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] = std::log( bi );
+	}
+      else
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
 	};
 
-      // double IntA = 
-      // 	(X[j+1] * bn[0] - bn[1])  -
-      // 	(X[j+1] * an[0] - an[1]);
       
-      // double IntB = 
-      // 	(X[j] * an[0] - an[1])  -
-      // 	(X[j] * bn[0] - bn[1]);
+      if ( (2+L) == -1 )
+	{
+	  bp[0] = std::log( bi );
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] /= ((2+L)+4.);
+	}
+      else if ( (2+L) == -2 )
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] = std::log( bi );
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] /= ((2+L)+4.);
+	}
+      else if ( (2+L) == -3 )
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] = std::log( bi );
+	  bp[3] /= ((2+L)+4.);
+	}
+      else if ( (2+L) == -4 )
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] = std::log( bi );
+	}
+      else
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] /= ((2+L)+4.);
+	};
 
-      double IntA = an[1]-bn[1]+X[j+1]*(bn[0]-an[0]);
-      double IntB = bn[1]-an[1]+X[j  ]*(an[0]-bn[0]);
+
+      double IntAm = am[1]-bm[1]+bi*(bm[0]-am[0]);
+      double IntBm = bm[1]-am[1]+ai*(am[0]-bm[0]);
       
-      double IntA3 = 
-	( ( xb[2] * bn[0] - 3. * xb[1] * bn[1]
-	  + 3. * xb[0]  * bn[2] - bn[3] )   -
-	( xb[2] * an[0] - 3. * xb[1] * an[1]
-	  + 3. * xb[0] * an[2] - an[3] ) );
+      double IntA3m = 
+	( ( xb[2] * bm[0] - 3. * xb[1] * bm[1]
+	  + 3. * xb[0]  * bm[2] - bm[3] )   -
+	( xb[2] * am[0] - 3. * xb[1] * am[1]
+	  + 3. * xb[0] * am[2] - am[3] ) );
       
-      double IntB3 = 
-	( ( xa[2] * an[0] - 3. * xa[1] * an[1]
-	  + 3. * xa[0]  * an[2] - an[3] )  -
-	( xa[2] * bn[0] - 3. * xa[1] * bn[1]
-	  + 3. * xa[0] * bn[2] - bn[3] ) );
+      double IntB3m = 
+	( ( xa[2] * am[0] - 3. * xa[1] * am[1]
+	  + 3. * xa[0]  * am[2] - am[3] )  -
+	( xa[2] * bm[0] - 3. * xa[1] * bm[1]
+	  + 3. * xa[0] * bm[2] - bm[3] ) );
 
-      double IntC = (IntA3 - IntA * del2 ) / 6.0;
-      double IntD = (IntB3 - IntB * del2 ) / 6.0;
+      double IntCm = (IntA3m - IntAm * del2 ) / 6.0;
+      double IntDm = (IntB3m - IntBm * del2 ) / 6.0;
 
-      int tj = 2*j;
+
+      double IntAp = ap[1]-bp[1]+bi*(bp[0]-ap[0]);
+      double IntBp = bp[1]-ap[1]+ai*(ap[0]-bp[0]);
+      
+      double IntA3p = 
+	( ( xb[2] * bp[0] - 3. * xb[1] * bp[1]
+	  + 3. * xb[0]  * bp[2] - bp[3] )   -
+	( xb[2] * ap[0] - 3. * xb[1] * ap[1]
+	  + 3. * xb[0] * ap[2] - ap[3] ) );
+      
+      double IntB3p = 
+	( ( xa[2] * ap[0] - 3. * xa[1] * ap[1]
+	  + 3. * xa[0]  * ap[2] - ap[3] )  -
+	( xa[2] * bp[0] - 3. * xa[1] * bp[1]
+	  + 3. * xa[0] * bp[2] - bp[3] ) );
+
+      double IntCp = (IntA3p - IntAp * del2 ) / 6.0;
+      double IntDp = (IntB3p - IntBp * del2 ) / 6.0;
+
       double d[4];
-      d[0] = spldata[  tj];
-      d[1] = spldata[++tj];
-      d[2] = spldata[++tj];
-      d[3] = spldata[++tj];
 
-      double const IntervalInteg = 
-	(IntA * d[0] + IntB * d[2] + IntC * d[1] + IntD * d[3])/del;
-      
-      TotInteg += IntervalInteg;
+      for ( int m=0; m<2*L+1; ++m )
+	{
+	  int tj = 2*j;
+	  d[0] = spldata[m][  tj];
+	  d[1] = spldata[m][++tj];
+	  d[2] = spldata[m][++tj];
+	  d[3] = spldata[m][++tj];
+
+	  pots[m][j] = (IntA * d[0] + IntB * d[2] + IntC * d[1] + IntD * d[3])/del;
     };
 
-  return TotInteg;
+
 }
+*/
 
 
 #endif
