@@ -2,128 +2,100 @@
 #define _cspline_hpp_
 
 #include <cmath>
-#include <iostream>
-#include <iomanip>
-#include <cstdlib>
+#include <algorithm>
+#include <vector>
 
-/*
-void cspline_tridag
-( int const n, 
-  double const * a, double const * b, 
-  double const * c, double const * r, 
-  double * u, double * work )
+
+namespace ccdl
 {
-  // work[n]
-  double bet = b[0];
-  u[0]=r[0]/bet;
-  work[0] = 0.;
-  for ( int j=1; j<n; ++j )
-    {
-      work[j]=c[j-1]/bet;
-      bet = b[j]-a[j-1]*work[j];
-      u[j]=(r[j]-a[j-1]*u[j-1])/bet;
-    };
-  for ( int j=n; j-->0; )
-    u[j]=u[j]-work[j+1]*u[j+1];
-}
-*/
+
+  void cspline_transform
+  ( double const * x, 
+    std::vector<double> & y, // y values on input; spldata on output
+    double const lder, 
+    double const rder,
+    double * work_5n );
+
+  int cspline_khi
+  ( double const x, 
+    int const n, 
+    double const * X );
+
+  double cspline_value
+  ( double const x,
+    int const n, 
+    double const * X, 
+    double const * spldata );
+
+  double cspline_value_and_deriv
+  ( double const x,
+    double & dydx,
+    int const n, 
+    double const * X, 
+    double const * spldata );
+
+  double cspline_value_and_secondderiv
+  ( double const x,
+    double & dydx,
+    double & d2ydx2,
+    int const n, 
+    double const * X, 
+    double const * spldata );
+
+  double cspline_value_given_khi
+  ( double const x,
+    int k, 
+    double const * X, 
+    double const * spldata );
+
+  double cspline_value_and_deriv_given_khi
+  ( double const x,
+    double & dydx,
+    int k, 
+    double const * X, 
+    double const * spldata );
+
+  double cspline_value_and_secondderiv_given_khi
+  ( double const x,
+    double & dydx,
+    double & d2ydx2,
+    int k, 
+    double const * X, 
+    double const * spldata );
+
+  template <int XPOW>
+  double cspline_integral
+  ( double const a, 
+    double const b,
+    int const n, 
+    double const * X, 
+    double const * spldata );
+
+  template <int L>
+  void cspline_lmpotential
+  ( int const n, 
+    double const * X, 
+    std::vector<double> const * spldata,
+    std::vector<double> * pots );
 
 
-void cspline_tridag
-( int const n, 
-  double const * a, double const * b, 
-  double const * c, double const * r, 
-  double * spldata, double * work )
-{
-  // work[n]
-  double bet = b[0];
-  spldata[1]=r[0]/bet;
-  work[0] = 0.;
-  for ( int j=1; j<n; ++j )
-    {
-      work[j]=c[j-1]/bet;
-      bet = b[j]-a[j-1]*work[j];
-      spldata[1+j*2]=(r[j]-a[j-1]*spldata[1+(j-1)*2])/bet;
-    };
-  for ( int j=n; j-->0; )
-    spldata[1+j*2]-=work[j+1]*spldata[1+(j+1)*2];
-}
-
-
-void cspline_transform
-( double const * x, 
-  std::vector<double> & y, // y values on input; spldata on output
-  double const lder, double const rder,
-  double * work_5n )
-{
-  int const n = y.size();
-  int const nm1 = n-1;
-  // work_5n[5*n]
-  double * c = work_5n;
-  double * r = c+n;
-  double * a = r+n;
-  double * b = a+n;
-  double * g = b+n;
-
-
-  c[0] = x[1]-x[0];
-  double prev = 6. * ( y[1]-y[0] ) / c[0];
-  r[0] = prev;
-  for ( int i=1; i<nm1; ++i )
-    {
-      c[i] = x[i+1]-x[i];
-      double cur = 6. * ( y[i+1]-y[i] ) / c[i];
-      r[i] = cur-prev;
-      prev = cur;
-      a[i] = c[i-1];
-      b[i] = 2.*( c[i]+a[i] );
-    };
-  b[0]   = 1.;
-  b[nm1] = 1.;
-  r[0]   = (3.0/(x[1]-x[0])) * ( (y[1]-y[0])/(x[1]-x[0]) - lder );
-  c[0]   = 0.5;
-  r[nm1] = (-3.0/(x[nm1]-x[nm1-1]))
-    *( (y[nm1]-y[nm1-1])/(x[nm1]-x[nm1-1]) - rder );
-  a[nm1] = 0.5;
-
-  //for ( int i=0; i<n; ++i )
-  //  spldata[i*2] = y[i];
-  y.resize( 2*n );
-  for ( int i=n; i-->1; )
-    y[2*i] = y[i];
-
-  cspline_tridag(n,a+1,b,c,r,y.data(),g);
-
-  // for ( int i=0; i<n; ++i )
-  //   {
-  //     std::cout << std::scientific 
-  // 		<< std::setw(14) << std::setprecision(5) << x[i]
-  // 		<< std::scientific 
-  // 		<< std::setw(14) << std::setprecision(5) << y[i]
-  // 		<< std::scientific 
-  // 		<< std::setw(14) << std::setprecision(5) << y2[i]
-  // 		<< std::scientific 
-  // 		<< std::setw(14) << std::setprecision(5) << a[i]
-  // 		<< std::scientific 
-  // 		<< std::setw(14) << std::setprecision(5) << b[i]
-  // 		<< std::scientific 
-  // 		<< std::setw(14) << std::setprecision(5) << c[i]
-  // 		<< std::scientific 
-  // 		<< std::setw(14) << std::setprecision(5) << r[i]
-  // 		<< "\n";
-  //   };
-  // exit(0);
 }
 
-inline int cspline_khi( double const x, int const n, double const * X )
+
+
+
+
+inline int ccdl::cspline_khi( double const x, int const n, double const * X )
 {
   return std::distance( X, std::lower_bound( X+1, X+n-1, x ) );
 }
 
 
-inline double cspline_value_given_khi
+inline double ccdl::cspline_value_given_khi
 ( double const x,
-  int k, double const * X, double const * spldata )
+  int k, 
+  double const * X, 
+  double const * spldata )
 {
   double const x1 = X[k];
   double const x0 = X[--k];
@@ -140,59 +112,35 @@ inline double cspline_value_given_khi
 }
 
 
-inline double cspline_value
+inline double ccdl::cspline_value
 ( double const x,
-  int const n, double const * X, double const * spldata )
+  int const n, 
+  double const * X, 
+  double const * spldata )
 {
-  return cspline_value_given_khi
+  return ccdl::cspline_value_given_khi
     (x,
-     cspline_khi(x,n,X),
+     ccdl::cspline_khi(x,n,X),
      X,
      spldata);
 }
 
 
-double cspline_value_and_deriv_given_khi
+
+
+
+
+inline double ccdl::cspline_value_and_deriv
 ( double const x,
   double & dydx,
-  int k, double const * X, double const * spldata )
+  int const n, 
+  double const * X, 
+  double const * spldata )
 {
-  double const x1 = X[k];
-  double const x0 = X[--k];
-  k *= 2;
-  double const h = x1-x0;
-  double const h16 = h/6.;
-  double const h26 = h*h16;
-  double const ooh = 1./h;
-  double const a = (x1-x)*ooh;
-  double const b = 1.-a; //(x-x0)*ooh;
-  double const c = (a*a*a-a)*h26;
-  double const d = (b*b*b-b)*h26;
-  //double const dadx = -ooh;
-  //double const dbdx =  ooh;
-  double const dcdx = (1.-3.*a*a)*h16;
-  double const dddx = (3.*b*b-1.)*h16;
-
-  double y0 = spldata[  k];
-  double d0 = spldata[++k];
-  double y1 = spldata[++k];
-  double d1 = spldata[++k];
-  //dydx = dadx*y0+dbdx*y1+dcdx*d0+dddx*d1;
-  dydx = ooh *( y1-y0 ) +dcdx*d0+dddx*d1;
-  return    a*y0+   b*y1+   c*d0+   d*d1;
-}
-
-
-
-inline double cspline_value_and_deriv
-( double const x,
-  double & dydx,
-  int const n, double const * X, double const * spldata )
-{
-  return cspline_value_and_deriv_given_khi
+  return ccdl::cspline_value_and_deriv_given_khi
     (x,
      dydx,
-     cspline_khi(x,n,X),
+     ccdl::cspline_khi(x,n,X),
      X,
      spldata);
 }
@@ -200,60 +148,31 @@ inline double cspline_value_and_deriv
 
 
 
-double cspline_value_and_secondderiv_given_khi
-( double const x,
-  double & dydx,
-  double & d2ydx2,
-  int k, double const * X, double const * spldata )
-{
-  double const x1 = X[k];
-  double const x0 = X[--k];
-  k *= 2;
-  double const h = x1-x0;
-  double const h16 = h/6.;
-  double const h26 = h*h16;
-  double const ooh = 1./h;
-  double const a = (x1-x)*ooh;
-  double const b = 1.-a; //(x-x0)*ooh;
-  double const c = (a*a*a-a)*h26;
-  double const d = (b*b*b-b)*h26;
-  //double const dadx = -ooh;
-  //double const dbdx =  ooh;
-  double const dcdx = (1.-3.*a*a)*h16;
-  double const dddx = (3.*b*b-1.)*h16;
 
-  double y0 = spldata[  k];
-  double d0 = spldata[++k];
-  double y1 = spldata[++k];
-  double d1 = spldata[++k];
-  //dydx = dadx*y0+dbdx*y1+dcdx*d0+dddx*d1;
-  dydx = ooh *( y1-y0 ) +dcdx*d0+dddx*d1;
-  d2ydx2 = a * d0 + b * d1;
-  return    a*y0+   b*y1+   c*d0+   d*d1;
-}
-
-
-inline double cspline_value_and_secondderiv
+inline double ccdl::cspline_value_and_secondderiv
 ( double const x,
   double & dydx,
   double & d2ydx2,
   int const n, double const * X, double const * spldata )
 {
-  return cspline_value_and_secondderiv_given_khi
+  return ccdl::cspline_value_and_secondderiv_given_khi
     (x,
      dydx,
      d2ydx2,
-     cspline_khi(x,n,X),
+     ccdl::cspline_khi(x,n,X),
      X,
      spldata);
 }
 
 
+
 template <int XPOW>
-double cspline_integral
+double ccdl::cspline_integral
 ( double const a, double const b,
   int const n, double const * X, double const * spldata )
 {
+  if ( std::abs(a-b) < 1.e-10 ) return 0.;
+
   double TotInteg = 0.0;
   int const nm1 = n-1;
 
@@ -450,6 +369,343 @@ double cspline_integral
 
 
 
+
+template <int L>
+void ccdl::cspline_lmpotential
+( int const n, double const * X, 
+  std::vector<double> const * spldata,
+  std::vector<double> * pots )
+{
+  for ( int m=0; m<2*L+1; ++m )
+    pots[m].resize(2*n);
+
+  int const nm1 = n-1;
+
+  double ai,bi;
+
+  bi = X[0];
+
+  double am[4],ap[4],apowm;
+  double bm[4] = {0.,0.,0.,0.};
+  double bp[4] = {0.,0.,0.,0.};
+  double xa[3],xb[3];
+
+  xb[0] = bi;
+  xb[1] = xb[0]*bi;
+  xb[2] = xb[1]*bi;
+
+
+  apowm = 0.;
+
+  if ( bi > 0. )
+    {
+      apowm = std::pow(bi,-(L+1));
+
+      bm[0] = std::pow(bi,1-L);
+      bm[1] = bm[0]*bi;
+      bm[2] = bm[1]*bi;
+      bm[3] = bm[2]*bi;
+
+      bp[0] = std::pow(bi,2+L);
+      bp[1] = bp[0]*bi;
+      bp[2] = bp[1]*bi;
+      bp[3] = bp[2]*bi;
+
+      if ( (1-L) == -1 )
+	{
+	  bm[0] = std::log( bi );
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
+	}
+      else if ( (1-L) == -2 )
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] = std::log( bi );
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
+	}
+      else if ( (1-L) == -3 )
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] = std::log( bi );
+	  bm[3] /= ((1-L)+4.);
+	}
+      else if ( (1-L) == -4 )
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] = std::log( bi );
+	}
+      else
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
+	};
+
+
+      if ( (2+L) == -1 )
+	{
+	  bp[0] = std::log( bi );
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] /= ((2+L)+4.);
+	}
+      else if ( (2+L) == -2 )
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] = std::log( bi );
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] /= ((2+L)+4.);
+	}
+      else if ( (2+L) == -3 )
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] = std::log( bi );
+	  bp[3] /= ((2+L)+4.);
+	}
+      else if ( (2+L) == -4 )
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] = std::log( bi );
+	}
+      else
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] /= ((2+L)+4.);
+	};
+
+    };
+      
+  for ( int j=0; j<nm1; ++j )
+    {
+      ai = bi;
+      bi = X[j+1]; 
+      double del = bi-ai;
+      double del2 = del*del;
+
+      xa[0] = xb[0];
+      xa[1] = xb[1];
+      xa[2] = xb[2];
+
+      xb[0] = bi;
+      xb[1] = xb[0] * bi;
+      xb[2] = xb[1] * bi;
+
+      am[0] = bm[0];
+      am[1] = bm[1];
+      am[2] = bm[2];
+      am[3] = bm[3];
+      ap[0] = bp[0];
+      ap[1] = bp[1];
+      ap[2] = bp[2];
+      ap[3] = bp[3];
+
+      bm[0] = std::pow(bi,(1-L)+1);
+      bm[1] = bm[0]*bi;
+      bm[2] = bm[1]*bi;
+      bm[3] = bm[2]*bi;
+
+      bp[0] = std::pow(bi,(2+L)+1);
+      bp[1] = bp[0]*bi;
+      bp[2] = bp[1]*bi;
+      bp[3] = bp[2]*bi;
+
+
+      if ( (1-L) == -1 )
+	{
+	  bm[0] = std::log( bi );
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
+	}
+      else if ( (1-L) == -2 )
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] = std::log( bi );
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
+	}
+      else if ( (1-L) == -3 )
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] = std::log( bi );
+	  bm[3] /= ((1-L)+4.);
+	}
+      else if ( (1-L) == -4 )
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] = std::log( bi );
+	}
+      else
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
+	};
+
+      
+      if ( (2+L) == -1 )
+	{
+	  bp[0] = std::log( bi );
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] /= ((2+L)+4.);
+	}
+      else if ( (2+L) == -2 )
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] = std::log( bi );
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] /= ((2+L)+4.);
+	}
+      else if ( (2+L) == -3 )
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] = std::log( bi );
+	  bp[3] /= ((2+L)+4.);
+	}
+      else if ( (2+L) == -4 )
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] = std::log( bi );
+	}
+      else
+	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] /= ((2+L)+4.);
+	};
+
+
+      double IntAm = am[1]-bm[1]+bi*(bm[0]-am[0]);
+      double IntBm = bm[1]-am[1]+ai*(am[0]-bm[0]);
+      
+      double IntA3m = 
+	( ( xb[2] * bm[0] - 3. * xb[1] * bm[1]
+	    + 3. * xb[0]  * bm[2] - bm[3] )   -
+	  ( xb[2] * am[0] - 3. * xb[1] * am[1]
+	    + 3. * xb[0] * am[2] - am[3] ) );
+      
+      double IntB3m = 
+	( ( xa[2] * am[0] - 3. * xa[1] * am[1]
+	    + 3. * xa[0]  * am[2] - am[3] )  -
+	  ( xa[2] * bm[0] - 3. * xa[1] * bm[1]
+	    + 3. * xa[0] * bm[2] - bm[3] ) );
+
+      double IntCm = (IntA3m - IntAm * del2 ) / 6.0;
+      double IntDm = (IntB3m - IntBm * del2 ) / 6.0;
+
+
+      double IntAp = ap[1]-bp[1]+bi*(bp[0]-ap[0]);
+      double IntBp = bp[1]-ap[1]+ai*(ap[0]-bp[0]);
+      
+      double IntA3p = 
+	( ( xb[2] * bp[0] - 3. * xb[1] * bp[1]
+	    + 3. * xb[0]  * bp[2] - bp[3] )   -
+	  ( xb[2] * ap[0] - 3. * xb[1] * ap[1]
+	    + 3. * xb[0] * ap[2] - ap[3] ) );
+      
+      double IntB3p = 
+	( ( xa[2] * ap[0] - 3. * xa[1] * ap[1]
+	    + 3. * xa[0]  * ap[2] - ap[3] )  -
+	  ( xa[2] * bp[0] - 3. * xa[1] * bp[1]
+	    + 3. * xa[0] * bp[2] - bp[3] ) );
+
+      double IntCp = (IntA3p - IntAp * del2 ) / 6.0;
+      double IntDp = (IntB3p - IntBp * del2 ) / 6.0;
+
+      double d[4];
+
+      for ( int m=0; m<2*L+1; ++m )
+	{
+	  int tj = 2*j;
+	  d[0] = spldata[m][  tj];
+	  d[1] = spldata[m][++tj];
+	  d[2] = spldata[m][++tj];
+	  d[3] = spldata[m][++tj];
+
+	  pots[m][j]   = (IntAm * d[0] + IntBm * d[2] + IntCm * d[1] + IntDm * d[3])/del;
+
+	  pots[m][j+1+n] = pots[m][j+n] 
+	    + (IntAp * d[0] + IntBp * d[2] + IntCp * d[1] + IntDp * d[3])/del;
+
+	  pots[m][j+n] *= apowm;
+
+	};
+
+      apowm = std::pow(bi,-(L+1));
+
+    }
+  for ( int m=0; m<2*L+1; ++m )
+    pots[m][2*n-1] *= apowm;
+
+  for ( int j=n-1; j-->1; )
+    {
+      bi = X[j];
+      ai = std::pow(bi,L);
+      for ( int m=0; m<2*L+1; ++m )
+	{
+	  pots[m][j-1] += pots[m][j];
+	  pots[m][j] *= ai;
+	};
+    };
+
+  if ( L > 0 )
+    {
+      ai = std::pow(X[0],L);
+      for ( int m=0; m<2*L+1; ++m )
+	pots[m][0] *= ai;
+    };
+
+  double const FOUR_PI = 4. * 3.141592653589793238462643383279502884197;
+  double fact = FOUR_PI / ( 2*L+1 );
+  for ( int m=0; m<2*L+1; ++m )
+    {
+      for ( int j=0; j<n; ++j )
+	{
+	  pots[m][j] += pots[m][j+n];
+	  pots[m][j] *= fact;
+	};
+      pots[m].resize(n);
+    };
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 namespace test
 {
 
@@ -577,281 +833,7 @@ namespace test
 
 
 
-/*
-template <int L>
-double cspline_lmpotential
-( int const n, double const * X, 
-  std::vector<double> const * spldata,
-  std::vector<double> * pots )
-{
-  for ( int m=0; m<2*L+1; ++m )
-    pots[m].resize(2*n);
 
-  int const nm1 = n-1;
-
-  double ai,bi;
-
-  bi = X[0];
-
-  double am[4],ap[4];
-  double bm[4] = {0.,0.,0.,0.};
-  double bp[4] = {0.,0.,0.,0.};
-  double xa[3],xb[3];
-
-  xb[0] = bi;
-  xb[1] = xb[0]*bi;
-  xb[2] = xb[1]*bi;
-
-  if ( bi > 0. )
-    {
-
-      bm[0] = std::pow(bi,(1-L)+1);
-      bm[1] = bm[0]*bi;
-      bm[2] = bm[1]*bi;
-      bm[3] = bm[2]*bi;
-
-      bp[0] = std::pow(bi,(2+L)+1);
-      bp[1] = bp[0]*bi;
-      bp[2] = bp[1]*bi;
-      bp[3] = bp[2]*bi;
-
-      if ( (1-L) == -1 )
-	{
-	  bm[0] = std::log( bi );
-	  bm[1] /= ((1-L)+2.);
-	  bm[2] /= ((1-L)+3.);
-	  bm[3] /= ((1-L)+4.);
-	}
-      else if ( (1-L) == -2 )
-	{
-	  bm[0] /= ((1-L)+1.);
-	  bm[1] = std::log( bi );
-	  bm[2] /= ((1-L)+3.);
-	  bm[3] /= ((1-L)+4.);
-	}
-      else if ( (1-L) == -3 )
-	{
-	  bm[0] /= ((1-L)+1.);
-	  bm[1] /= ((1-L)+2.);
-	  bm[2] = std::log( bi );
-	  bm[3] /= ((1-L)+4.);
-	}
-      else if ( (1-L) == -4 )
-	{
-	  bm[0] /= ((1-L)+1.);
-	  bm[1] /= ((1-L)+2.);
-	  bm[2] /= ((1-L)+3.);
-	  bm[3] = std::log( bi );
-	}
-      else
-	{
-	  bm[0] /= ((1-L)+1.);
-	  bm[1] /= ((1-L)+2.);
-	  bm[2] /= ((1-L)+3.);
-	  bm[3] /= ((1-L)+4.);
-	};
-
-
-      if ( (2+L) == -1 )
-	{
-	  bp[0] = std::log( bi );
-	  bp[1] /= ((2+L)+2.);
-	  bp[2] /= ((2+L)+3.);
-	  bp[3] /= ((2+L)+4.);
-	}
-      else if ( (2+L) == -2 )
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] = std::log( bi );
-	  bp[2] /= ((2+L)+3.);
-	  bp[3] /= ((2+L)+4.);
-	}
-      else if ( (2+L) == -3 )
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] /= ((2+L)+2.);
-	  bp[2] = std::log( bi );
-	  bp[3] /= ((2+L)+4.);
-	}
-      else if ( (2+L) == -4 )
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] /= ((2+L)+2.);
-	  bp[2] /= ((2+L)+3.);
-	  bp[3] = std::log( bi );
-	}
-      else
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] /= ((2+L)+2.);
-	  bp[2] /= ((2+L)+3.);
-	  bp[3] /= ((2+L)+4.);
-	};
-
-    };
-      
-  for ( int j=jlo; j<nm1; ++j )
-    {
-      ai = bi;
-      bi = X[j+1]; 
-      double del = bi-ai;
-      double del2 = del*del;
-
-      xa[0] = xb[0];
-      xa[1] = xb[1];
-      xa[2] = xb[2];
-
-      xb[0] = bi;
-      xb[1] = xb[0] * bi;
-      xb[2] = xb[1] * bi;
-
-      am[0] = bm[0];
-      am[1] = bm[1];
-      am[2] = bm[2];
-      am[3] = bm[3];
-      ap[0] = bp[0];
-      ap[1] = bp[1];
-      ap[2] = bp[2];
-      ap[3] = bp[3];
-
-      bm[0] = std::pow(bi,(1-L)+1);
-      bm[1] = bm[0]*bi;
-      bm[2] = bm[1]*bi;
-      bm[3] = bm[2]*bi;
-
-      bp[0] = std::pow(bi,(2+L)+1);
-      bp[1] = bp[0]*bi;
-      bp[2] = bp[1]*bi;
-      bp[3] = bp[2]*bi;
-
-
-      if ( (1-L) == -1 )
-	{
-	  bm[0] = std::log( bi );
-	  bm[1] /= ((1-L)+2.);
-	  bm[2] /= ((1-L)+3.);
-	  bm[3] /= ((1-L)+4.);
-	}
-      else if ( (1-L) == -2 )
-	{
-	  bm[0] /= ((1-L)+1.);
-	  bm[1] = std::log( bi );
-	  bm[2] /= ((1-L)+3.);
-	  bm[3] /= ((1-L)+4.);
-	}
-      else if ( (1-L) == -3 )
-	{
-	  bm[0] /= ((1-L)+1.);
-	  bm[1] /= ((1-L)+2.);
-	  bm[2] = std::log( bi );
-	  bm[3] /= ((1-L)+4.);
-	}
-      else if ( (1-L) == -4 )
-	{
-	  bm[0] /= ((1-L)+1.);
-	  bm[1] /= ((1-L)+2.);
-	  bm[2] /= ((1-L)+3.);
-	  bm[3] = std::log( bi );
-	}
-      else
-	{
-	  bm[0] /= ((1-L)+1.);
-	  bm[1] /= ((1-L)+2.);
-	  bm[2] /= ((1-L)+3.);
-	  bm[3] /= ((1-L)+4.);
-	};
-
-      
-      if ( (2+L) == -1 )
-	{
-	  bp[0] = std::log( bi );
-	  bp[1] /= ((2+L)+2.);
-	  bp[2] /= ((2+L)+3.);
-	  bp[3] /= ((2+L)+4.);
-	}
-      else if ( (2+L) == -2 )
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] = std::log( bi );
-	  bp[2] /= ((2+L)+3.);
-	  bp[3] /= ((2+L)+4.);
-	}
-      else if ( (2+L) == -3 )
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] /= ((2+L)+2.);
-	  bp[2] = std::log( bi );
-	  bp[3] /= ((2+L)+4.);
-	}
-      else if ( (2+L) == -4 )
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] /= ((2+L)+2.);
-	  bp[2] /= ((2+L)+3.);
-	  bp[3] = std::log( bi );
-	}
-      else
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] /= ((2+L)+2.);
-	  bp[2] /= ((2+L)+3.);
-	  bp[3] /= ((2+L)+4.);
-	};
-
-
-      double IntAm = am[1]-bm[1]+bi*(bm[0]-am[0]);
-      double IntBm = bm[1]-am[1]+ai*(am[0]-bm[0]);
-      
-      double IntA3m = 
-	( ( xb[2] * bm[0] - 3. * xb[1] * bm[1]
-	  + 3. * xb[0]  * bm[2] - bm[3] )   -
-	( xb[2] * am[0] - 3. * xb[1] * am[1]
-	  + 3. * xb[0] * am[2] - am[3] ) );
-      
-      double IntB3m = 
-	( ( xa[2] * am[0] - 3. * xa[1] * am[1]
-	  + 3. * xa[0]  * am[2] - am[3] )  -
-	( xa[2] * bm[0] - 3. * xa[1] * bm[1]
-	  + 3. * xa[0] * bm[2] - bm[3] ) );
-
-      double IntCm = (IntA3m - IntAm * del2 ) / 6.0;
-      double IntDm = (IntB3m - IntBm * del2 ) / 6.0;
-
-
-      double IntAp = ap[1]-bp[1]+bi*(bp[0]-ap[0]);
-      double IntBp = bp[1]-ap[1]+ai*(ap[0]-bp[0]);
-      
-      double IntA3p = 
-	( ( xb[2] * bp[0] - 3. * xb[1] * bp[1]
-	  + 3. * xb[0]  * bp[2] - bp[3] )   -
-	( xb[2] * ap[0] - 3. * xb[1] * ap[1]
-	  + 3. * xb[0] * ap[2] - ap[3] ) );
-      
-      double IntB3p = 
-	( ( xa[2] * ap[0] - 3. * xa[1] * ap[1]
-	  + 3. * xa[0]  * ap[2] - ap[3] )  -
-	( xa[2] * bp[0] - 3. * xa[1] * bp[1]
-	  + 3. * xa[0] * bp[2] - bp[3] ) );
-
-      double IntCp = (IntA3p - IntAp * del2 ) / 6.0;
-      double IntDp = (IntB3p - IntBp * del2 ) / 6.0;
-
-      double d[4];
-
-      for ( int m=0; m<2*L+1; ++m )
-	{
-	  int tj = 2*j;
-	  d[0] = spldata[m][  tj];
-	  d[1] = spldata[m][++tj];
-	  d[2] = spldata[m][++tj];
-	  d[3] = spldata[m][++tj];
-
-	  pots[m][j] = (IntA * d[0] + IntB * d[2] + IntC * d[1] + IntD * d[3])/del;
-    };
-
-
-}
-*/
 
 
 #endif
