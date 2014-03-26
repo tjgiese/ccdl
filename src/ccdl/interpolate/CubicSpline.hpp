@@ -24,15 +24,15 @@ namespace ccdl
       bool const lzero,
       bool const rzero );
     
-    int const GetN() const { return mX.size(); }
+    int GetN() const;
 
-    double GetLeftX() const { return mX[0]; }
+    double GetLeftX() const;
 
-    double GetRightX() const { return mX.back(); }
+    double GetRightX() const;
 
-    double GetX( int const i ) const { return mX[i]; }
+    double GetX( int const i ) const;
 
-    double GetY( int const i ) const { return mY[2*i]; }
+    double GetY( int const i ) const;
 
     void GetX( double * x ) const;
 
@@ -84,6 +84,107 @@ namespace ccdl
     std::vector<double> mX,mY;
   };
 
+}
+
+
+
+inline int ccdl::CubicSpline::GetN() const 
+{ 
+  return mX.size(); 
+}
+
+
+inline double ccdl::CubicSpline::GetLeftX() const 
+{ 
+  return mX[0]; 
+}
+
+
+inline double ccdl::CubicSpline::GetRightX() const 
+{ 
+  return mX.back(); 
+}
+
+
+inline double ccdl::CubicSpline::GetX
+( int const i ) const 
+{ 
+  return mX[i]; 
+}
+
+
+inline double ccdl::CubicSpline::GetY
+( int const i ) const 
+{ 
+  return mY[2*i]; 
+}
+
+
+inline void ccdl::CubicSpline::GetX
+( double * x ) const
+{
+  int const n = GetN();
+  for ( int i=0; i<n; ++i )
+    x[i] = mX[i];
+}
+
+
+inline void ccdl::CubicSpline::GetY
+( double * y ) const
+{
+  int const n = GetN();
+  for ( int i=0; i<n; ++i )
+    y[i] = mY[i];
+}
+
+
+inline double ccdl::CubicSpline::GetValue
+( double const x ) const
+{
+  return ccdl::cspline_value
+    (x,
+     GetN(),mX.data(),mY.data());
+}
+
+
+inline double ccdl::CubicSpline::GetValueAndDeriv
+( double const x,
+  double & dydx ) const
+{
+  return ccdl::cspline_value_and_deriv
+    (x,dydx,
+     GetN(),mX.data(),mY.data());
+}
+
+
+inline double ccdl::CubicSpline::GetValueAndSecondDeriv
+( double const x,
+  double & dydx,
+  double & d2ydx2 ) const
+{
+  return ccdl::cspline_value_and_secondderiv
+    (x,dydx,d2ydx2,
+     GetN(),mX.data(),mY.data());
+}
+
+
+template <int NINJA_POWER>
+inline double ccdl::CubicSpline::Integrate
+( double const xlo,
+  double const xhi ) const
+{
+  return test::cspline_integral<NINJA_POWER>
+    (xlo,xhi,
+     GetN(),mX.data(),mY.data());
+}
+
+
+inline void ccdl::CubicSpline::ConvertToPotential()
+{
+  std::vector<double> data(GetN(),0.);
+  ccdl::cspline_lmpotential<0>
+    (GetN(),mX.data(),&mY,&data);
+  Reset(data.data(),false,false);
 }
 
 #endif

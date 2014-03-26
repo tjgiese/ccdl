@@ -4,7 +4,7 @@
 #include <cmath>
 #include <algorithm>
 #include <vector>
-
+#include <iostream>
 
 namespace ccdl
 {
@@ -176,9 +176,9 @@ double ccdl::cspline_integral
   double TotInteg = 0.0;
   int const nm1 = n-1;
 
-  double ai,bi;
-  double an1,an2,an3,an4;
-  double bn1,bn2,bn3,bn4;
+  double bi;
+  //double an1,an2,an3,an4;
+  //double bn1,bn2,bn3,bn4;
 
   int jlo = nm1;
   for ( int j=0; j<nm1; ++j )
@@ -190,6 +190,7 @@ double ccdl::cspline_integral
 	};
     };
 
+  bi = X[jlo];
   if ( X[jlo] < a ) bi = a;
 
   double an[4];
@@ -260,7 +261,7 @@ double ccdl::cspline_integral
       xb[1] = xb[0] * X[j+1];
       xb[2] = xb[1] * X[j+1];
 
-      ai = bi;
+      //ai = bi;
       an[0] = bn[0];
       an[1] = bn[1];
       an[2] = bn[2];
@@ -713,7 +714,7 @@ namespace test
   double Int1( double x, double d, double a1 )
   {
     double Int1_res = 0.;
-    if ( a1 > 0. )
+    if ( std::abs(a1) > 1.e-20 )
       {
 	double a1n1,a1n2;
 	if ( XPOW+1 == 0 )
@@ -741,7 +742,7 @@ namespace test
   double Int2( double x, double d, double a1 )
   {
     double Int2_res = 0.;
-    if ( a1 > 0. )
+    if ( std::abs(a1) > 1.e-20 )
       {
 	double x2 = x*x;
 	double x3 = x2*x;
@@ -798,16 +799,18 @@ namespace test
     double TotInteg = 0.0;
     int const nm1 = n-1;
 
+    double ai,bi;
+    bi = a;
+
     for ( int j=0; j<nm1; ++j )
       {
       
-	if ( X[j+1] < a ) continue;
-	if ( X[j] > b ) break;
+	if ( X[j+1] < a and j+1 < nm1 ) continue;
+	if ( X[j] > b and j > 0 ) break;
 
-	double bi = X[j+1];
-	double ai = X[j];
-	if ( X[j+1] > b ) bi = b;
-	if ( X[j] < a ) ai = a;
+	ai = bi;
+	bi = X[j+1];
+	if ( X[j+1] > b or j+1 == nm1 ) bi = b;
 
 	double del = X[j+1] - X[j];
 
@@ -823,13 +826,16 @@ namespace test
 	double IntervalInteg = IntA * spldata[2*j]  + IntB * spldata[2*(j+1)]
 	  + IntC * spldata[1+2*j] + IntD * spldata[1+2*(j+1)];
 	TotInteg += IntervalInteg;
-      
       };
   
     return TotInteg;
   }
 
 }
+
+
+
+
 
 
 
