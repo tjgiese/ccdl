@@ -78,10 +78,23 @@ namespace ccdl
     ( double const xlo,
       double const xhi ) const;
 
-    void ConvertToPotential();
+    void YlmDensityToYlmPotential();
+
+    void YlmDensityToYlmPotential( double const charge );
+
+    void RadialDensityToRadialPotential();
+
+    void RadialDensityToRadialPotential( double charge );
+
+    void operator*= ( double const d );
+
+    void operator/= ( double const d );
+
 
   private:
+
     std::vector<double> mX,mY;
+
   };
 
 }
@@ -173,19 +186,68 @@ inline double ccdl::CubicSpline::Integrate
 ( double const xlo,
   double const xhi ) const
 {
-  return test::cspline_integral<NINJA_POWER>
+  return ccdl::cspline_integral<NINJA_POWER>
     (xlo,xhi,
      GetN(),mX.data(),mY.data());
 }
 
 
-inline void ccdl::CubicSpline::ConvertToPotential()
+inline void ccdl::CubicSpline::YlmDensityToYlmPotential()
 {
   std::vector<double> data(GetN(),0.);
-  ccdl::cspline_lmpotential<0>
-    (GetN(),mX.data(),&mY,&data);
+  ccdl::cspline_lmpotential2<0>
+    (GetN(),mX.data(),&mY,&data,NULL);
   Reset(data.data(),false,false);
 }
+
+
+inline void ccdl::CubicSpline::YlmDensityToYlmPotential( double const norm )
+{
+  std::vector<double> data(GetN(),0.);
+  ccdl::cspline_lmpotential2<0>
+    (GetN(),mX.data(),&mY,&data,&norm);
+  Reset(data.data(),false,false);
+}
+
+
+inline void ccdl::CubicSpline::RadialDensityToRadialPotential()
+{
+  /*
+  double const FOUR_PI = 4. * 3.141592653589793238462643383279502884197;
+  double const SQRT_4PI = std::sqrt( FOUR_PI );
+  // angular integral of density times Y00 harmonic
+  (*this) *= FOUR_PI / SQRT_4PI;
+  YlmDensityToYlmPotential();
+  // multiply potential by Y00 harmonic
+  (*this) *= 1. / SQRT_4PI;
+  */
+  YlmDensityToYlmPotential();
+}
+
+
+inline void ccdl::CubicSpline::RadialDensityToRadialPotential( double norm )
+{
+  double const FOUR_PI = 4. * 3.141592653589793238462643383279502884197;
+  double const SQRT_4PI = std::sqrt( FOUR_PI );
+  YlmDensityToYlmPotential( norm / SQRT_4PI );
+}
+
+
+inline void ccdl::CubicSpline::operator*= ( double const d )
+{
+  int const n = mY.size();
+  for ( int i=0; i<n; ++i )
+    mY[i] *= d;
+}
+
+
+inline void ccdl::CubicSpline::operator/= ( double const d )
+{
+  int const n = mY.size();
+  for ( int i=0; i<n; ++i )
+    mY[i] /= d;
+}
+
 
 #endif
 

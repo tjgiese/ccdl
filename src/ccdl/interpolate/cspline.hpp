@@ -5,6 +5,10 @@
 #include <algorithm>
 #include <vector>
 #include <iostream>
+#include <iomanip>
+#include <fstream>
+
+#define EFMT std::scientific << std::setw(24) << std::setprecision(15)
 
 namespace ccdl
 {
@@ -76,7 +80,16 @@ namespace ccdl
   ( int const n, 
     double const * X, 
     std::vector<double> const * spldata,
-    std::vector<double> * pots );
+    std::vector<double> * pots,
+    double const * ClmNormalizations );
+
+  template <int L>
+  void cspline_lmpotential2
+  ( int const n, 
+    double const * X, 
+    std::vector<double> const * spldata,
+    std::vector<double> * pots,
+    double const * ClmNormalizations );
 
 
 }
@@ -165,6 +178,52 @@ inline double ccdl::cspline_value_and_secondderiv
 }
 
 
+template <int XPOW>
+inline void cspline_integral_helper( double const bi, double * bn )
+{
+  bn[0] = std::pow(bi,XPOW+1);
+  bn[1] = bn[0]*bi;
+  bn[2] = bn[1]*bi;
+  bn[3] = bn[2]*bi;
+  
+  if ( XPOW == -1 )
+    {
+      bn[0] = std::log( bi );
+      bn[1] /= (XPOW+2.);
+      bn[2] /= (XPOW+3.);
+      bn[3] /= (XPOW+4.);
+    }
+  else if ( XPOW == -2 )
+    {
+      bn[0] /= (XPOW+1.);
+      bn[1] = std::log( bi );
+      bn[2] /= (XPOW+3.);
+      bn[3] /= (XPOW+4.);
+    }
+  else if ( XPOW == -3 )
+    {
+      bn[0] /= (XPOW+1.);
+      bn[1] /= (XPOW+2.);
+      bn[2] = std::log( bi );
+      bn[3] /= (XPOW+4.);
+    }
+  else if ( XPOW == -4 )
+    {
+      bn[0] /= (XPOW+1.);
+      bn[1] /= (XPOW+2.);
+      bn[2] /= (XPOW+3.);
+      bn[3] = std::log( bi );
+    }
+  else
+    {
+      bn[0] /= (XPOW+1.);
+      bn[1] /= (XPOW+2.);
+      bn[2] /= (XPOW+3.);
+      bn[3] /= (XPOW+4.);
+    };
+}
+
+
 
 template <int XPOW>
 double ccdl::cspline_integral
@@ -173,6 +232,9 @@ double ccdl::cspline_integral
 {
   if ( std::abs(a-b) < 1.e-10 ) return 0.;
 
+  // std::ofstream fout;
+  // fout.open("int.dat");
+
   double TotInteg = 0.0;
   int const nm1 = n-1;
 
@@ -180,7 +242,8 @@ double ccdl::cspline_integral
   //double an1,an2,an3,an4;
   //double bn1,bn2,bn3,bn4;
 
-  int jlo = nm1;
+  int jlo = nm1-1;
+  bi = a;
   for ( int j=0; j<nm1; ++j )
     {
       if ( X[j+1] >= a )
@@ -190,8 +253,8 @@ double ccdl::cspline_integral
 	};
     };
 
-  bi = X[jlo];
-  if ( X[jlo] < a ) bi = a;
+  //bi = X[jlo];
+  //if ( X[jlo] < a ) bi = a;
 
   double an[4];
   double bn[4] = {0.,0.,0.,0.};
@@ -201,7 +264,7 @@ double ccdl::cspline_integral
   xb[1] = xb[0]*X[jlo];
   xb[2] = xb[1]*X[jlo];
 
-  if ( bi > 0. )
+  if ( std::abs(bi) > 1.e-20 )
     {
 
       bn[0] = std::pow(bi,XPOW+1);
@@ -248,7 +311,7 @@ double ccdl::cspline_integral
       
   for ( int j=jlo; j<nm1; ++j )
     {
-      if ( X[j] > b ) break;
+      if ( X[j] > b and j > 0 ) break;
 
       double del = X[j+1] - X[j];
       double del2 = del*del;
@@ -268,34 +331,12 @@ double ccdl::cspline_integral
       an[3] = bn[3];
 
       bi = X[j+1]; 
-      if ( X[j+1] > b ) bi = b;
+      if ( X[j+1] > b or j+1 == nm1 ) bi = b;
 
       bn[0] = std::pow(bi,XPOW+1);
       bn[1] = bn[0]*bi;
       bn[2] = bn[1]*bi;
       bn[3] = bn[2]*bi;
-      // bn[0] /= (XPOW+1);
-      // bn[1] /= (XPOW+2);
-      // bn[2] /= (XPOW+3);
-      // bn[3] /= (XPOW+4);
-      
-      // if ( XPOW == -1 )
-      // 	{
-      // 	  bn[0] = std::log( bi );
-      // 	}
-      // else if ( XPOW == -2 )
-      // 	{
-      // 	  bn[1] = std::log( bi );
-      // 	}
-      // else if ( XPOW == -3 )
-      // 	{
-      // 	  bn[2] = std::log( bi );
-      // 	}
-      // else if ( XPOW == -4 )
-      // 	{
-      // 	  bn[3] = std::log( bi );
-      // 	};
-
 
       if ( XPOW == -1 )
 	{
@@ -360,7 +401,11 @@ double ccdl::cspline_integral
 
       double const IntervalInteg = 
 	(IntA * d[0] + IntB * d[2] + IntC * d[1] + IntD * d[3])/del;
-      
+     
+      // fout << std::setw(4) << j 
+      // 	   << EFMT << an[0] << EFMT << bn[0]
+      // 	   << IntervalInteg << "\n";
+
       TotInteg += IntervalInteg;
     };
 
@@ -375,32 +420,41 @@ template <int L>
 void ccdl::cspline_lmpotential
 ( int const n, double const * X, 
   std::vector<double> const * spldata,
-  std::vector<double> * pots )
+  std::vector<double> * pots,
+  double const * ClmNormalizations )
 {
+  // std::ofstream fout;
+  // fout.open("lmint.dat");
+
+
+
   for ( int m=0; m<2*L+1; ++m )
     pots[m].resize(2*n);
+
+  double norms[ 2*L+1 ];
+  for ( int m=0; m<2*L+1; ++m )
+    norms[m] = 0.;
 
   int const nm1 = n-1;
 
   double ai,bi;
 
-  bi = X[0];
+  //bi = X[0];
+  bi = 0.;
 
   double am[4],ap[4],apowm;
   double bm[4] = {0.,0.,0.,0.};
   double bp[4] = {0.,0.,0.,0.};
   double xa[3],xb[3];
 
-  xb[0] = bi;
-  xb[1] = xb[0]*bi;
-  xb[2] = xb[1]*bi;
-
+  xb[0] = X[0];
+  xb[1] = xb[0]*X[0];
+  xb[2] = xb[1]*X[0];
 
   apowm = 0.;
-
+  
   if ( bi > 0. )
     {
-      apowm = std::pow(bi,-(L+1));
 
       bm[0] = std::pow(bi,1-L);
       bm[1] = bm[0]*bi;
@@ -447,38 +501,44 @@ void ccdl::cspline_lmpotential
 	  bm[2] /= ((1-L)+3.);
 	  bm[3] /= ((1-L)+4.);
 	};
+    };
 
+  bi = 0.;
+
+  if ( bi > 0. )
+    {
+      apowm = std::pow(bi,-(L+1));
 
       if ( (2+L) == -1 )
-	{
-	  bp[0] = std::log( bi );
-	  bp[1] /= ((2+L)+2.);
-	  bp[2] /= ((2+L)+3.);
-	  bp[3] /= ((2+L)+4.);
-	}
+      	{
+      	  bp[0] = std::log( bi );
+      	  bp[1] /= ((2+L)+2.);
+      	  bp[2] /= ((2+L)+3.);
+      	  bp[3] /= ((2+L)+4.);
+      	}
       else if ( (2+L) == -2 )
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] = std::log( bi );
-	  bp[2] /= ((2+L)+3.);
-	  bp[3] /= ((2+L)+4.);
-	}
+      	{
+      	  bp[0] /= ((2+L)+1.);
+      	  bp[1] = std::log( bi );
+      	  bp[2] /= ((2+L)+3.);
+      	  bp[3] /= ((2+L)+4.);
+      	}
       else if ( (2+L) == -3 )
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] /= ((2+L)+2.);
-	  bp[2] = std::log( bi );
-	  bp[3] /= ((2+L)+4.);
-	}
+      	{
+      	  bp[0] /= ((2+L)+1.);
+      	  bp[1] /= ((2+L)+2.);
+      	  bp[2] = std::log( bi );
+      	  bp[3] /= ((2+L)+4.);
+      	}
       else if ( (2+L) == -4 )
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] /= ((2+L)+2.);
-	  bp[2] /= ((2+L)+3.);
-	  bp[3] = std::log( bi );
-	}
+      	{
+      	  bp[0] /= ((2+L)+1.);
+      	  bp[1] /= ((2+L)+2.);
+      	  bp[2] /= ((2+L)+3.);
+      	  bp[3] = std::log( bi );
+      	}
       else
-	{
+      	{
 	  bp[0] /= ((2+L)+1.);
 	  bp[1] /= ((2+L)+2.);
 	  bp[2] /= ((2+L)+3.);
@@ -486,12 +546,18 @@ void ccdl::cspline_lmpotential
 	};
 
     };
-      
+  
+  
+
+  //std::ofstream fout;
+  //fout.open("lmint.dat");
+
+
   for ( int j=0; j<nm1; ++j )
     {
-      ai = bi;
+      //ai = bi;
       bi = X[j+1]; 
-      double del = bi-ai;
+      double del = X[j+1] - X[j];
       double del2 = del*del;
 
       xa[0] = xb[0];
@@ -559,45 +625,45 @@ void ccdl::cspline_lmpotential
 	};
 
       
-      if ( (2+L) == -1 )
-	{
-	  bp[0] = std::log( bi );
+      // if ( (2+L) == -1 )
+      // 	{
+      // 	  bp[0] = std::log( bi );
+      // 	  bp[1] /= ((2+L)+2.);
+      // 	  bp[2] /= ((2+L)+3.);
+      // 	  bp[3] /= ((2+L)+4.);
+      // 	}
+      // else if ( (2+L) == -2 )
+      // 	{
+      // 	  bp[0] /= ((2+L)+1.);
+      // 	  bp[1] = std::log( bi );
+      // 	  bp[2] /= ((2+L)+3.);
+      // 	  bp[3] /= ((2+L)+4.);
+      // 	}
+      // else if ( (2+L) == -3 )
+      // 	{
+      // 	  bp[0] /= ((2+L)+1.);
+      // 	  bp[1] /= ((2+L)+2.);
+      // 	  bp[2] = std::log( bi );
+      // 	  bp[3] /= ((2+L)+4.);
+      // 	}
+      // else if ( (2+L) == -4 )
+      // 	{
+      // 	  bp[0] /= ((2+L)+1.);
+      // 	  bp[1] /= ((2+L)+2.);
+      // 	  bp[2] /= ((2+L)+3.);
+      // 	  bp[3] = std::log( bi );
+      // 	}
+      // else
+      // 	{
+	  bp[0] /= ((2+L)+1.);
 	  bp[1] /= ((2+L)+2.);
 	  bp[2] /= ((2+L)+3.);
 	  bp[3] /= ((2+L)+4.);
-	}
-      else if ( (2+L) == -2 )
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] = std::log( bi );
-	  bp[2] /= ((2+L)+3.);
-	  bp[3] /= ((2+L)+4.);
-	}
-      else if ( (2+L) == -3 )
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] /= ((2+L)+2.);
-	  bp[2] = std::log( bi );
-	  bp[3] /= ((2+L)+4.);
-	}
-      else if ( (2+L) == -4 )
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] /= ((2+L)+2.);
-	  bp[2] /= ((2+L)+3.);
-	  bp[3] = std::log( bi );
-	}
-      else
-	{
-	  bp[0] /= ((2+L)+1.);
-	  bp[1] /= ((2+L)+2.);
-	  bp[2] /= ((2+L)+3.);
-	  bp[3] /= ((2+L)+4.);
-	};
+	// };
 
 
-      double IntAm = am[1]-bm[1]+bi*(bm[0]-am[0]);
-      double IntBm = bm[1]-am[1]+ai*(am[0]-bm[0]);
+      double IntAm = am[1]-bm[1]+X[j+1]*(bm[0]-am[0]);
+      double IntBm = bm[1]-am[1]+X[j  ]*(am[0]-bm[0]);
       
       double IntA3m = 
 	( ( xb[2] * bm[0] - 3. * xb[1] * bm[1]
@@ -615,8 +681,8 @@ void ccdl::cspline_lmpotential
       double IntDm = (IntB3m - IntBm * del2 ) / 6.0;
 
 
-      double IntAp = ap[1]-bp[1]+bi*(bp[0]-ap[0]);
-      double IntBp = bp[1]-ap[1]+ai*(ap[0]-bp[0]);
+      double IntAp = ap[1]-bp[1]+X[j+1]*(bp[0]-ap[0]);
+      double IntBp = bp[1]-ap[1]+X[j  ]*(ap[0]-bp[0]);
       
       double IntA3p = 
 	( ( xb[2] * bp[0] - 3. * xb[1] * bp[1]
@@ -644,12 +710,35 @@ void ccdl::cspline_lmpotential
 	  d[3] = spldata[m][++tj];
 
 	  pots[m][j]   = (IntAm * d[0] + IntBm * d[2] + IntCm * d[1] + IntDm * d[3])/del;
+	  //pots[m][j] = 0.;
+	  
+	  // fout << std::setw(4) << j 
+	  //      << EFMT << am[0] << EFMT << bm[0]
+	  //      << pots[m][j] << "\n";
 
-	  pots[m][j+1+n] = pots[m][j+n] 
-	    + (IntAp * d[0] + IntBp * d[2] + IntCp * d[1] + IntDp * d[3])/del;
+	  // std::cout << std::setw(4) << j
+	  // 	    << EFMT << am[0] << EFMT << bm[0]
+	  // 	    << EFMT << pots[m][j]
+	  // 	    << EFMT << ccdl::cspline_integral<1-L>(am[0],bm[0],n,X,spldata[m].data())
+	  // 	    << "\n";
 
+
+	  double const t = (IntAp * d[0] + IntBp * d[2] + IntCp * d[1] + IntDp * d[3])/del;
+
+	  //std::cout << std::setw(5) << j << EFMT << t << "\n";
+
+	  norms[m] += t;
+	  pots[m][j+1+n] = t + pots[m][j+n] ;
 	  pots[m][j+n] *= apowm;
+	  //if ( j == 0 ) pots[m][n] = t * std::pow(X[0],-(L+1));
 
+	  //pots[m][j+1+n] = 0.;
+	  //pots[m][j+n] = 0.;
+
+
+	  // old
+	  //pots[m][j+1+n] = pots[m][j+n] 
+	  //  + (IntAp * d[0] + IntBp * d[2] + IntCp * d[1] + IntDp * d[3])/del;
 	};
 
       apowm = std::pow(bi,-(L+1));
@@ -658,6 +747,13 @@ void ccdl::cspline_lmpotential
   for ( int m=0; m<2*L+1; ++m )
     pots[m][2*n-1] *= apowm;
 
+  //for ( int m=0; m<2*L+1; ++m )
+  //  {
+      //for ( int j=n-1; j-->1; ) pots[m][j] = pots[m][j-1];
+      //pots[m][0] = ;
+  //  };
+      
+
   for ( int j=n-1; j-->1; )
     {
       bi = X[j];
@@ -665,9 +761,23 @@ void ccdl::cspline_lmpotential
       for ( int m=0; m<2*L+1; ++m )
 	{
 	  pots[m][j-1] += pots[m][j];
+	  // double t;
+	  // if ( j-1 > 0 )
+	  //   {
+	  //     t = ccdl::cspline_integral<1-L>(X[j-1],X[n-1],n,X,spldata[m].data());
+	  //   }
+	  // else
+	  //   {
+	  //     t = ccdl::cspline_integral<1-L>(0.,X[n-1],n,X,spldata[m].data());
+	  //   };
+	  // std::cout << std::setw(4) << j-1
+	  // 	    << EFMT << pots[m][j-1]
+	  // 	    << EFMT << t
+	  // 	    << "\n";
 	  pots[m][j] *= ai;
 	};
     };
+
 
   if ( L > 0 )
     {
@@ -678,14 +788,45 @@ void ccdl::cspline_lmpotential
 
   double const FOUR_PI = 4. * 3.141592653589793238462643383279502884197;
   double fact = FOUR_PI / ( 2*L+1 );
-  for ( int m=0; m<2*L+1; ++m )
+  
+  //std::cout << std::scientific << std::setw(25) << std::setprecision(14) << FOUR_PI * norms[0] << "\n";
+
+  if ( ClmNormalizations != NULL )
     {
-      for ( int j=0; j<n; ++j )
+      double const normFactor = std::sqrt( FOUR_PI / (2*L+1) );
+      for ( int m=0; m<2*L+1; ++m )
 	{
-	  pots[m][j] += pots[m][j+n];
-	  pots[m][j] *= fact;
+	  if ( std::abs( ClmNormalizations[m] ) > 1.e-6 )
+	    {
+	      // std::cout << EFMT << ClmNormalizations[m] 
+	      // 		<< EFMT << norms[m]
+	      // 		<< EFMT << normFactor * norms[m] << "\n";
+	      norms[m] = fact * ClmNormalizations[m] / ( normFactor * norms[m] );
+	    }
+	  else
+	    {
+	      norms[m] = fact;
+	    };
+
+	  for ( int j=0; j<n; ++j )
+	    {
+	      pots[m][j] += pots[m][j+n];
+	      pots[m][j] *= norms[m];
+	    };
+	  pots[m].resize(n);
 	};
-      pots[m].resize(n);
+    }
+  else
+    {
+      for ( int m=0; m<2*L+1; ++m )
+	{
+	  for ( int j=0; j<n; ++j )
+	    {
+	      pots[m][j] += pots[m][j+n];
+	      pots[m][j] *= fact;
+	    };
+	  pots[m].resize(n);
+	};
     };
 
 }
@@ -832,6 +973,516 @@ namespace test
   }
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+template <int L>
+void ccdl::cspline_lmpotential2
+( int const n, double const * X, 
+  std::vector<double> const * spldata,
+  std::vector<double> * pots,
+  double const * ClmNormalizations )
+{
+  // std::ofstream fout;
+  // fout.open("lmint.dat");
+
+
+  for ( int m=0; m<2*L+1; ++m )
+    pots[m].resize(2*n);
+
+  double norms[ 2*L+1 ];
+  for ( int m=0; m<2*L+1; ++m )
+    norms[m] = 0.;
+
+  int const nm1 = n-1;
+
+  double ai,bi;
+
+  double am[4],ap[4],apowm;
+  double bm[4] = {0.,0.,0.,0.};
+  double bp[4] = {0.,0.,0.,0.};
+  double xa[3],xb[3];
+
+
+  
+  if ( X[0] > 1.e-10 )
+    {
+      // integrate rho(r) r^{L+2} from 0 to X[0]
+
+      xa[0] = X[0];
+      xa[1] = xa[0]*X[0];
+      xa[2] = xa[1]*X[0];
+      ap[0] = ap[1] = ap[2] = ap[3] = 0.;
+      xb[0] = X[1];
+      xb[1] = xb[0]*X[1];
+      xb[2] = xb[1]*X[1];
+      cspline_integral_helper<2+L>( X[1], bp );
+      double del = X[1] - X[0];
+      double del2 = del*del;
+
+
+      double IntAp = ap[1]-bp[1]+X[1]*(bp[0]-ap[0]);
+      double IntBp = bp[1]-ap[1]+X[0]*(ap[0]-bp[0]);
+      
+      double IntA3p = 
+	( ( xb[2] * bp[0] - 3. * xb[1] * bp[1]
+	    + 3. * xb[0]  * bp[2] - bp[3] )   -
+	  ( xb[2] * ap[0] - 3. * xb[1] * ap[1]
+	    + 3. * xb[0] * ap[2] - ap[3] ) );
+      
+      double IntB3p = 
+	( ( xa[2] * ap[0] - 3. * xa[1] * ap[1]
+	    + 3. * xa[0]  * ap[2] - ap[3] )  -
+	  ( xa[2] * bp[0] - 3. * xa[1] * bp[1]
+	    + 3. * xa[0] * bp[2] - bp[3] ) );
+
+      double IntCp = (IntA3p - IntAp * del2 ) / 6.0;
+      double IntDp = (IntB3p - IntBp * del2 ) / 6.0;
+
+      double d[4];
+
+      for ( int m=0; m<2*L+1; ++m )
+	{
+	  int tj = 0;
+	  d[0] = spldata[m][  tj];
+	  d[1] = spldata[m][++tj];
+	  d[2] = spldata[m][++tj];
+	  d[3] = spldata[m][++tj];
+
+	  double const t = (IntAp * d[0] + IntBp * d[2] + IntCp * d[1] + IntDp * d[3])/del;
+	  norms[m] += t;
+	  pots[m][j] = t;
+	};
+    };
+
+
+
+  // now integrate both in the range j->j+1
+  // the r^{1-L} integral is stored in j
+  // the r^{2+L} integral is stored in j+1
+
+
+
+
+
+
+
+
+  bi = X[0];
+  bi = 0.;
+
+
+
+  xb[0] = X[0];
+  xb[1] = xb[0]*X[0];
+  xb[2] = xb[1]*X[0];
+
+  apowm = 1.;
+  
+  if ( bi > 0. )
+    {
+
+      bm[0] = std::pow(bi,1-L);
+      bm[1] = bm[0]*bi;
+      bm[2] = bm[1]*bi;
+      bm[3] = bm[2]*bi;
+
+      bp[0] = std::pow(bi,2+L);
+      bp[1] = bp[0]*bi;
+      bp[2] = bp[1]*bi;
+      bp[3] = bp[2]*bi;
+
+      if ( (1-L) == -1 )
+	{
+	  bm[0] = std::log( bi );
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
+	}
+      else if ( (1-L) == -2 )
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] = std::log( bi );
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
+	}
+      else if ( (1-L) == -3 )
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] = std::log( bi );
+	  bm[3] /= ((1-L)+4.);
+	}
+      else if ( (1-L) == -4 )
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] = std::log( bi );
+	}
+      else
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
+	};
+    };
+
+  bi = 0.;
+
+  if ( bi > 0. )
+    {
+      apowm = std::pow(bi,-(L+1));
+
+      if ( (2+L) == -1 )
+      	{
+      	  bp[0] = std::log( bi );
+      	  bp[1] /= ((2+L)+2.);
+      	  bp[2] /= ((2+L)+3.);
+      	  bp[3] /= ((2+L)+4.);
+      	}
+      else if ( (2+L) == -2 )
+      	{
+      	  bp[0] /= ((2+L)+1.);
+      	  bp[1] = std::log( bi );
+      	  bp[2] /= ((2+L)+3.);
+      	  bp[3] /= ((2+L)+4.);
+      	}
+      else if ( (2+L) == -3 )
+      	{
+      	  bp[0] /= ((2+L)+1.);
+      	  bp[1] /= ((2+L)+2.);
+      	  bp[2] = std::log( bi );
+      	  bp[3] /= ((2+L)+4.);
+      	}
+      else if ( (2+L) == -4 )
+      	{
+      	  bp[0] /= ((2+L)+1.);
+      	  bp[1] /= ((2+L)+2.);
+      	  bp[2] /= ((2+L)+3.);
+      	  bp[3] = std::log( bi );
+      	}
+      else
+      	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] /= ((2+L)+4.);
+	};
+
+    };
+  
+  
+
+  //std::ofstream fout;
+  //fout.open("lmint.dat");
+
+
+  for ( int j=0; j<nm1; ++j )
+    {
+      //ai = bi;
+      bi = X[j+1]; 
+      double del = X[j+1] - X[j];
+      double del2 = del*del;
+
+      xa[0] = xb[0];
+      xa[1] = xb[1];
+      xa[2] = xb[2];
+
+      xb[0] = bi;
+      xb[1] = xb[0] * bi;
+      xb[2] = xb[1] * bi;
+
+      am[0] = bm[0];
+      am[1] = bm[1];
+      am[2] = bm[2];
+      am[3] = bm[3];
+      ap[0] = bp[0];
+      ap[1] = bp[1];
+      ap[2] = bp[2];
+      ap[3] = bp[3];
+
+      bm[0] = std::pow(bi,(1-L)+1);
+      bm[1] = bm[0]*bi;
+      bm[2] = bm[1]*bi;
+      bm[3] = bm[2]*bi;
+
+      bp[0] = std::pow(bi,(2+L)+1);
+      bp[1] = bp[0]*bi;
+      bp[2] = bp[1]*bi;
+      bp[3] = bp[2]*bi;
+
+
+      if ( (1-L) == -1 )
+	{
+	  bm[0] = std::log( bi );
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
+	}
+      else if ( (1-L) == -2 )
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] = std::log( bi );
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
+	}
+      else if ( (1-L) == -3 )
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] = std::log( bi );
+	  bm[3] /= ((1-L)+4.);
+	}
+      else if ( (1-L) == -4 )
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] = std::log( bi );
+	}
+      else
+	{
+	  bm[0] /= ((1-L)+1.);
+	  bm[1] /= ((1-L)+2.);
+	  bm[2] /= ((1-L)+3.);
+	  bm[3] /= ((1-L)+4.);
+	};
+
+      
+      // if ( (2+L) == -1 )
+      // 	{
+      // 	  bp[0] = std::log( bi );
+      // 	  bp[1] /= ((2+L)+2.);
+      // 	  bp[2] /= ((2+L)+3.);
+      // 	  bp[3] /= ((2+L)+4.);
+      // 	}
+      // else if ( (2+L) == -2 )
+      // 	{
+      // 	  bp[0] /= ((2+L)+1.);
+      // 	  bp[1] = std::log( bi );
+      // 	  bp[2] /= ((2+L)+3.);
+      // 	  bp[3] /= ((2+L)+4.);
+      // 	}
+      // else if ( (2+L) == -3 )
+      // 	{
+      // 	  bp[0] /= ((2+L)+1.);
+      // 	  bp[1] /= ((2+L)+2.);
+      // 	  bp[2] = std::log( bi );
+      // 	  bp[3] /= ((2+L)+4.);
+      // 	}
+      // else if ( (2+L) == -4 )
+      // 	{
+      // 	  bp[0] /= ((2+L)+1.);
+      // 	  bp[1] /= ((2+L)+2.);
+      // 	  bp[2] /= ((2+L)+3.);
+      // 	  bp[3] = std::log( bi );
+      // 	}
+      // else
+      // 	{
+	  bp[0] /= ((2+L)+1.);
+	  bp[1] /= ((2+L)+2.);
+	  bp[2] /= ((2+L)+3.);
+	  bp[3] /= ((2+L)+4.);
+	// };
+
+
+      double IntAm = am[1]-bm[1]+X[j+1]*(bm[0]-am[0]);
+      double IntBm = bm[1]-am[1]+X[j  ]*(am[0]-bm[0]);
+      
+      double IntA3m = 
+	( ( xb[2] * bm[0] - 3. * xb[1] * bm[1]
+	    + 3. * xb[0]  * bm[2] - bm[3] )   -
+	  ( xb[2] * am[0] - 3. * xb[1] * am[1]
+	    + 3. * xb[0] * am[2] - am[3] ) );
+      
+      double IntB3m = 
+	( ( xa[2] * am[0] - 3. * xa[1] * am[1]
+	    + 3. * xa[0]  * am[2] - am[3] )  -
+	  ( xa[2] * bm[0] - 3. * xa[1] * bm[1]
+	    + 3. * xa[0] * bm[2] - bm[3] ) );
+
+      double IntCm = (IntA3m - IntAm * del2 ) / 6.0;
+      double IntDm = (IntB3m - IntBm * del2 ) / 6.0;
+
+
+      double IntAp = ap[1]-bp[1]+X[j+1]*(bp[0]-ap[0]);
+      double IntBp = bp[1]-ap[1]+X[j  ]*(ap[0]-bp[0]);
+      
+      double IntA3p = 
+	( ( xb[2] * bp[0] - 3. * xb[1] * bp[1]
+	    + 3. * xb[0]  * bp[2] - bp[3] )   -
+	  ( xb[2] * ap[0] - 3. * xb[1] * ap[1]
+	    + 3. * xb[0] * ap[2] - ap[3] ) );
+      
+      double IntB3p = 
+	( ( xa[2] * ap[0] - 3. * xa[1] * ap[1]
+	    + 3. * xa[0]  * ap[2] - ap[3] )  -
+	  ( xa[2] * bp[0] - 3. * xa[1] * bp[1]
+	    + 3. * xa[0] * bp[2] - bp[3] ) );
+
+      double IntCp = (IntA3p - IntAp * del2 ) / 6.0;
+      double IntDp = (IntB3p - IntBp * del2 ) / 6.0;
+
+      double d[4];
+
+      for ( int m=0; m<2*L+1; ++m )
+	{
+	  int tj = 2*j;
+	  d[0] = spldata[m][  tj];
+	  d[1] = spldata[m][++tj];
+	  d[2] = spldata[m][++tj];
+	  d[3] = spldata[m][++tj];
+
+	  pots[m][j]   = (IntAm * d[0] + IntBm * d[2] + IntCm * d[1] + IntDm * d[3])/del;
+	  //pots[m][j] = 0.;
+	  
+	  // fout << std::setw(4) << j 
+	  //      << EFMT << am[0] << EFMT << bm[0]
+	  //      << pots[m][j] << "\n";
+
+	  // std::cout << std::setw(4) << j
+	  // 	    << EFMT << am[0] << EFMT << bm[0]
+	  // 	    << EFMT << pots[m][j]
+	  // 	    << EFMT << ccdl::cspline_integral<1-L>(am[0],bm[0],n,X,spldata[m].data())
+	  // 	    << "\n";
+
+
+	  double const t = (IntAp * d[0] + IntBp * d[2] + IntCp * d[1] + IntDp * d[3])/del;
+
+	  //std::cout << std::setw(5) << j << EFMT << t << "\n";
+
+	  norms[m] += t;
+	  pots[m][j+1+n] = t + pots[m][j+n] ;
+	  pots[m][j+n] *= apowm;
+	  //if ( j == 0 ) pots[m][n] = t * std::pow(X[0],-(L+1));
+
+	  //pots[m][j+1+n] = 0.;
+	  //pots[m][j+n] = 0.;
+
+
+	  // old
+	  //pots[m][j+1+n] = pots[m][j+n] 
+	  //  + (IntAp * d[0] + IntBp * d[2] + IntCp * d[1] + IntDp * d[3])/del;
+	};
+
+      apowm = std::pow(bi,-(L+1));
+
+    }
+  for ( int m=0; m<2*L+1; ++m )
+    pots[m][2*n-1] *= apowm;
+
+  //for ( int m=0; m<2*L+1; ++m )
+  //  {
+      //for ( int j=n-1; j-->1; ) pots[m][j] = pots[m][j-1];
+      //pots[m][0] = ;
+  //  };
+      
+
+  for ( int j=n-1; j-->1; )
+    {
+      bi = X[j];
+      ai = std::pow(bi,L);
+      for ( int m=0; m<2*L+1; ++m )
+	{
+	  pots[m][j-1] += pots[m][j];
+	  // double t;
+	  // if ( j-1 > 0 )
+	  //   {
+	  //     t = ccdl::cspline_integral<1-L>(X[j-1],X[n-1],n,X,spldata[m].data());
+	  //   }
+	  // else
+	  //   {
+	  //     t = ccdl::cspline_integral<1-L>(0.,X[n-1],n,X,spldata[m].data());
+	  //   };
+	  // std::cout << std::setw(4) << j-1
+	  // 	    << EFMT << pots[m][j-1]
+	  // 	    << EFMT << t
+	  // 	    << "\n";
+	  pots[m][j] *= ai;
+	};
+    };
+
+
+  if ( L > 0 )
+    {
+      ai = std::pow(X[0],L);
+      for ( int m=0; m<2*L+1; ++m )
+	pots[m][0] *= ai;
+    };
+
+  double const FOUR_PI = 4. * 3.141592653589793238462643383279502884197;
+  double fact = FOUR_PI / ( 2*L+1 );
+  
+  //std::cout << std::scientific << std::setw(25) << std::setprecision(14) << FOUR_PI * norms[0] << "\n";
+
+  if ( ClmNormalizations != NULL )
+    {
+      double const normFactor = std::sqrt( FOUR_PI / (2*L+1) );
+      for ( int m=0; m<2*L+1; ++m )
+	{
+	  if ( std::abs( ClmNormalizations[m] ) > 1.e-6 )
+	    {
+	      // std::cout << EFMT << ClmNormalizations[m] 
+	      // 		<< EFMT << norms[m]
+	      // 		<< EFMT << normFactor * norms[m] << "\n";
+	      norms[m] = fact * ClmNormalizations[m] / ( normFactor * norms[m] );
+	    }
+	  else
+	    {
+	      norms[m] = fact;
+	    };
+
+	  for ( int j=0; j<n; ++j )
+	    {
+	      pots[m][j] += pots[m][j+n];
+	      pots[m][j] *= norms[m];
+	    };
+	  pots[m].resize(n);
+	};
+    }
+  else
+    {
+      for ( int m=0; m<2*L+1; ++m )
+	{
+	  for ( int j=0; j<n; ++j )
+	    {
+	      pots[m][j] += pots[m][j+n];
+	      pots[m][j] *= fact;
+	    };
+	  pots[m].resize(n);
+	};
+    };
+
+}
+
+
+
+
+
+
+
 
 
 
