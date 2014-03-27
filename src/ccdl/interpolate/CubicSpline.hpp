@@ -195,7 +195,7 @@ inline double ccdl::CubicSpline::Integrate
 inline void ccdl::CubicSpline::YlmDensityToYlmPotential()
 {
   std::vector<double> data(GetN(),0.);
-  ccdl::cspline_lmpotential2<0>
+  ccdl::cspline_lmpotential<0>
     (GetN(),mX.data(),&mY,&data,NULL);
   Reset(data.data(),false,false);
 }
@@ -204,7 +204,7 @@ inline void ccdl::CubicSpline::YlmDensityToYlmPotential()
 inline void ccdl::CubicSpline::YlmDensityToYlmPotential( double const norm )
 {
   std::vector<double> data(GetN(),0.);
-  ccdl::cspline_lmpotential2<0>
+  ccdl::cspline_lmpotential<0>
     (GetN(),mX.data(),&mY,&data,&norm);
   Reset(data.data(),false,false);
 }
