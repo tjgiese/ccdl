@@ -2,6 +2,7 @@
 #define _CubicSpline_hpp_
 
 #include "cspline.hpp"
+#include "../constants.hpp"
 
 namespace ccdl
 {
@@ -227,8 +228,8 @@ inline void ccdl::CubicSpline::RadialDensityToRadialPotential()
 
 inline void ccdl::CubicSpline::RadialDensityToRadialPotential( double norm )
 {
-  double const FOUR_PI = 4. * 3.141592653589793238462643383279502884197;
-  double const SQRT_4PI = std::sqrt( FOUR_PI );
+  //double const FOUR_PI = 4. * 3.141592653589793238462643383279502884197;
+  double const SQRT_4PI = std::sqrt( ccdl::FOUR_PI );
   YlmDensityToYlmPotential( norm / SQRT_4PI );
 }
 

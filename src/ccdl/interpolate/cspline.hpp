@@ -7,8 +7,9 @@
 #include <iostream>
 #include <iomanip>
 #include <fstream>
+#include "../constants.hpp"
 
-#define EFMT std::scientific << std::setw(24) << std::setprecision(15)
+// # define EFMT std::scientific << std::setw(24) << std::setprecision(15)
 
 namespace ccdl
 {
@@ -583,8 +584,8 @@ void ccdl::cspline_lmpotential
   // fout.open("lmint.dat");
 
 
-  double const FOUR_PI = 4. * 3.141592653589793238462643383279502884197;
-  double fact = FOUR_PI / ( 2*L+1 );
+  //double const FOUR_PI = 4. * 3.141592653589793238462643383279502884197;
+  double fact = ccdl::FOUR_PI / ( 2*L+1 );
 
   for ( int m=0; m<2*L+1; ++m )
     {
@@ -784,7 +785,7 @@ void ccdl::cspline_lmpotential
 
   if ( ClmNormalizations != NULL )
     {
-      double const normFactor = std::sqrt( FOUR_PI / (2*L+1) );
+      double const normFactor = std::sqrt( ccdl::FOUR_PI / (2*L+1) );
       for ( int m=0; m<2*L+1; ++m )
 	{
 	  if ( std::abs( ClmNormalizations[m] ) > 1.e-6 )
