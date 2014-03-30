@@ -24,9 +24,9 @@ namespace ccdl
 
     void Erase();
 
-    int const GetN() const { return mX.size(); }
+    int GetN() const { return mX.size(); }
 
-    int const GetNspl() const { return mY.size(); }
+    int GetNspl() const { return mY.size(); }
 
     double GetLeftX() const { return mX[0]; }
 
@@ -40,7 +40,7 @@ namespace ccdl
     ( int const ispl, 
       int const ipt ) const 
     { 
-      return mY[ispl][2*i]; 
+      return mY[ispl][2*ipt]; 
     }
     
     void GetY

@@ -600,7 +600,7 @@ void ccdl::cspline_lmpotential
 
   int const nm1 = n-1;
 
-  double ai,bi;
+  //double ai,bi;
 
   double am[4],ap[4],apowm;
   double bm[4] = {0.,0.,0.,0.};
