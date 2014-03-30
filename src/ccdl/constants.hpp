@@ -271,7 +271,7 @@ namespace ccdl
   /** \var SPEED_OF_LIGHT_AU
    * AU
    */
-  double const SPEED_OF_LIGHT_AU     = SPEED_OF_LIGHT / VELOCTY_SI_PER_AU;
+  double const SPEED_OF_LIGHT_AU     = SPEED_OF_LIGHT_SI / VELOCTY_SI_PER_AU;
 
 
 

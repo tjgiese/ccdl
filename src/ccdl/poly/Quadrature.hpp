@@ -1,8 +1,7 @@
 #ifndef _CCDL_GAUSSIANQUADRATUREMOD_HPP_
 #define _CCDL_GAUSSIANQUADRATUREMOD_HPP_
 
-
-namespace YGXX
+namespace ccdl
 {
   
   /** \brief Gauss-Laguerre quadrature points and weights
@@ -211,15 +210,19 @@ namespace YGXX
    *  @param[out] rVecWt = array of quadrature weights
    *
    */
+  template <class T>
   void LebedevRule
-  ( unsigned int const & iRule,
-    std::tr1::array<double,3> * rVecPt,
+  ( int const iRule,
+    T * rVecPt,
     double * rVecWt );
 
 
   double LebedevCosmoGaussianZetaScaleFactor( int const iRule );
 
 }
+
+
+#include "LebedevRule.hpp"
 
 
 #endif

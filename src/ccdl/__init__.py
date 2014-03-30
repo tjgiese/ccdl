@@ -9,5 +9,7 @@ package = autopackage(
     version="0.1",
     apiversion="0:0:0")
 
+package.license = licenses.Nonfree
+
 if __name__ == "__main__":
     package.configure()
