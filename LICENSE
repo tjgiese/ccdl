@@ -25,4 +25,15 @@
     OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
     SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+    The following is a list of exceptions to the above license:
+
+    (a) The directory src/ccdl/math/spblas contains files that
+        are subject to the following license terms:
+    "Pursuant to Title 17 Section 105 of the United States Code,
+     this software is not subject to copyright protection and is
+     in the public domain. NIST assumes no responsibility 
+     whatsoever for use by other parties of its source code or 
+     open source server, and makes no guarantees, expressed or 
+     implied, about its quality, reliability, or any other 
+     characteristic."
 
