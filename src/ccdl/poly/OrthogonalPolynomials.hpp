@@ -39,7 +39,7 @@ namespace ccdl
 
 }
 
-void ccdl::HermitePolynomial
+inline void ccdl::HermitePolynomial
 ( double const x, 
   int const n, // number of elements, not max order.  max_order = n-1
   double * val )
@@ -54,22 +54,22 @@ void ccdl::HermitePolynomial
     };
 }
 
-void ccdl::LaguerrePolynomial
+inline void ccdl::LaguerrePolynomial
 ( double const x, 
-  double const alpha, 
+  double const a, 
   int const n, 
   double * val )
 {
   val[0] = 1.;
   if ( n > 1 )
     {
-      val[1] = 1.-x+alpha;
+      val[1] = 1.-x+a;
       for ( int i=2; i<n; ++i )
 	val[i] = ( (i+i+a-x-1) * val[i-1] - (i+a-1) * val[i-2] ) / i;
     };
 }
 
-void ccdl::LegendrePolynomial
+inline void ccdl::LegendrePolynomial
 ( double const x, 
   int const n, // number of elements, not max order.  max_order = n-1
   double * val )
@@ -84,7 +84,7 @@ void ccdl::LegendrePolynomial
 }
 
 
-void ccdl::ChebyshevPolynomialFirstKind
+inline void ccdl::ChebyshevPolynomialFirstKind
 ( double const x, 
   int const n, // number of elements, not max order.  max_order = n-1
   double * val )
@@ -100,7 +100,7 @@ void ccdl::ChebyshevPolynomialFirstKind
 }
 
 
-void ccdl::ChebyshevPolynomialSecondKind
+inline void ccdl::ChebyshevPolynomialSecondKind
 ( double const x, 
   int const n, // number of elements, not max order.  max_order = n-1
   double * val )
@@ -116,7 +116,7 @@ void ccdl::ChebyshevPolynomialSecondKind
 }
 
 
-void ccdl::JacobiPolynomial
+inline void ccdl::JacobiPolynomial
 ( double const x, 
   double const alpha, 
   double const beta, 
@@ -132,8 +132,8 @@ void ccdl::JacobiPolynomial
       
       for ( int i=2; i<n; ++i )
 	{
-	  double const t = 2*i+ap;
-	  double const f = 2*i*(i+ap)*(t-2.);
+	  double const t = 2*i+ab;
+	  double const f = 2*i*(i+ab)*(t-2.);
 	  val[i] = ( (t-1.)*( t*(t-2.)*x+amb ) * val[i-1] 
 		     - 2.*(i+alpha-1.)*(i+beta-1.)*t * val[i-2] )/f;
 	};
