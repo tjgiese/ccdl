@@ -3,7 +3,11 @@
 
 namespace ccdl
 {
-  void SolidHarmRlm_v1( int const Lmax, double const * R, double * Y );
+  void SolidHarmRlm_v5( int const Lmax, double const * R, double * Y );
+  void SolidHarmIlm_v5( int const Lmax, double const * R, double * Y );
+  void RlmTranslation( int const Lto, int const Lfrom, 
+		       double const * Rtf, double * Wtf );
+
 }
 
 #endif

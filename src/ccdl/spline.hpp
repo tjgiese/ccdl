@@ -5,4 +5,6 @@
 #include "spline/MSpline.hpp"
 #include "spline/HarmonicSpline.hpp"
 
+#include "spline/bspline.hpp"
+
 #endif
