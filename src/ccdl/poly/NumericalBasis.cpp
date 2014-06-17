@@ -5,7 +5,7 @@
 #include "../constants.hpp"
 
 
-
+#include <iostream>
 
 
 
@@ -308,7 +308,7 @@ void ccdl::ClmLaguerreBasis
   double * fpp,
   double * fppp )
 {
-  std::vector<double> factrl(n+2*l+2,1.);
+  std::vector<double> factrl(n+2*l+2+1,1.);
   std::vector<double> Lag(n+1,0.);
   double Nc,x,tz,tzl,tzx;
   double L0,L1,L2,L3;
@@ -318,6 +318,7 @@ void ccdl::ClmLaguerreBasis
   tz  = 2*z;
   tzl = std::pow(tz,l);
   tlt = 2*l+2;
+  //std::cout <<  n+tlt+1 << " " << factrl.size() << "\n";
   fill_factrl( n+tlt+1, factrl.data() );
 
   Nc = std::sqrt( std::pow(tz,3) * factrl[n] / factrl[n+tlt] ) 
@@ -411,7 +412,7 @@ void ccdl::YlmLaguerreBasis
   double * fpp,
   double * fppp )
 {
-  std::vector<double> factrl( n+2*l+5, 1. );
+  std::vector<double> factrl( n+2*l+2+1, 1. );
   std::vector<double> Lag(n+1,0.);
   double Nc,x,tz,tzl,tzx,L0,L1,L2,L3;
   int tlt;

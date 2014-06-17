@@ -15,7 +15,7 @@ ccdl::AtomQuadParam::AtomQuadParam
     mNumPts(numShells*numAngPts),
     mShellOffsets(numShells+1)
 {
-  ccdl::GaussLaguerreRule( 0., numShells, mRadialPts, mRadialWts );
+  ccdl::GaussLaguerreRule( 0., numShells, mRadialPts.data(), mRadialWts.data() );
   double const lambda = mRadialPts.back() / outerRadius;
   for ( int i=0; i<numShells; ++i )
     {
@@ -85,8 +85,8 @@ ccdl::MolQuad::MolQuad
 
 void ccdl::MolQuad::BuildGrid()
 {
-  assert( mNumAtoms == mAtomParam.size() );
-  assert( mNumAtoms+1 == mAtomOffset.size() );
+  assert( mNumAtoms == (int)mAtomParam.size() );
+  assert( mNumAtoms+1 == (int)mAtomOffset.size() );
 
   mAtomOffset[0] = 0;
   for ( int iat=0; iat<GetNumAtoms(); ++iat )
@@ -100,27 +100,32 @@ void ccdl::MolQuad::BuildGrid()
 
   for ( int i=0; i<GetNumPts(); ++i )
     mPartitionWt[i] = 1.;
-
-  std::vector<double> angPts,angWts;
-  ccdl::LebedevRule( GetNumPts(0,0), angPts, angWts );
+  
+  int nang = GetNumPts(0,0);
+  std::vector< std::tr1::array<double,3> > angPts(nang);
+  std::vector<double> angWts(nang);
+  ccdl::LebedevRule( nang, angPts.data(), angWts.data() );
   for ( int iat=0; iat < GetNumAtoms(); ++iat )
     {
       for ( int irad=0, nrad=GetNumRadialShells(iat); irad<nrad; ++irad )
 	{
-	  int const nang = GetNumPts(iat,irad);
+	  nang = GetNumPts(iat,irad);
 
-	  if ( nang != angWts.size() )
-	    ccdl::LebedevRule( nang, angPts, angWts );
-
+	  if ( nang != (int)angWts.size() )
+	    {
+	      angPts.resize(nang);
+	      angWts.resize(nang);
+	      ccdl::LebedevRule( nang, angPts.data(), angWts.data() );
+	    };
 	  int const o = GetRadialShellOffset(iat,irad);
 	  double const radius = GetAtomParam(iat).GetRadialPt(irad);
 	  double const radWt  = GetAtomParam(iat).GetRadialWt(irad);
 	  for ( int iang=0; iang < nang; ++iang )
 	    {
 	      mSingleCenterWt[iang+o] = radWt * angWts[iang];
-	      mQuadCrd[iang+o][0] = mAtomCrd[iat][0] + radius * angPts[0+iang*3];
-	      mQuadCrd[iang+o][1] = mAtomCrd[iat][1] + radius * angPts[1+iang*3];
-	      mQuadCrd[iang+o][2] = mAtomCrd[iat][2] + radius * angPts[2+iang*3];
+	      mQuadCrd[iang+o][0] = mAtomCrd[iat][0] + radius * angPts[iang][0];
+	      mQuadCrd[iang+o][1] = mAtomCrd[iat][1] + radius * angPts[iang][1];
+	      mQuadCrd[iang+o][2] = mAtomCrd[iat][2] + radius * angPts[iang][2];
 	    };
 	};
     };

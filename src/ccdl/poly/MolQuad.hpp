@@ -28,6 +28,8 @@ namespace ccdl
 
     double GetRadialPt( int const irad ) const { return mRadialPts[irad]; }
 
+    double const * GetRadialPts() const { return mRadialPts.data(); }
+
     double GetRadialWt( int const irad ) const { return mRadialWts[irad]; }
 
     int GetNumAngPts( int const irad ) const { return mNumAngPts[irad]; }
@@ -65,9 +67,9 @@ namespace ccdl
     MolQuad( std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > const & atomParam, 
 	     std::vector< std::tr1::array<double,3> > const & atomCrd );
    
-    MolQuad( std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > const & atomParam, 
-	     std::vector< std::tr1::array<double,3> > const & atomCrd,
-	     double const bufferRadius );
+//    MolQuad( std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > const & atomParam, 
+//	     std::vector< std::tr1::array<double,3> > const & atomCrd,
+//	     double const bufferRadius );
     
 
     double GetQuadWt( int const ipt ) const { return mTotalWt[ipt]; }
