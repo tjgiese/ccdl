@@ -87,6 +87,11 @@ namespace ccdl
 
     void RadialDensityToRadialPotential( double charge );
 
+
+    void RadialDensityToSphericalPotential();
+
+    void RadialDensityToSphericalPotential( double charge );
+
     void operator*= ( double const d );
 
     void operator/= ( double const d );

@@ -1210,7 +1210,7 @@ void ccdl::Backend::_8pt_helper
 
 
 
-double ccdl::LebedevCosmoGaussianZetaScaleFactor( int const iRule )
+inline double ccdl::LebedevCosmoGaussianZetaScaleFactor( int const iRule )
 {
   double scl=4.90792902522;
   switch(iRule)

@@ -3,7 +3,8 @@
 #include <iostream>
 #include <cmath>
 #include <cassert>
-#include <vector>
+
+#include "../constants.hpp"
 
 #ifndef alloca
 #define alloca __builtin_alloca
@@ -17,7 +18,7 @@
 ///////////////////////////////////////////////////////////////////
 
 
-void ccdl::one_pass_bspline( double * c, double const w, int const n )
+void ccdl::bspline_one_pass( double * c, double const w, int const n )
 {
   int nm1 = n-1;
   double const div = 1. / nm1;
@@ -26,7 +27,7 @@ void ccdl::one_pass_bspline( double * c, double const w, int const n )
     c[nm1 - j] = div * ((w + j) * c[nm1 - j - 1] + (n - j - w) * c[nm1 - j]);
   c[0] = div * (1 - w) * c[0];
 }
-void ccdl::diff_bspline( int const order, double const * array, double * diff )
+void ccdl::bspline_diff( int const order, double const * array, double * diff )
 {
   assert( order > 1 );
   int const nm1 = order-1;
@@ -36,7 +37,7 @@ void ccdl::diff_bspline( int const order, double const * array, double * diff )
   diff[nm1] = array[nm1-1];
 }
 
-void ccdl::fill_bspline_0( double const w, int const order, double * array )
+void ccdl::bspline_eval( double const w, int const order, double * array )
 {
   array[0] = 1. - w;
   array[1] = w;
@@ -56,12 +57,12 @@ void ccdl::fill_bspline_0( double const w, int const order, double * array )
           array[0] = div * (1. - w) * array[0];
           // and the rest
           for ( int k = 5; k < order+1; ++k )
-            ccdl::one_pass_bspline(array, w, k);
+            ccdl::bspline_one_pass(array, w, k);
         };
     };
 }
 
-void ccdl::fill_bspline_1( double const w, int const order, double * array, double * darray )
+void ccdl::bspline_eval( double const w, int const order, double * array, double * darray )
 {
   assert( order > 2 );
   double const div = 1./3.;
@@ -101,12 +102,12 @@ void ccdl::fill_bspline_1( double const w, int const order, double * array, doub
 
       // and the rest
       for ( int k = 5; k < order; ++k ) // don't do k==order
-        ccdl::one_pass_bspline(array, w, k);
+        ccdl::bspline_one_pass(array, w, k);
 
-      ccdl::diff_bspline(order,array,darray);
+      ccdl::bspline_diff(order,array,darray);
 
       // One more recursion: // do the k==order
-      ccdl::one_pass_bspline(array, w, order);
+      ccdl::bspline_one_pass(array, w, order);
 
     }
   else // order == 3
@@ -122,7 +123,7 @@ void ccdl::fill_bspline_1( double const w, int const order, double * array, doub
     };
 }
 
-void ccdl::fill_bspline_n( double const w, int const order, int const nder, double * array )
+void ccdl::bspline_eval( double const w, int const order, int const nder, double * array )
 {
   assert( order > 2 );
   double ** darray = (double**)alloca ( sizeof(double**) * (nder+1) );
@@ -133,14 +134,14 @@ void ccdl::fill_bspline_n( double const w, int const order, int const nder, doub
     array[i] = 0.;
   array[0] = 1.;
   for ( int d=0, nd=std::min(nder,order-1); d<nd; ++d )
-    ccdl::diff_bspline(order,darray[d],darray[d+1]);
+    ccdl::bspline_diff(order,darray[d],darray[d+1]);
   array[0] = 1. - w;
   array[1] = w;
   for ( int o=3; o<=order; ++o )
     {
       for ( int d=0, nd=std::min(order-(o-1),nder); d<nd; ++d )
-        diff_bspline(order,darray[d],darray[d+1]);
-      ccdl::one_pass_bspline(array, w, o);
+        bspline_diff(order,darray[d],darray[d+1]);
+      ccdl::bspline_one_pass(array, w, o);
     };
 }
 
@@ -153,7 +154,7 @@ void ccdl::fill_bspline_n( double const w, int const order, int const nder, doub
 ///////////////////////////////////////////////////////////////////
 
 
-void ccdl::periodicBspline
+void ccdl::bspline_periodic
 ( double x, 
   double const lenx, 
   int const nx,
@@ -161,11 +162,11 @@ void ccdl::periodicBspline
   double * w )
 {
   x = x*nx/lenx - (order%2)*0.5;
-  ccdl::fill_bspline_0(x-std::floor(x),order,w);
+  ccdl::bspline_eval(x-std::floor(x),order,w);
 }
 
 
-void ccdl::periodicBspline
+void ccdl::bspline_periodic
 ( double x, 
   double const lenx, 
   int const nx,
@@ -180,11 +181,11 @@ void ccdl::periodicBspline
   for ( int b=0; b<order; ++b, ++ilo )
     gidx[b] = ilo%nx;
   ///////////////////////////
-  ccdl::fill_bspline_0(x,order,w);
+  ccdl::bspline_eval(x,order,w);
 }
 
 
-void ccdl::periodicBspline
+void ccdl::bspline_periodic
 ( double x, 
   double const lenx, 
   int const nx,
@@ -206,14 +207,14 @@ void ccdl::periodicBspline
       gidx[b] = ilo%nx;
     };
   ///////////////////////////
-  ccdl::fill_bspline_0(q,order,w);
+  ccdl::bspline_eval(q,order,w);
 }
 
 
 
 
 
-void ccdl::periodicBsplineDeriv
+void ccdl::bspline_periodic_deriv
 ( double x, 
   double const lenx, 
   int const nx,
@@ -225,14 +226,14 @@ void ccdl::periodicBsplineDeriv
   int ilo = std::floor(x);
   x -= ilo;
   ///////////////////////////
-  ccdl::fill_bspline_1(x,order,w,dw);
+  ccdl::bspline_eval(x,order,w,dw);
   x = nx/lenx;
   for ( int b=0; b<order; ++b )
     dw[b] *= x;
 }
 
 
-void ccdl::periodicBsplineDeriv
+void ccdl::bspline_periodic_deriv
 ( double x, 
   double const lenx, 
   int const nx,
@@ -245,7 +246,7 @@ void ccdl::periodicBsplineDeriv
   int ilo = std::floor(x);
   x -= ilo;
   ilo = ((ilo+1-order/2)%nx+nx)%nx;
-  ccdl::fill_bspline_1(x,order,w,dw);
+  ccdl::bspline_eval(x,order,w,dw);
   x = nx/lenx;
   for ( int b=0; b<order; ++b, ++ilo )
     {
@@ -255,7 +256,7 @@ void ccdl::periodicBsplineDeriv
 }
 
 
-void ccdl::periodicBsplineDeriv
+void ccdl::bspline_periodic_deriv
 ( double x, 
   double const lenx, 
   int const nx,
@@ -268,7 +269,7 @@ void ccdl::periodicBsplineDeriv
   double del = lenx/nx;
   double q = x/del - (order%2)*0.5;
   int ilo = std::floor(q);
-  ccdl::fill_bspline_1(q-ilo,order,w,dw);
+  ccdl::bspline_eval(q-ilo,order,w,dw);
   ilo += 1 - order/2;
   dw[0] /= del;
   delta[0] = del*ilo-x;
@@ -292,7 +293,7 @@ void ccdl::periodicBsplineDeriv
 ///////////////////////////////////////////////////////////////////
 
 
-void ccdl::aperiodicBspline
+void ccdl::bspline_aperiodic
 ( double x, 
   double const lenx, 
   int const nx,
@@ -302,7 +303,7 @@ void ccdl::aperiodicBspline
 {
   x = x*nx/lenx - (order%2)*0.5;
   int ilo = std::floor(x);
-  ccdl::fill_bspline_0(x-ilo,order,w);
+  ccdl::bspline_eval(x-ilo,order,w);
   ilo += 1 - order/2;
   for ( int b=0; b<order; ++b, ++ilo )
     {
@@ -318,7 +319,7 @@ void ccdl::aperiodicBspline
     };
 }
 
-void ccdl::aperiodicBspline
+void ccdl::bspline_aperiodic
 ( double x, 
   double const lenx, 
   int const nx,
@@ -330,7 +331,7 @@ void ccdl::aperiodicBspline
   double del = lenx/nx;
   double q = x/del - (order%2)*0.5;
   int ilo = std::floor(q);
-  ccdl::fill_bspline_0(q-ilo,order,w);
+  ccdl::bspline_eval(q-ilo,order,w);
   ilo += 1 - order/2;
   for ( int b=0; b<order; ++b, ++ilo )
     {
@@ -349,7 +350,7 @@ void ccdl::aperiodicBspline
     };
 }
 
-void ccdl::aperiodicBsplineDeriv
+void ccdl::bspline_aperiodic_deriv
 ( double x, 
   double const lenx, 
   int const nx,
@@ -360,7 +361,7 @@ void ccdl::aperiodicBsplineDeriv
 {
   x = x*nx/lenx - (order%2)*0.5;
   int ilo = std::floor(x);
-  ccdl::fill_bspline_1(x-ilo,order,w,dw);
+  ccdl::bspline_eval(x-ilo,order,w,dw);
   ilo += 1-order/2;
   x = nx/lenx;
   for ( int b=0; b<order; ++b, ++ilo )
@@ -381,7 +382,7 @@ void ccdl::aperiodicBsplineDeriv
 
 
 
-void ccdl::aperiodicBsplineDeriv
+void ccdl::bspline_aperiodic_deriv
 ( double x, 
   double const lenx, 
   int const nx,
@@ -394,7 +395,7 @@ void ccdl::aperiodicBsplineDeriv
   double del = lenx/nx;
   double q = x/del - (order%2)*0.5;
   int ilo = std::floor(q);
-  ccdl::fill_bspline_1(q-ilo,order,w,dw);
+  ccdl::bspline_eval(q-ilo,order,w,dw);
   ilo += 1 - order/2;
   for ( int b=0; b<order; ++b, ++ilo )
     {
@@ -421,7 +422,7 @@ void ccdl::aperiodicBsplineDeriv
 
 
 
-void ccdl::periodicBsplineNthDeriv
+void ccdl::bspline_periodic_nderiv
 ( double x, 
   double const lenx, 
   int const nx,
@@ -434,7 +435,7 @@ void ccdl::periodicBsplineNthDeriv
   double del = lenx/nx;
   double q = x/del - (order%2)*0.5;
   int ilo = std::floor(q);
-  ccdl::fill_bspline_n(q-ilo,order,nder,dwdx);
+  ccdl::bspline_eval(q-ilo,order,nder,dwdx);
   ilo += 1 - order/2;
   delta[0] = del*ilo-x;
   gidx[0]  = ((ilo++)%nx+nx)%nx;
@@ -456,7 +457,7 @@ void ccdl::periodicBsplineNthDeriv
 }
 
 
-void ccdl::aperiodicBsplineNthDeriv
+void ccdl::bspline_aperiodic_nderiv
 ( double x, 
   double const lenx, 
   int const nx,
@@ -469,7 +470,7 @@ void ccdl::aperiodicBsplineNthDeriv
   double del = lenx/nx;
   double q = x/del - (order%2)*0.5;
   int ilo = std::floor(q);
-  ccdl::fill_bspline_n(q-ilo,order,nder,dwdx);
+  ccdl::bspline_eval(q-ilo,order,nder,dwdx);
   ilo += 1 - order/2;
   for ( int b=0; b<order; ++b, ++ilo )
     {
@@ -488,5 +489,181 @@ void ccdl::aperiodicBsplineNthDeriv
 	  delta[b] = 0.;
 	};
     };
+}
+
+
+
+
+
+
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////
+
+
+
+
+#include <vector>
+#include <complex>
+#include <cmath>
+#include <fftw3.h>
+
+////////////////////////////////////////////////////////////////////
+// discrete cosine expansion; computes the fourier coefficients
+// of an even function positioned according to the fftw3 conventions
+////////////////////////////////////////////////////////////////////
+void ccdl::bspline_dct
+( int const N, int const order, double const * in, double * out )
+{
+  for ( int i=0; i<N; ++i ) out[i] = 0.;
+  
+  int const o = (order-1)/2;
+  int const Np = (order)/2+1;
+  int const Nh = N-o;
+  
+  double const tpion = TWO_PI/N;
+  for ( int m=0; m<N; ++m )
+    {
+      double const k = m * tpion;
+      for ( int n=0; n<Np; ++n )
+        out[m] += in[n+o] * std::cos(k*n);
+      for ( int i=0; i<o; ++i )
+        out[m] += in[i] * std::cos(k*(Nh+i));
+    };
+}
+
+
+////////////////////////////////////////////////////////////////////
+// discrete cosine expansion; computes the fourier coefficients
+// of an even function positioned according to the fftw3 conventions
+// This version computes only half of the spectrum on account
+// of the symmetry of the complex numbers in the fast-loop
+////////////////////////////////////////////////////////////////////
+void ccdl::bspline_hdct
+( int const N, int const order, double const * in, double * out )
+{
+  for ( int i=0; i<N/2+1; ++i ) out[i] = 0.;
+  
+  int const Nmax = N/2+1;
+  int const o = (order-1)/2;
+  int const Np = (order)/2+1;
+  int const Nh = N-o;
+  
+  double const tpion = TWO_PI/N;
+  for ( int m=0; m<Nmax; ++m )
+    {
+      double const k = m * tpion;
+      for ( int n=0; n<Np; ++n )
+        out[m] += in[n+o] * std::cos(k*n);
+      for ( int i=0; i<o; ++i )
+        out[m] += in[i] * std::cos(k*(Nh+i));
+    };
+}
+
+
+////////////////////////////////////////////////////////////////////
+// Computes the fourier transform of a b-spline
+////////////////////////////////////////////////////////////////////
+void ccdl::bspline_fourier_full
+( int const N, int const order, double * fc )
+{
+  double * wts = (double*)alloca (sizeof(double*)*order);
+    //std::vector<double> wts( order, 0. );
+  ccdl::bspline_eval( ( order%2 == 0 ? 0.0 : 0.5 ), order, wts );
+  ccdl::bspline_dct( N, order, wts, fc );
+}
+
+////////////////////////////////////////////////////////////////////
+// Computes the fourier transform of a b-spline
+// This version only computes half of the fourier spectrum on
+// account of the complex number symmetry within the fast loop
+////////////////////////////////////////////////////////////////////
+void ccdl::bspline_fourier_half
+( int const N, int const order, double * fc )
+{
+  double * wts = (double*)alloca (sizeof(double*)*order);
+  //std::vector<double> wts( order, 0. );
+  ccdl::bspline_eval( ( order%2 == 0 ? 0.0 : 0.5 ), order, wts );
+  ccdl::bspline_hdct( N, order, wts, fc );
+}
+
+
+
+///////////////////////////////////////////////////////////////////
+// renormalizes a uniform grid of data so that b-spline
+// interpolation exactly passes through the data
+///////////////////////////////////////////////////////////////////
+void ccdl::bspline_renormalize
+( double const lx,
+  int const nx,
+  int const order,
+  double * data )
+{
+  int const nfourier      = nx/2+1;
+  
+  //
+  // allocate fft data and plans
+  //
+  double * value = fftw_alloc_real( nx );
+
+  std::complex<double> * fourier 
+    = reinterpret_cast< std::complex<double> * >
+    ( fftw_alloc_complex( nfourier ) );
+
+  fftw_plan * fplan = new fftw_plan
+    ( fftw_plan_dft_r2c_1d
+      ( nx,
+        value, 
+        reinterpret_cast< fftw_complex *>( fourier ), 
+        FFTW_ESTIMATE ) );
+
+  fftw_plan * rplan = new fftw_plan
+    ( fftw_plan_dft_c2r_1d
+      ( nx,
+        reinterpret_cast< fftw_complex *>( fourier ), 
+        value, 
+        FFTW_ESTIMATE ) );
+  //
+  // forward fft of data
+  //
+  for ( int i=0; i<nx; ++i )
+    value[i] = data[i];
+  fftw_execute( *fplan );
+  double const volElement = lx/nx;
+  for ( int i=0; i<nfourier; ++i )
+    fourier[i] *= volElement;
+  //
+  // forward fft of b-splines
+  //
+  std::vector<double> fx( nx, 0. );
+  bspline_fourier_half( nx, order, fx.data() );
+  //
+  // scale the fourier coefs
+  //
+  for ( int i=0; i < nfourier; ++i )
+    fourier[i] /= ( fx[i] );
+  //
+  // reverse fft
+  //
+  fftw_execute( *rplan ); 
+  double const ooV = 1./lx;
+  for ( int i=0; i<nx; ++i )
+    data[i] = ooV * value[i];
+  //
+  // delete
+  //
+  fftw_destroy_plan( *fplan );
+  delete fplan;
+  fplan = NULL;
+  fftw_destroy_plan( *rplan );
+  delete rplan;
+  rplan = NULL;
+  fftw_free(reinterpret_cast< fftw_complex * &>(fourier));
+  fourier = NULL;
+  fftw_free( value );
+  value = NULL;
 }
 
