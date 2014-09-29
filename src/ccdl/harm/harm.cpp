@@ -211,317 +211,383 @@ void ccdl::RlmTranslation
 
 
 
-/*
 
-void ccdl::SolidHarmIlm_v1
-( int const Lmax, double const *__restrict__ R, double *__restrict__ Y )
+
+void ccdl::IlmInteraction
+( int const lam, int const lbm, 
+  double const *__restrict__ Rab,
+  double *__restrict__ T )
 {
-  int const nl1 = Lmax+1;
-  double x = R[0];
-  double y = R[1];
-  double z = R[2];
-  double r2     = x*x + y*y + z*z;
-  double oor2   = 1.0/r2;
-  Y[0] = std::sqrt(oor2);
-  double co  = Y[0];
-  double coo = 0.0;  
-  int TLm1=-1;
-  int LPMtLMM=0;
-  for (int L=1; L<nl1; ++L )
+  int l,m,j,k;
+  int l0,j0,lj0,l1,j1,jc,js;
+  int jms,kms,mms;
+
+
+  if ( lam == 0 and lbm == 0 )
     {
-      TLm1 += 2;
-      double c  = oor2 * (TLm1*z*co-LPMtLMM*coo);
-      coo= co;
-      co = c;
-      LPMtLMM += TLm1;
-      Y[LPMtLMM] = c;
+      T[0] = 1. / std::sqrt( Rab[0]*Rab[0] + Rab[1]*Rab[1] + Rab[2]*Rab[2] );
+      return;
     };
 
-  double cmmo=0.0;
-  double cpmo=Y[0];
+  int const na = (lam+1)*(lam+1);
+#ifdef __GNUG__
+  double *__restrict__ I = (double *__restrict__) alloca ( sizeof(double)*((lam+lbm+1)*(lam+lbm+1)) );
+#else
+  std::vector<double> I( (lam+lbm+1)*(lam+lbm+1) , 0. );
+#endif
 
-  for ( int M=1; M<nl1; ++M )
+  // minus Rab !!
+  double mrab[] = { -Rab[0], -Rab[1], -Rab[2] };
+  ccdl::SolidHarmIlm_v5(lam+lbm,mrab,I);
+
+
+
+
+
+  if ( lam >= lbm )
     {
-      int TM = M+M;
-      int TMm1=TM-1;
-      int M2 = M*M;
-      double cpm =  ( y*cmmo - x*cpmo ) * TMm1 * oor2;
-      double cmm = -( y*cpmo + x*cmmo ) * TMm1 * oor2;
-      cpmo=cpm;
-      cmmo=cmm;
-      int i  = M2+TM;
-      Y[i-1] = cpm;
-      Y[i] = cmm;
-      double cpm2o = cpm;
-      double cmm2o = cmm;
-      double cpm2oo= 0.0;
-      double cmm2oo= 0.0;
-      LPMtLMM = -TMm1;
-      for ( int L=M+1; L<nl1; ++L )
+
+      for ( l=0; l <= lam; ++l )
 	{
-	  int TL = L+L;
-	  TLm1 = TL-1;
-	  LPMtLMM += TLm1 - 2;
-	  double a = TLm1 * z * oor2;
-	  double b = LPMtLMM * oor2;
-	  double cpm2 = a * cpm2o - b * cpm2oo;
-	  double cmm2 = a * cmm2o - b * cmm2oo;
-	  i += TLm1;
-	  Y[i-1]   = cpm2;
-	  Y[i] = cmm2;
-	  cpm2oo = cpm2o;
-	  cmm2oo = cmm2o;
-	  cpm2o  = cpm2;
-	  cmm2o  = cmm2;
-	  };
-      };
-}
+	  l0 = l*l;
+	  T[l0] = I[l0];
+	  for ( m=1 ; m < 2*l+1; ++m )
+	    T[l0+m] = I[l0+m] * 2.;
+	};
 
-
-
-
-  void SolidHarmIlm_v2
-  ( int const Lmax, double const * R, double *__restrict__ Y )
-  {
-    double const oor2 = 1. / ( R[0]*R[0] + R[1]*R[1] + R[2]*R[2] );
-    Y[0] = std::sqrt(oor2);
-    if ( Lmax > 0 )
-      {
-	double Q[3] = { -R[0]*oor2, -R[1]*oor2, R[2]*oor2 };
-	Y[1] = Q[2]*Y[0];
-	Y[2] = Q[0]*Y[0];
-	Y[3] = Q[1]*Y[0];
-	for ( int L=2; L<Lmax+1; ++L )
-	  {
-	    int tlm1 = L+L-1;
-	    int l0 = L*L;
-	    int l1 = l0-tlm1;
-	    int l2 = l1-tlm1+2;
-	    double t = tlm1*Q[2];
-	    Y[l0] = t*Y[l1] - l1*Y[l2]*oor2;
-	    for ( int M=1; M<L-1; ++M )
-	      {
-		Y[l0+2*M-1] = t*Y[l1+2*M-1]-(l1-M*M)*Y[l2+2*M-1]*oor2;
-		Y[l0+2*M]   = t*Y[l1+2*M]  -(l1-M*M)*Y[l2+2*M]  *oor2;
-	      };
-	    Y[l0+tlm1-2] = t*Y[l1+tlm1-2];
-	    Y[l0+tlm1-1] = t*Y[l1+tlm1-1];
-	    
-	    Y[l0+tlm1]   = tlm1*(Q[0]*Y[l1+tlm1-2]-Q[1]*Y[l1+tlm1-1]);
- 	    Y[l0+tlm1+1] = tlm1*(Q[0]*Y[l1+tlm1-1]+Q[1]*Y[l1+tlm1-2]);
-	  };
-      };
-  }
-
-
-  void SolidHarmIlm_v3
-  ( int const Lmax, double const * R, double *__restrict__ Y )
-  {
-    double const oor2 = 1. / ( R[0]*R[0] + R[1]*R[1] + R[2]*R[2] );
-    Y[0] = std::sqrt(oor2);
-    if ( Lmax > 0 )
-      {
-	double Q[3] = { -R[0]*oor2, -R[1]*oor2, R[2]*oor2 };
-	Y[1] = Q[2]*Y[0];
-	Y[2] = Q[0]*Y[0];
-	Y[3] = Q[1]*Y[0];
-	double *__restrict__ p = Y+3;
-	double const *__restrict__  pa = Y;
-	double const *__restrict__  pb = Y-1;
-	for ( int L=2; L<Lmax+1; ++L )
-	  {
-	    int tlm1 = L+L-1;
-	    //int l0 = L*L;
-	    int l1 = (L-1)*(L-1);
-	    //int l2 = l1-tlm1+2;
-	    double t = tlm1*Q[2];
-	    *++p = *++pa*t - *++pb*l1*oor2;
-	    for ( int M=1; M<L-1; ++M )
-	      {
-		*++p = *++pa*t - *++pb*(l1-M*M)*oor2;
-		*++p = *++pa*t - *++pb*(l1-M*M)*oor2;
-	      };
-	    *++p = *++pa*t;
-	    *++p = *++pa*t;
-	    
-	    *++p = tlm1*(Q[0]*(*(pa-1))-Q[1]*(*pa));
- 	    *++p = tlm1*(Q[0]*(*pa)+Q[1]*(*(pa-1)));
-	  };
-      };
-  }
-
-*/
-
-
-
-
-/*
-
-void ccdl::SolidHarmRlm_v1
-( int const Lmax, double const *__restrict__ R, double *__restrict__ Y )
-{
-  Y[0] = 1.;
-
-  int const nl1 = Lmax+1;
-  double const x = R[0];
-  double const y = R[1];
-  double const z = R[2];
-  double const r2 = x*x+y*y+z*z;
-
-  double c;
-  double co  = 1.0;
-  double coo = 0.0;
-  for ( int L=1; L < nl1; ++L )
-    {
-      int L2=L*L;
-      c      = ( (2*L-1)*z*co-r2*coo ) / L2;
-      coo   = co;
-      co    = c;
-      Y[L2] = c;
-    };
-
-  double cmmo=0.0;
-  double cpmo=1.0;
-
-  for ( int M=1; M < nl1; ++M )
-    {
-      int TM = 2*M;
-      int M2 = M*M;
-      double cpm =  ( y*cmmo - x*cpmo ) / TM;
-      double cmm = -( y*cpmo + x*cmmo ) / TM;
-      cpmo=cpm;
-      cmmo=cmm;
-      int i  = M2+TM;
-      Y[i-1] = cpm;
-      Y[i]   = cmm;
-
-      double cpm2o = cpm;
-      double cmm2o = cmm;
-      double cpm2oo= 0.0;
-      double cmm2oo= 0.0;
-      int LPMtLMM = 0;
-      for ( int L=M+1; L < nl1; ++L )
+      jms = -1;
+      for ( j=1; j <= lbm; ++j )
 	{
-	  int TL       = L+L;
-	  int TLm1     = TL-1;
-	  LPMtLMM += TLm1;
-	  double a    = TLm1 * z / LPMtLMM;
-	  double b    = r2 / LPMtLMM;
-	  double cpm2 = a * cpm2o - b * cpm2oo;
-	  double cmm2 = a * cmm2o - b * cmm2oo;
-	  i += TLm1;
-	  Y[i-1] = cpm2;
-	  Y[i]   = cmm2;
-	  cpm2oo   = cpm2o;
-	  cmm2oo   = cmm2o;
-	  cpm2o    = cpm2;
-	  cmm2o    = cmm2;
+	  j0 = j*j;
+	  T[j0*na] = jms * I[j0];
+	  for ( k=1; k < 2*j+1; ++k )
+	    T[(j0+k)*na] = jms * I[j0+k] * 2.;
+	  jms = -jms;
+	};
+	
+      for ( j=1; j <= lbm; ++j )
+	{
+	  j0 = j*j;
+
+
+	  jms = -std::pow(-1,j);
+	  int lmx = std::min(j-1,lam);
+	  for ( l=1; l <= lmx; ++l )
+	    {
+	      l0 = l*l;
+	      for ( m=0; m < 2*l+1; ++m )
+		for ( k=0; k < 2*j+1; ++k )
+		  T[(l0+m)+(j0+k)*na] = jms * T[(j0+k)+(l0+m)*na];
+	      jms = -jms;
+	    };
+          
+
+	  //  we can build partially build l=j,lam-1
+	  //  from the l+1,j-1 block... we will just need to compute the k=j cases for all m
+
+
+	  jms = std::pow(-1,j);
+
+	  j1 = (j-1)*(j-1);
+	  for ( l=j; l <= lam-1; ++l )
+	    {
+	      l0 = l*l;
+	      l1 = (l+1)*(l+1);
+	      lj0 = (l+j)*(l+j);
+		
+	      //  k != j
+	      for ( k=0; k < 2*j-1; ++k )
+		for ( m=0; m < 2*l+1; ++m )
+		  T[(l0+m)+(j0+k)*na] = -T[(l1+m)+(j1+k)*na];
+		
+	      //  k = j
+		
+	      jc = j0+2*j-1;
+	      js = jc+1;
+		
+	      //  m=0, k=j
+	      //  (m-k < 0)
+	      T[l0+jc*na] = jms * 2. * I[lj0+2*j-1];
+	      T[l0+js*na] = jms * 2. * I[lj0+2*j  ];
+		
+		
+	      //  m=j, k=j
+	      //  (m-k = 0)
+	      //  (m = k)
+	      T[(l0+2*j-1)+jc*na] = jms * 2. * ( I[lj0+4*j-1] + jms * I[lj0] );
+	      T[(l0+2*j-1)+js*na] = jms * 2. * ( I[lj0+4*j  ] );
+	      T[(l0+2*j  )+jc*na] = jms * 2. * ( I[lj0+4*j  ] );
+	      T[(l0+2*j  )+js*na] = jms * 2. * (-I[lj0+4*j-1] + jms * I[lj0] );
+		
+		
+	      //  m>0, k>0
+	      //  m-k < 0
+	      mms = -1;
+	      int mmx = std::min(l,j-1);
+	      for ( m=1; m <= mmx; ++m )
+		{
+		  T[(l0+2*m-1)+jc*na] = jms * 2. * ( I[lj0+2*(m+j)-1] + mms * I[lj0-2*(m-j)-1] );
+		  T[(l0+2*m-1)+js*na] = jms * 2. * ( I[lj0+2*(m+j)  ] + mms * I[lj0-2*(m-j)  ] );
+		  T[(l0+2*m  )+jc*na] = jms * 2. * ( I[lj0+2*(m+j)  ] - mms * I[lj0-2*(m-j)  ] );
+		  T[(l0+2*m  )+js*na] = jms * 2. * (-I[lj0+2*(m+j)-1] + mms * I[lj0-2*(m-j)-1] );
+		  mms = -mms;
+		}
+		
+	      //  m>0, k>0
+	      //  m-k > 0
+	      for ( m=j+1; m <= l; ++m )
+		{
+		  T[(l0+2*m-1)+jc*na] = jms * 2. * ( I[lj0+2*(m+j)-1] + jms * I[lj0+2*(m-j)-1] );
+		  T[(l0+2*m-1)+js*na] = jms * 2. * ( I[lj0+2*(m+j)  ] - jms * I[lj0+2*(m-j)  ] );
+		  T[(l0+2*m  )+jc*na] = jms * 2. * ( I[lj0+2*(m+j)  ] + jms * I[lj0+2*(m-j)  ] );
+		  T[(l0+2*m  )+js*na] = jms * 2. * (-I[lj0+2*(m+j)-1] + jms * I[lj0+2*(m-j)-1] );
+		}
+	    };
+	    
+	    
+	    
+	  //  we have to build the entire l=lam block
+	    
+
+	  l = lam;
+	    
+	  l0  = l*l;
+	  lj0 = (l+j)*(l+j);
+	    
+	  //  m=0, k=0
+	  T[l0+j0*na] = jms * I[lj0];
+	    
+	  //  m=0, k>0
+	  //  (m-k < 0)
+	  for ( k=1; k <= j; ++k )
+	    {
+	      T[l0+(j0+2*k-1)*na] = jms * 2. * I[lj0+2*k-1];
+	      T[l0+(j0+2*k  )*na] = jms * 2. * I[lj0+2*k];
+	    };
+	  //  m>0, k=0
+	  //  (m-k > 0)
+	  for ( m=1; m <= l; ++m )
+	    {
+	      T[(l0+2*m-1)+j0*na] = jms * 2. * I[lj0+2*m-1];
+	      T[(l0+2*m  )+j0*na] = jms * 2. * I[lj0+2*m  ];
+	    }
+	    
+	  //  m>0, k>0
+	  //  (m-k = 0)
+	  //  (m = k)
+	  mms = -1;
+	  for ( m=1; m <= j; ++m )
+	    {
+	      T[(l0+2*m-1)+(j0+2*m-1)*na] = jms * 2. * ( I[lj0+4*m-1] + mms * I[lj0] );
+	      T[(l0+2*m-1)+(j0+2*m  )*na] = jms * 2. * ( I[lj0+4*m  ]);
+	      T[(l0+2*m  )+(j0+2*m-1)*na] = jms * 2. * ( I[lj0+4*m  ]);
+	      T[(l0+2*m  )+(j0+2*m  )*na] = jms * 2. * (-I[lj0+4*m-1] + mms * I[lj0] );
+	      mms = -mms;
+	    };
+	    
+	    
+	  //  m>0, k>0
+	  //  m-k < 0
+	  mms = -1;
+	  for ( m=1; m <= l; ++m )
+	    {
+	      for ( k=m+1; k <= j; ++k )
+		{
+		  T[(l0+2*m-1)+(j0+2*k-1)*na] = jms * 2. * ( I[lj0+2*(m+k)-1] + mms * I[lj0-2*(m-k)-1] );
+		  T[(l0+2*m-1)+(j0+2*k  )*na] = jms * 2. * ( I[lj0+2*(m+k)  ] + mms * I[lj0-2*(m-k)  ] );
+		  T[(l0+2*m  )+(j0+2*k-1)*na] = jms * 2. * ( I[lj0+2*(m+k)  ] - mms * I[lj0-2*(m-k)  ] );
+		  T[(l0+2*m  )+(j0+2*k  )*na] = jms * 2. * (-I[lj0+2*(m+k)-1] + mms * I[lj0-2*(m-k)-1] );
+		};
+	      mms = -mms;
+	    }
+	    
+	  //  m>0, k>0
+	  //  m-k > 0
+	  kms = -1;
+	  for ( k=1; k <= j; ++k )
+	    {
+	      for ( m=k+1; m <= l; ++m )
+		{
+		  T[(l0+2*m-1)+(j0+2*k-1)*na] = jms * 2. * ( I[lj0+2*(m+k)-1] + kms * I[lj0+2*(m-k)-1] );
+		  T[(l0+2*m-1)+(j0+2*k  )*na] = jms * 2. * ( I[lj0+2*(m+k)  ] - kms * I[lj0+2*(m-k)  ] );
+		  T[(l0+2*m  )+(j0+2*k-1)*na] = jms * 2. * ( I[lj0+2*(m+k)  ] + kms * I[lj0+2*(m-k)  ] );
+		  T[(l0+2*m  )+(j0+2*k  )*na] = jms * 2. * (-I[lj0+2*(m+k)-1] + kms * I[lj0+2*(m-k)-1] );
+		};
+	      kms = -kms;
+	    };
+	    
+	    
+	};
+    }
+
+  /* */
+
+  else
+    {
+
+
+      for ( l=0; l <= lam; ++l )
+	{
+	  l0 = l*l;
+	  T[l0] = I[l0];
+	  for ( m=1; m < 2*l+1; ++m )
+	    T[l0+m] = I[l0+m] * 2.;
+	}
+
+      jms = -1;
+      for ( j=1; j <= lbm; ++j )
+	{
+	  j0 = j*j;
+	  T[j0*na] = jms * I[j0];
+	  for ( k=1; k < 2*j+1; ++k )
+	    T[(j0+k)*na] = jms * I[j0+k] * 2.;
+	  jms = -jms;
+	}
+
+
+      for ( l=1; l <= lam; ++l )
+	{
+	  l0 = l*l;
+
+	  jms = -std::pow(-1,l);
+	  int jmx = std::min(l-1,lbm);
+	  for ( j=1; j <= jmx; ++j )
+	    {
+	      j0 = j*j;
+	      for ( m=0; m < 2*l+1; ++m )
+		for ( k=0; k < 2*j+1; ++k )
+		  T[(l0+m)+(j0+k)*na] = jms * T[(j0+k)+(l0+m)*na];
+	      jms = -jms;
+	    }
+
+	  //  we can build partially build j=l,lbm-1
+	  //  from the l-1,j+1 block... we will just need to compute the m=l cases for all j
+
+	  l1 = (l-1)*(l-1);
+	  for ( j=l; j <= lbm-1; ++j )
+	    {
+	      jms = std::pow(-1,j);
+	      j0  = j*j;
+	      j1  = (j+1)*(j+1);
+	      lj0 = (l+j)*(l+j);
+
+
+	      //  l != m
+	      for ( k=0; k < 2*j+1; ++k )
+		for ( m=0; m < 2*l-1; ++m )
+		  T[(l0+m)+(j0+k)*na] = -T[(l1+m)+(j1+k)*na];
+		
+
+	      //  m>0, k=0
+	      //  (m-k > 0)
+	      T[(l0+2*l-1)+j0*na] = jms * 2. * I[lj0+2*l-1];
+	      T[(l0+2*l  )+j0*na] = jms * 2. * I[lj0+2*l  ];
+
+	      // HERE *na
+
+	      //  m=l, k=l
+	      //  (m-k = 0)
+	      //  (m = k)
+	      mms = std::pow(-1,l);
+	      T[(l0+2*l-1)+(j0+2*l-1)*na] = jms * 2. * ( I[lj0+4*l-1] + mms * I[lj0] );
+	      T[(l0+2*l-1)+(j0+2*l  )*na] = jms * 2. * ( I[lj0+4*l  ] );
+	      T[(l0+2*l  )+(j0+2*l-1)*na] = jms * 2. * ( I[lj0+4*l  ] );
+	      T[(l0+2*l  )+(j0+2*l  )*na] = jms * 2. * (-I[lj0+4*l-1] + mms * I[lj0] );
+
+
+	      //  m>0, k>0
+	      //  m-k < 0
+	      for ( k=l+1; k <= j; ++k )
+		{
+		  T[(l0+2*l-1)+(j0+2*k-1)*na] = jms * 2. * ( I[lj0+2*(l+k)-1] + mms * I[lj0-2*(l-k)-1] );
+		  T[(l0+2*l-1)+(j0+2*k  )*na] = jms * 2. * ( I[lj0+2*(l+k)  ] + mms * I[lj0-2*(l-k)  ] );
+		  T[(l0+2*l  )+(j0+2*k-1)*na] = jms * 2. * ( I[lj0+2*(l+k)  ] - mms * I[lj0-2*(l-k)  ] );
+		  T[(l0+2*l  )+(j0+2*k  )*na] = jms * 2. * (-I[lj0+2*(l+k)-1] + mms * I[lj0-2*(l-k)-1] );
+		}
+
+	      //  m>0, k>0
+	      //  m-k > 0
+	      kms = -1;
+	      for ( k=1; k <= l-1; ++k )
+		{
+		  T[(l0+2*l-1)+(j0+2*k-1)*na] = jms * 2. * ( I[lj0+2*(l+k)-1] + kms * I[lj0+2*(l-k)-1] );
+		  T[(l0+2*l-1)+(j0+2*k  )*na] = jms * 2. * ( I[lj0+2*(l+k)  ] - kms * I[lj0+2*(l-k)  ] );
+		  T[(l0+2*l  )+(j0+2*k-1)*na] = jms * 2. * ( I[lj0+2*(l+k)  ] + kms * I[lj0+2*(l-k)  ] );
+		  T[(l0+2*l  )+(j0+2*k  )*na] = jms * 2. * (-I[lj0+2*(l+k)-1] + kms * I[lj0+2*(l-k)-1] );
+		  kms = -kms;
+		};
+	    }
+
+	  //  we have to build the entire j=lbm block
+
+	  j = lbm;
+	  jms = std::pow(-1,j);
+	  j0  = j*j;
+	  lj0 = (l+j)*(l+j);
+
+	  //  m=0, k=0
+	  T[l0+j0*na] = jms * I[lj0];
+
+	  //  m=0, k>0
+	  //  (m-k < 0)
+	  for ( k=1; k <= j; ++k )
+	    {
+	      T[l0+(j0+2*k-1)*na] = jms * 2. * I[lj0+2*k-1];
+	      T[l0+(j0+2*k  )*na] = jms * 2. * I[lj0+2*k  ];
+	    };
+
+	  //  m>0, k=0
+	  //  (m-k > 0)
+	  for ( m=1; m <= l; ++m )
+	    {
+	      T[(l0+2*m-1)+j0*na] = jms * 2. * I[lj0+2*m-1];
+	      T[(l0+2*m  )+j0*na] = jms * 2. * I[lj0+2*m  ];
+	    };
+
+	  //  m>0, k>0
+	  //  (m-k = 0)
+	  //  (m = k)
+	  mms = -1;
+	  for ( m=1; m <= l; ++m )
+	    {
+	      T[(l0+2*m-1)+(j0+2*m-1)*na] = jms * 2. * ( I[lj0+4*m-1] + mms * I[lj0] );
+	      T[(l0+2*m-1)+(j0+2*m  )*na] = jms * 2. * ( I[lj0+4*m  ] );
+	      T[(l0+2*m  )+(j0+2*m-1)*na] = jms * 2. * ( I[lj0+4*m  ] );
+	      T[(l0+2*m  )+(j0+2*m  )*na] = jms * 2. * (-I[lj0+4*m-1] + mms * I[lj0] );
+	      mms = -mms;
+	    }
+
+	  //  m>0, k>0
+	  //  m-k < 0
+	  mms = -1;
+	  for ( m=1; m <= l; ++m )
+	    {
+	      for ( k=m+1; k <= j; ++k )
+		{
+		  T[(l0+2*m-1)+(j0+2*k-1)*na] = jms * 2. * ( I[lj0+2*(m+k)-1] + mms * I[lj0-2*(m-k)-1] );
+		  T[(l0+2*m-1)+(j0+2*k  )*na] = jms * 2. * ( I[lj0+2*(m+k)  ] + mms * I[lj0-2*(m-k)  ] );
+		  T[(l0+2*m  )+(j0+2*k-1)*na] = jms * 2. * ( I[lj0+2*(m+k)  ] - mms * I[lj0-2*(m-k)  ] );
+		  T[(l0+2*m  )+(j0+2*k  )*na] = jms * 2. * (-I[lj0+2*(m+k)-1] + mms * I[lj0-2*(m-k)-1] );
+		};
+	      mms = -mms;
+	    };
+
+	  //  m>0, k>0
+	  //  m-k > 0
+	  kms = -1;
+	  for ( k=1; k <= j; ++k )
+	    {
+	      for ( m=k+1; m <= l; ++m )
+		{
+		  T[(l0+2*m-1)+(j0+2*k-1)*na] = jms * 2. * ( I[lj0+2*(m+k)-1] + kms * I[lj0+2*(m-k)-1] );
+		  T[(l0+2*m-1)+(j0+2*k  )*na] = jms * 2. * ( I[lj0+2*(m+k)  ] - kms * I[lj0+2*(m-k)  ] );
+		  T[(l0+2*m  )+(j0+2*k-1)*na] = jms * 2. * ( I[lj0+2*(m+k)  ] + kms * I[lj0+2*(m-k)  ] );
+		  T[(l0+2*m  )+(j0+2*k  )*na] = jms * 2. * (-I[lj0+2*(m+k)-1] + kms * I[lj0+2*(m-k)-1] );
+		};
+	      kms = -kms;
+	    };
+
 	};
     };
-  
+ 
 }
-
-void ccdl::SolidHarmRlm_v3
-( int const Lmax, double const * R, double * Y )
-{
-  Y[0] = 1.;
-
-
-  //0 1 2 3 4 5 6 7 8
-  //0 1 1 1 2 2 2 2 2
-  //0-1 0 1-2-1 0 1 2
-  
-  if ( Lmax > 0 )
-    {
-      double const x = R[0];
-      double const y = R[1];
-      double const z = R[2];
-
-      Y[1] =      z;
-      Y[2] = -0.5*x;
-      Y[3] = -0.5*y;
-
-      int const nl1 = Lmax+1;
-      double const r2 = x*x+y*y+z*z;
-      for ( int L=2; L<nl1; ++L )
-	{
-	  int l2 = (L-2)*(L-2);
-	  int l1 = (L-1)*(L-1);
-	  int l0 = L*L;
-	  int tl = L+L;
-	  double tlm1 = tl-1;
-	  Y[l0] = ( tlm1*z*Y[l1] - r2*Y[l2] ) / (L*L);
-	  int M,m;
-	  double a,b;
-	  
-	  for ( M=1; M<L-1; ++M )
-	    {
-	      m = M+M;
-	      double mm = (L+M)*(L-M);
-	      a = tlm1*z/mm;
-	      b = r2/mm;
-	      Y[l0+m-1] = a*Y[l1+m-1]-b*Y[l2+m-1];
-	      Y[l0+m] = a*Y[l1+m]-b*Y[l2+m];
-	    }
-	  M=L-1;
-	  m=M+M;
-	  a = tlm1*z / ( (L+M)*(L-M) );
-	  Y[l0+m-1]=a*Y[l1+m-1];
-	  Y[l0+m]=a*Y[l1+m];
-	  M=L;
-	  m=M+M;
-	  Y[l0+m-1]=-(x*Y[l1+(m-2)-1]-y*Y[l1+(m-2)])/tl;
-	  Y[l0+m]=-(x*Y[l1+(m-2)]+y*Y[l1+(m-2)-1])/tl;
-	}
-    };
-}
-
-void ccdl::SolidHarmRlm_v4
-( int const Lmax, double const * R, double *__restrict__ Y )
-{
-  Y[0] = 1.;
-  if ( Lmax > 0 )
-    {
-      double const x = R[0];
-      double const y = R[1];
-      double const z = R[2];
-	
-      Y[1] =      z;
-      Y[2] = -0.5*x;
-      Y[3] = -0.5*y;
-	
-      int const nl1 = Lmax+1;
-      double const r2 = x*x+y*y+z*z;
-      int M;
-      //double a,b;
-      double *__restrict__ p = Y+3;
-	
-      for ( int L=2; L<nl1; ++L )
-	{
-	  double ool0 = 1./(L*L);
-	  double ootl = 0.5/L;
-	  int o = L+L-1;
-	  double const tlm1=o*z;
-	  double const *__restrict__  pa = p-(--o);
-	  double const *__restrict__  pb = pa-(--o);
-	  *++p = ( tlm1*(*pa) - r2*(*pb) ) * ool0;
-	  for ( M=1; M<L-1; ++M )
-	    {
-	      double mm = 1./((L+M)*(L-M));
-	      *++p = (tlm1*(*++pa)-r2*(*++pb))*mm;
-	      *++p = (tlm1*(*++pa)-r2*(*++pb))*mm;
-	      // a = tlm1*mm;
-	      // b = r2*mm;
-	      // *++p = a*(*++pa)-b*(*++pb);
-	      // *++p = a*(*++pa)-b*(*++pb);
-	    }
-	  *++p = z*(*++pa);
-	  *++p = z*(*++pa);
-	  pb=pa-1;
-	  *++p = -(x*(*(pb))-y*(*pa))*ootl;
-	  *++p = -(x*(*pa)+y*(*(pb)))*ootl;
-	}
-    };   
-}
-
-*/
