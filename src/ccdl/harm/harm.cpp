@@ -7,7 +7,7 @@
 #endif
 
 
-void ccdl::SolidHarmRlm_v5
+void ccdl::SolidHarm_Rlm
 ( int const Lmax, double const * R, double *__restrict__ Y )
 {
   Y[0] = 1.;
@@ -64,61 +64,261 @@ void ccdl::SolidHarmRlm_v5
 
 
 
-
-
-
-
-void ccdl::SolidHarmIlm_v5
-( int const Lmax, double const * R, double *__restrict__ Y )
+void ccdl::SolidHarm_dRlm
+( int const lmax,
+  double const *__restrict__ Y,
+  double *__restrict__ dY )
 {
-  double const oor2 = 1. / ( R[0]*R[0] + R[1]*R[1] + R[2]*R[2] );
-  Y[0] = std::sqrt(oor2);
-  if ( Lmax > 0 )
+  // l = 0
+  dY[0] = 0.; dY[1] = 0.; dY[2] = 0.;
+
+  if ( lmax > 0 )
     {
-      double Q[3] = { -R[0]*oor2, -R[1]*oor2, R[2]*oor2 };
-      Y[1] = Q[2]*Y[0];
-      Y[2] = Q[0]*Y[0];
-      Y[3] = Q[1]*Y[0];
-      double *__restrict__ p = Y+3;
-      double const *__restrict__  pa = Y;
-      double const *__restrict__  pb = Y-1;
-      for ( int L=2; L<Lmax+1; ++L )
+      // l=1
+      dY[3] =  0.;       dY[4]  =  0.;      dY[5]  = Y[0];
+      dY[6] = -0.5*Y[0]; dY[7]  =  0.;      dY[8]  = 0.;
+      dY[9] =  0.;      dY[10] = -0.5*Y[0]; dY[11] = 0.;
+      if ( lmax > 1 )
 	{
-	  int tlm1 = L+L-1;
-	  int l1 = (L-1)*(L-1);
-	  double t = tlm1*Q[2];
-	  *++p = *++pa*t - *++pb*l1*oor2;
-	  for ( int M=1; M<L-1; ++M )
+	  // l=2
+	  dY[12] =      Y[2];  dY[13]  =  Y[3];      dY[14]  = Y[1];
+	  dY[15] = -0.5*Y[1];  dY[16]  =  0.;        dY[17]  = Y[2];
+	  dY[18] =  0.;        dY[19]  = -0.5*Y[1];  dY[20]  = Y[3];
+	  dY[21] = -0.5*Y[2];  dY[22]  =  0.5*Y[3];  dY[23]  = 0.;
+	  dY[24] = -0.5*Y[3];  dY[25]  = -0.5*Y[2];  dY[26]  = 0.;
+
+	  double *__restrict__ p = dY+26;
+	  for ( int l=3; l<lmax+1; ++l )
 	    {
-	      double h=(l1-M*M)*oor2;
-	      *++p = *++pa*t - *++pb*h;
-	      *++p = *++pa*t - *++pb*h;
+	      int lo = (l-1)*(l-1);
+		
+	      // M=0
+	      *(++p) = Y[lo+1];
+	      *(++p) = Y[lo+2];
+	      *(++p) = Y[lo  ];
+		
+	      // M=1 (no l-1,m-1s; l-1,m-1c is 0 case)
+	      *(++p) =  0.5 * ( Y[lo+3]-Y[lo] );
+	      *(++p) =  0.5 * Y[lo+4];
+	      *(++p) =  Y[lo+1];
+	      *(++p) =  0.5 * Y[lo+4];
+	      *(++p) = -0.5 * ( Y[lo+3]+Y[lo] );
+	      *(++p) =  Y[lo+2];
+		
+	      // 2 <= M < L-2
+	      int ms = 4;
+	      int mc = 3;
+	      for ( int  m=2; m < l-1; ++m )
+		{
+		  //int ms = 2*m;
+		  //int mc = ms-1;
+		  *(++p) =  0.5 * ( Y[lo+mc+2]-Y[lo+mc-2] );
+		  *(++p) =  0.5 * ( Y[lo+ms+2]+Y[lo+ms-2] );
+		  *(++p) = Y[lo+mc];
+		  *(++p) =  0.5 * ( Y[lo+ms+2]-Y[lo+ms-2] );
+		  *(++p) = -0.5 * ( Y[lo+mc+2]+Y[lo+mc-2] );
+		  *(++p) = Y[lo+ms];
+		  ms += 2;
+		  mc += 2;
+		}
+		
+	      // M = L-1 (no l-1,m+1)
+	      //int ms = 2*(l-1);
+	      //int mc = ms-1;
+	      *(++p) = -0.5 * Y[lo+mc-2];
+	      *(++p) =  0.5 * Y[lo+ms-2];
+	      *(++p) = Y[lo+mc];
+	      *(++p) = -0.5 * Y[lo+ms-2];
+	      *(++p) = -0.5 * Y[lo+mc-2];
+	      *(++p) = Y[lo+ms];
+		
+	      // M = L  (no l-1,m+1; no l-1,m)
+	      //ms += 2;
+	      //mc += 2;
+	      *(++p) = -0.5 * Y[lo+mc];
+	      *(++p) =  0.5 * Y[lo+ms];
+	      *(++p) =  0.;
+	      *(++p) = -0.5 * Y[lo+ms];
+	      *(++p) = -0.5 * Y[lo+mc];
+	      *(++p) =  0.;
 	    };
-	  *++p = *++pa*t;
-	  *++p = *++pa*t;
-	  
-	  *++p = tlm1*(Q[0]*(*(pa-1))-Q[1]*(*pa));
-	  *++p = tlm1*(Q[0]*(*pa)+Q[1]*(*(pa-1)));
 	};
     };
 }
 
 
 
-void ccdl::RlmTranslation
+
+
+void ccdl::SolidHarm_d2Rlm
+( int const lmax,
+  double const *__restrict__ dY,
+  double *__restrict__ d2Y )
+{
+  --d2Y;
+  for ( int i=0; i<6; ++i ) *(++d2Y) = 0.;
+
+  if ( lmax > 0 )
+    {
+      for ( int i=6; i<6*4; ++i ) *(++d2Y) = 0.;
+
+      if ( lmax > 1 )
+	{
+
+	  *(++d2Y) = dY[6];
+	  *(++d2Y) = dY[9];
+	  *(++d2Y) = dY[3];
+	  *(++d2Y) = dY[10];
+	  *(++d2Y) = dY[4];
+	  *(++d2Y) = dY[5];
+
+	  *(++d2Y) = -0.5 * dY[3];
+	  *(++d2Y) = 0.;
+	  *(++d2Y) = dY[6];
+	  *(++d2Y) = 0.;
+	  *(++d2Y) = dY[7];
+	  *(++d2Y) = dY[8];
+
+	  *(++d2Y) = 0.;
+	  *(++d2Y) = -0.5 * dY[3];
+	  *(++d2Y) = dY[9];
+	  *(++d2Y) = -0.5 * dY[4];
+	  *(++d2Y) = dY[10];
+	  *(++d2Y) = dY[11];
+
+	  *(++d2Y) = -0.5 * dY[6];
+	  *(++d2Y) =  0.5 * dY[9];
+	  *(++d2Y) = 0.;
+	  *(++d2Y) =  0.5 * dY[10];
+	  *(++d2Y) = 0.;
+	  *(++d2Y) = 0.;
+
+	  *(++d2Y) = -0.5 * dY[9];
+	  *(++d2Y) = -0.5 * dY[6];
+	  *(++d2Y) = 0.;
+	  *(++d2Y) = -0.5 * dY[7];
+	  *(++d2Y) = 0.;
+	  *(++d2Y) = 0.;
+
+	  // here
+
+	  for ( int L=3; L <= lmax; ++L )
+	    {
+	      int lo = (L-1)*(L-1);
+	      double const *__restrict__ q = dY + lo*3;
+	      // M=0
+	      *(++d2Y) = q[3];
+	      *(++d2Y) = q[6];
+	      *(++d2Y) = q[0];
+	      *(++d2Y) = q[7];
+	      *(++d2Y) = q[1];
+	      *(++d2Y) = q[2];
+
+
+
+	      // M=1 (no l-1,m-1s; l-1,m-1c is 0 case)
+	      *(++d2Y) = 0.5 * ( q[9]-q[0] );
+	      *(++d2Y) = 0.5 * q[12];
+	      *(++d2Y) = q[3];
+	      *(++d2Y) = 0.5 * q[13];
+	      *(++d2Y) = q[4];
+	      *(++d2Y) = q[5];
+
+	      *(++d2Y) =  0.5 * q[12];
+	      *(++d2Y) = -0.5 * ( q[9]+q[0] );
+	      *(++d2Y) = q[6];
+	      *(++d2Y) = -0.5 * ( q[10]+q[1] );
+	      *(++d2Y) = q[7];
+	      *(++d2Y) = q[8];
+
+
+
+	      // 2 <= M < L-2
+	      //int mc = 3;
+	      int tmc = 9;
+	      for ( int m=2; m < L-1; ++m )
+		{
+		  *(++d2Y) = 0.5 * ( q[tmc+6]-q[tmc-6] );
+		  *(++d2Y) = 0.5 * ( q[tmc+9]+q[tmc-3] );
+		  *(++d2Y) = q[tmc];
+		  *(++d2Y) = 0.5 * ( q[tmc+10]+q[tmc-2] );
+		  *(++d2Y) = q[tmc+1];
+		  *(++d2Y) = q[tmc+2];
+
+		  *(++d2Y) =  0.5 * ( q[tmc+9]-q[tmc-3] );
+		  *(++d2Y) = -0.5 * ( q[tmc+6]+q[tmc-6] );
+		  *(++d2Y) = q[tmc+3];
+		  *(++d2Y) = -0.5 * ( q[tmc+7]+q[tmc-5] );
+		  *(++d2Y) = q[tmc+4];
+		  *(++d2Y) = q[tmc+5];
+
+		  //mc += 2;
+		  tmc += 6;
+		}
+
+	      // M = L-1 (no l-1,m+1)
+	      //ms = 2*(L-1);
+	      //mc = ms-1;
+
+	      *(++d2Y) = -0.5 * q[tmc-6];
+	      *(++d2Y) =  0.5 * q[tmc-3];
+	      *(++d2Y) = q[tmc];
+	      *(++d2Y) =  0.5 * q[tmc-2];
+	      *(++d2Y) = q[tmc+1];
+	      *(++d2Y) = q[tmc+2];
+
+	      *(++d2Y) = -0.5 * q[tmc-3];
+	      *(++d2Y) = -0.5 * q[tmc-6];
+	      *(++d2Y) = q[tmc+3];
+	      *(++d2Y) = -0.5 * q[tmc-5];
+	      *(++d2Y) = q[tmc+4];
+	      *(++d2Y) = q[tmc+5];
+
+
+	      // M = L  (no l-1,m+1; no l-1,m)
+	      //ms = 2*L;
+	      //mc = ms-1;
+
+	      *(++d2Y) = -0.5 * q[tmc];
+	      *(++d2Y) =  0.5 * q[tmc+3];
+	      *(++d2Y) = 0.;
+	      *(++d2Y) =  0.5 * q[tmc+4];
+	      *(++d2Y) = 0.;
+	      *(++d2Y) = 0.;
+
+	      *(++d2Y) = -0.5 * q[tmc+3];
+	      *(++d2Y) = -0.5 * q[tmc];
+	      *(++d2Y) = 0.;
+	      *(++d2Y) = -0.5 * q[tmc+1];
+	      *(++d2Y) = 0.;
+	      *(++d2Y) = 0.;
+	    }
+
+
+	}
+    }
+
+
+}
+
+
+
+
+
+
+void ccdl::RlmTranslationFromRlm
 ( int const LtoMax, 
   int const LfromMax, 
-  double const *__restrict__ Rtf,
   double *__restrict__ W )
 {
   int const nt = ( LtoMax  +1 ) * ( LtoMax + 1 );
   int const nf = ( LfromMax+1 ) * ( LfromMax+1 );
   int const Lmin = std::min( LtoMax, LfromMax );
-  for ( int i=0, n=nt*nf; i<n; ++i )
+  for ( int i=nt, n=nt*nf; i<n; ++i )
     W[i]=0.;
   for ( int i=0, n=(Lmin+1)*(Lmin+1); i<n; ++i )
     W[i+i*nt] = 1.;
-  ccdl::SolidHarmRlm_v5( LtoMax, Rtf, W );
+  //ccdl::SolidHarm_Rlm( LtoMax, Rft, W );
   
   int jend = (LtoMax <= LfromMax) ? LtoMax : LfromMax+1; 
   
@@ -210,10 +410,208 @@ void ccdl::RlmTranslation
 
 
 
+void ccdl::RlmTranslationFromCrd
+( int const LtoMax, 
+  int const LfromMax, 
+  double const *__restrict__ Rft,
+  double *__restrict__ W )
+{
+  ccdl::SolidHarm_Rlm( LtoMax, Rft, W );
+  ccdl::RlmTranslationFromRlm( LtoMax, LfromMax, W );
+}
 
 
 
-void ccdl::IlmInteraction
+
+
+
+
+
+void ccdl::SolidHarm_Ilm
+( int const Lmax, double const * R, double *__restrict__ Y )
+{
+  double const oor2 = 1. / ( R[0]*R[0] + R[1]*R[1] + R[2]*R[2] );
+  Y[0] = std::sqrt(oor2);
+  if ( Lmax > 0 )
+    {
+      double Q[3] = { -R[0]*oor2, -R[1]*oor2, R[2]*oor2 };
+      Y[1] = Q[2]*Y[0];
+      Y[2] = Q[0]*Y[0];
+      Y[3] = Q[1]*Y[0];
+      double *__restrict__ p = Y+3;
+      double const *__restrict__  pa = Y;
+      double const *__restrict__  pb = Y-1;
+      for ( int L=2; L<Lmax+1; ++L )
+	{
+	  int tlm1 = L+L-1;
+	  int l1 = (L-1)*(L-1);
+	  double t = tlm1*Q[2];
+	  *++p = *++pa*t - *++pb*l1*oor2;
+	  for ( int M=1; M<L-1; ++M )
+	    {
+	      double h=(l1-M*M)*oor2;
+	      *++p = *++pa*t - *++pb*h;
+	      *++p = *++pa*t - *++pb*h;
+	    };
+	  *++p = *++pa*t;
+	  *++p = *++pa*t;
+	  
+	  *++p = tlm1*(Q[0]*(*(pa-1))-Q[1]*(*pa));
+	  *++p = tlm1*(Q[0]*(*pa)+Q[1]*(*(pa-1)));
+	};
+    };
+}
+
+
+
+
+
+void ccdl::SolidHarm_dIlm
+( int const lmax,
+  double const *__restrict__ Y,
+  double *__restrict__ dY )
+{
+  // L=0
+  *(dY) =  Y[2];
+  *(++dY) =  Y[3];
+  *(++dY) = -Y[1];
+
+
+  double const *__restrict__ q = Y+4;
+  for ( int L=1; L < lmax+1; ++L )
+    {
+      //int l1 = (L+1)*(L+1);
+      // double const *__restrict__ q = Y+l1;
+      // m=0
+      *(++dY) =  q[1];
+      *(++dY) =  q[2];
+      *(++dY) = -*q;
+
+      // m=1
+      *(++dY) =  0.5 * ( q[3] - *q );
+      *(++dY) =  0.5 * q[4];
+      *(++dY) = -q[1];
+
+      *(++dY) =  0.5 * q[4];
+      *(++dY) = -0.5 * ( q[3] + *q );
+      *(++dY) = -q[2];
+
+      // m>1
+      // for ( int m=2; m < L+1; ++m )
+      //   {
+      //     *(++dY) =  0.5 * ( q[2*m+1] - q[2*m-3] );
+      //     *(++dY) =  0.5 * ( q[2*m+2] + q[2*m-2] );
+      //     *(++dY) = -q[2*m-1];
+      //     *(++dY) =  0.5 * ( q[2*m+2] - q[2*m-2] );
+      //     *(++dY) = -0.5 * ( q[2*m+1] + q[2*m-3] );
+      //     *(++dY) = -q[2*m  ];
+      //   }
+      //q += 2*L+3;
+
+      q += 4;
+      for ( int m=2; m < L+1; ++m )
+	{
+	  *(++dY) =  0.5 * ( q[1] - q[-3] );
+	  *(++dY) =  0.5 * ( q[2] + q[-2] );
+	  *(++dY) = -q[-1];
+	  *(++dY) =  0.5 * ( q[2] - q[-2] );
+	  *(++dY) = -0.5 * ( q[1] + q[-3] );
+	  *(++dY) = -*q;
+	  q += 2;
+	}
+      ++q;
+
+    }
+}
+
+
+
+
+
+void ccdl::SolidHarm_d2Ilm
+( int const lmax,
+  double const *__restrict__ dY,
+  double *__restrict__ d2Y )
+{
+
+  // L=0
+  *(d2Y)   =  dY[6];
+  *(++d2Y) =  dY[9];
+  *(++d2Y) = -dY[3];
+  *(++d2Y) =  dY[10];
+  *(++d2Y) = -dY[4];
+  *(++d2Y) = -dY[5];
+
+  for ( int L=1; L < lmax+1; ++L )
+    {
+      //int l0 = L*L;
+      int l1 = (L+1)*(L+1);
+      double const *__restrict__ q = dY+3*l1;
+      // m=0
+      *(++d2Y) =  q[3];
+      *(++d2Y) =  q[6];
+      *(++d2Y) = -*q;
+      *(++d2Y) =  q[7];
+      *(++d2Y) = -q[1];
+      *(++d2Y) = -q[2];
+
+      // m=1
+      *(++d2Y) =  0.5 * ( q[9] - *q );
+      *(++d2Y) =  0.5 * q[12];
+      *(++d2Y) = -q[3];
+      *(++d2Y) =  0.5 * q[13];
+      *(++d2Y) = -q[4];
+      *(++d2Y) = -q[5];
+
+      *(++d2Y) =  0.5 * q[12];
+      *(++d2Y) = -0.5 * ( q[9] + *q );
+      *(++d2Y) = -q[6];
+      *(++d2Y) = -0.5 * ( q[10] + q[1] );
+      *(++d2Y) = -q[7];
+      *(++d2Y) = -q[8];
+      // m>1
+      q += 12;
+      for ( int m=2; m < L+1; ++m )
+	{
+	  // *(++d2Y) =  0.5 * ( q[6*m+3] - q[6*m-9] );
+	  // *(++d2Y) =  0.5 * ( q[6*m+6] + q[6*m-6] );
+	  // *(++d2Y) = -q[6*m-3];
+	  // *(++d2Y) =  0.5 * ( q[6*m+7] + q[6*m-5] );
+	  // *(++d2Y) = -q[6*m-2];
+	  // *(++d2Y) = -q[6*m-1];
+
+
+	  // *(++d2Y) =  0.5 * ( q[6*m+6] - q[6*m-6] );
+	  // *(++d2Y) = -0.5 * ( q[6*m+3] + q[6*m-9] );
+	  // *(++d2Y) = -q[6*m];
+	  // *(++d2Y) = -0.5 * ( q[6*m+4] + q[6*m-8] );
+	  // *(++d2Y) = -q[6*m+1];
+	  // *(++d2Y) = -q[6*m+2];
+
+	  *(++d2Y) =  0.5 * ( q[3] - q[-9] );
+	  *(++d2Y) =  0.5 * ( q[6] + q[-6] );
+	  *(++d2Y) = -q[-3];
+	  *(++d2Y) =  0.5 * ( q[7] + q[-5] );
+	  *(++d2Y) = -q[-2];
+	  *(++d2Y) = -q[-1];
+
+
+	  *(++d2Y) =  0.5 * ( q[6] - q[-6] );
+	  *(++d2Y) = -0.5 * ( q[3] + q[-9] );
+	  *(++d2Y) = -*q;
+	  *(++d2Y) = -0.5 * ( q[4] + q[-8] );
+	  *(++d2Y) = -q[1];
+	  *(++d2Y) = -q[2];
+	    
+	  q += 6;
+	}
+    }
+}
+
+
+
+
+void ccdl::IlmInteractionFromCrd
 ( int const lam, int const lbm, 
   double const *__restrict__ Rab,
   double *__restrict__ T )
@@ -238,7 +636,7 @@ void ccdl::IlmInteraction
 
   // minus Rab !!
   double mrab[] = { -Rab[0], -Rab[1], -Rab[2] };
-  ccdl::SolidHarmIlm_v5(lam+lbm,mrab,I);
+  ccdl::SolidHarm_Ilm(lam+lbm,mrab,I);
 
 
 
