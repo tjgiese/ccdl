@@ -306,9 +306,10 @@ void ccdl::SolidHarm_d2Rlm
 
 
 
-void ccdl::RlmTranslationFromRlm
+void ccdl::RlmTranslation
 ( int const LtoMax, 
-  int const LfromMax, 
+  int const LfromMax,
+  double const *__restrict__ Rft,
   double *__restrict__ W )
 {
   int const nt = ( LtoMax  +1 ) * ( LtoMax + 1 );
@@ -318,7 +319,7 @@ void ccdl::RlmTranslationFromRlm
     W[i]=0.;
   for ( int i=0, n=(Lmin+1)*(Lmin+1); i<n; ++i )
     W[i+i*nt] = 1.;
-  //ccdl::SolidHarm_Rlm( LtoMax, Rft, W );
+  ccdl::SolidHarm_Rlm( LtoMax, Rft, W );
   
   int jend = (LtoMax <= LfromMax) ? LtoMax : LfromMax+1; 
   
@@ -410,15 +411,15 @@ void ccdl::RlmTranslationFromRlm
 
 
 
-void ccdl::RlmTranslationFromCrd
-( int const LtoMax, 
-  int const LfromMax, 
-  double const *__restrict__ Rft,
-  double *__restrict__ W )
-{
-  ccdl::SolidHarm_Rlm( LtoMax, Rft, W );
-  ccdl::RlmTranslationFromRlm( LtoMax, LfromMax, W );
-}
+// void ccdl::RlmTranslationFromCrd
+// ( int const LtoMax, 
+//   int const LfromMax, 
+//   double const *__restrict__ Rft,
+//   double *__restrict__ W )
+// {
+//   ccdl::SolidHarm_Rlm( LtoMax, Rft, W );
+//   ccdl::RlmTranslationFromRlm( LtoMax, LfromMax, W );
+// }
 
 
 
@@ -611,7 +612,7 @@ void ccdl::SolidHarm_d2Ilm
 
 
 
-void ccdl::IlmInteractionFromCrd
+void ccdl::IlmInteraction
 ( int const lam, int const lbm, 
   double const *__restrict__ Rab,
   double *__restrict__ T )

@@ -6,16 +6,12 @@ namespace ccdl
   void SolidHarm_Rlm( int const Lmax, double const * R, double * Y );
   void SolidHarm_dRlm( int const Lmax, double const * Y, double * dY );
   void SolidHarm_d2Rlm( int const Lmax, double const * dY, double * d2Y );
-  void RlmTranslationFromRlm( int const Lto, int const Lfrom, double * W_RlmInFirstCol );
-  void RlmTranslationFromCrd( int const Lto, int const Lfrom, double const * Rft, double * W );
-
+  void RlmTranslation( int const Lto, int const Lfrom, double const * Rft, double * W );
 
   void SolidHarm_Ilm( int const Lmax, double const * R, double * Y );
   void SolidHarm_dIlm( int const Lmax, double const * Y, double * dY );
   void SolidHarm_d2Ilm( int const Lmax, double const * dY, double * d2Y );
-  void IlmInteractionFromCrd( int const La, int const Lb, double const * Rab, double * T );
-
-
+  void IlmInteraction( int const La, int const Lb, double const * Rab, double * T );
 }
 
 #endif
