@@ -12,6 +12,8 @@ namespace ccdl
   void SolidHarm_dIlm( int const Lmax, double const * Y, double * dY );
   void SolidHarm_d2Ilm( int const Lmax, double const * dY, double * d2Y );
   void IlmInteraction( int const La, int const Lb, double const * Rab, double * T );
+  void IlmInteractionGrd( int const La, int const Lb, double const * Rab, double * T, double * dT );
+
 }
 
 #endif
