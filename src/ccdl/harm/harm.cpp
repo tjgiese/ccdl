@@ -425,6 +425,198 @@ void ccdl::RlmTranslation
 
 
 
+void ccdl::RlmTranslationGrd
+( int const lam, int const lbm, 
+  double const *__restrict__ Rab,
+  double *__restrict__ W,
+  double *__restrict__ D )
+{
+
+  ccdl::RlmTranslation(lam,lbm,Rab,W);
+
+  // l = 0
+  int na = (lam+1)*(lam+1);
+  int nb = (lbm+1)*(lbm+1);
+  int nd = na*nb*3;
+  for ( int i=0; i<nd; ++i ) D[i] = 0.;
+
+  if ( lam < 1 ) return;
+
+  int lmin = std::min(lam,lbm);
+
+
+  // l=1
+  D[3] =  0.;       D[4]  =  0.;      D[5]  = W[0];
+  D[6] = -0.5*W[0]; D[7]  =  0.;      D[8]  = 0.;
+  D[9] =  0.;      D[10] = -0.5*W[0]; D[11] = 0.;
+  if ( lam > 1 )
+    {
+      // l=2
+      D[12] =      W[2];  D[13]  =  W[3];      D[14]  = W[1];
+      D[15] = -0.5*W[1];  D[16]  =  0.;        D[17]  = W[2];
+      D[18] =  0.;        D[19]  = -0.5*W[1];  D[20]  = W[3];
+      D[21] = -0.5*W[2];  D[22]  =  0.5*W[3];  D[23]  = 0.;
+      D[24] = -0.5*W[3];  D[25]  = -0.5*W[2];  D[26]  = 0.;
+	
+      double *__restrict__ p = D+26;
+      for ( int l=3; l<lam+1; ++l )
+	{
+	  int lo = (l-1)*(l-1);
+            
+	  // M=0
+	  *(++p) = W[lo+1];
+	  *(++p) = W[lo+2];
+	  *(++p) = W[lo  ];
+            
+	  // M=1 (no l-1,m-1s; l-1,m-1c is 0 case)
+	  *(++p) =  0.5 * ( W[lo+3]-W[lo] );
+	  *(++p) =  0.5 * W[lo+4];
+	  *(++p) =  W[lo+1];
+	  *(++p) =  0.5 * W[lo+4];
+	  *(++p) = -0.5 * ( W[lo+3]+W[lo] );
+	  *(++p) =  W[lo+2];
+            
+	  // 2 <= M < L-2
+	  int ms = 4;
+	  int mc = 3;
+	  for ( int  m=2; m < l-1; ++m )
+	    {
+	      //int ms = 2*m;
+	      //int mc = ms-1;
+	      *(++p) =  0.5 * ( W[lo+mc+2]-W[lo+mc-2] );
+	      *(++p) =  0.5 * ( W[lo+ms+2]+W[lo+ms-2] );
+	      *(++p) = W[lo+mc];
+	      *(++p) =  0.5 * ( W[lo+ms+2]-W[lo+ms-2] );
+	      *(++p) = -0.5 * ( W[lo+mc+2]+W[lo+mc-2] );
+	      *(++p) = W[lo+ms];
+	      ms += 2;
+	      mc += 2;
+	    }
+	    
+	  // M = L-1 (no l-1,m+1)
+	  //int ms = 2*(l-1);
+	  //int mc = ms-1;
+	  *(++p) = -0.5 * W[lo+mc-2];
+	  *(++p) =  0.5 * W[lo+ms-2];
+	  *(++p) = W[lo+mc];
+	  *(++p) = -0.5 * W[lo+ms-2];
+	  *(++p) = -0.5 * W[lo+mc-2];
+	  *(++p) = W[lo+ms];
+            
+	  // M = L  (no l-1,m+1; no l-1,m)
+	  //ms += 2;
+	  //mc += 2;
+	  *(++p) = -0.5 * W[lo+mc];
+	  *(++p) =  0.5 * W[lo+ms];
+	  *(++p) =  0.;
+	  *(++p) = -0.5 * W[lo+ms];
+	  *(++p) = -0.5 * W[lo+mc];
+	  *(++p) =  0.;
+	};
+	
+    };
+
+
+	  
+
+  if ( lam > 1 and lbm > 0 )
+    {
+      D[2+(4+(1)*na)*3] =  1.0;
+      D[0+(5+(1)*na)*3] = -0.5;
+      D[1+(6+(1)*na)*3] = -0.5;
+	
+      D[0+(4+(2)*na)*3] =  1.0;
+      D[2+(5+(2)*na)*3] =  1.0;
+      D[0+(7+(2)*na)*3] = -0.5;
+      D[1+(8+(2)*na)*3] = -0.5;
+	
+      D[1+(4+(3)*na)*3] =  1.0;
+      D[2+(6+(3)*na)*3] =  1.0;
+      D[1+(7+(3)*na)*3] =  0.5;
+      D[0+(8+(3)*na)*3] = -0.5;
+    };
+    
+  for ( int l=3; l <= lam; ++l )
+    {
+      int l0 = l*l;
+      int l1 = (l-1)*(l-1);
+
+      int jmx = std::min(l-1,lmin);
+      for ( int j=1; j <= jmx; ++j )
+	{
+	  int j0  = j*j;
+	  int j1 = (j-1)*(j-1);
+	  int j2 = (j+1)*(j+1);
+	    
+	  for ( int k=0; k < 2*j-1; ++k )
+	    for ( int m=0; m < 2*l-1; ++m )
+	      {
+		D[0+(l0+m+(j0+k)*na)*3] = D[0+(l1+m+(j1+k)*na)*3];
+		D[1+(l0+m+(j0+k)*na)*3] = D[1+(l1+m+(j1+k)*na)*3];
+		D[2+(l0+m+(j0+k)*na)*3] = D[2+(l1+m+(j1+k)*na)*3];
+	      };
+
+	  // Now only do k=j cases;
+	  int l0a = l0+(j2-2)*na;
+	  int l1a = l1+(j2-2)*na;
+	  for ( int jk= j2-2 ; jk < j2; ++jk, l0a += na, l1a += na )
+	    {
+	      //double *__restrict__ p = D+l0a*3-1;
+	      // m=0;
+	      D[0+(l0a)*3] = W[l1a+1];
+	      D[1+(l0a)*3] = W[l1a+2];
+	      D[2+(l0a)*3] = W[l1a+0];
+		
+	      // m=1c;
+	      D[0+(l0a+1)*3] =  0.5 * W[l1a+3]- 0.5*W[l1a+0];
+	      D[1+(l0a+1)*3] =  0.5 * W[l1a+4];
+	      D[2+(l0a+1)*3] = W[l1a+1];
+
+	      // m=1s;
+	      D[0+(l0a+2)*3] =  0.5 * W[l1a+4];
+	      D[1+(l0a+2)*3] = -0.5 * W[l1a+3]- 0.5*W[l1a+0];
+	      D[2+(l0a+2)*3] = W[l1a+2];
+
+	      // m>1, 0 < m+1 < l-1;
+	      for ( int m=2; m < l-1; ++m )
+		{
+		  D[0+(l0a+2*m-1)*3] =  0.5 * W[l1a+2*(m+1)-1] - 0.5 * W[l1a+2*(m-1)-1];
+		  D[1+(l0a+2*m-1)*3] =  0.5 * W[l1a+2*(m+1)  ] + 0.5 * W[l1a+2*(m-1)  ];
+		  D[2+(l0a+2*m-1)*3] = W[l1a+2*m-1];
+		  D[0+(l0a+2*m  )*3] =  0.5 * W[l1a+2*(m+1)  ] - 0.5 * W[l1a+2*(m-1)  ];
+		  D[1+(l0a+2*m  )*3] = -0.5 * W[l1a+2*(m+1)-1] - 0.5 * W[l1a+2*(m-1)-1];
+		  D[2+(l0a+2*m  )*3] = W[l1a+2*m  ];
+		};
+
+	      // m=l-1;
+	      int m=l-1;
+	      D[0+(l0a+2*m-1)*3] =  - 0.5 * W[l1a+2*(m-1)-1];
+	      D[1+(l0a+2*m-1)*3] =    0.5 * W[l1a+2*(m-1)  ];
+	      D[2+(l0a+2*m-1)*3] = W[l1a+2*m-1];
+
+	      D[0+(l0a+2*m  )*3] = - 0.5 * W[l1a+2*(m-1)  ];
+	      D[1+(l0a+2*m  )*3] = - 0.5 * W[l1a+2*(m-1)-1];
+	      D[2+(l0a+2*m  )*3] = W[l1a+2*m  ];
+
+	      m=l;
+	      D[0+(l0a+2*m-1)*3] =  - 0.5 * W[l1a+2*(m-1)-1];
+	      D[1+(l0a+2*m-1)*3] =    0.5 * W[l1a+2*(m-1)  ];
+
+	      D[0+(l0a+2*m  )*3] = - 0.5 * W[l1a+2*(m-1)  ];
+	      D[1+(l0a+2*m  )*3] = - 0.5 * W[l1a+2*(m-1)-1];
+
+	    };
+	};
+    };
+    
+}
+
+
+
+
+
+
+
 
 
 
