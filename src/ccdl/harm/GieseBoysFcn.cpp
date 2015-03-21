@@ -847,6 +847,10 @@ extern const double GlobalGieseBoysFcnData[] = {
 
 #include <cmath>
 
+namespace ccdl
+{
+  void GieseBoysFcn( int const Lin, double const T, double * Fm );
+}
 
 void ccdl::GieseBoysFcn
 ( int const Lin, 

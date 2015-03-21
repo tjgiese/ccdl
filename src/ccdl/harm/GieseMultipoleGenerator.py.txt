@@ -1,0 +1,4845 @@
+#!/usr/bin/python
+
+import sys
+from math import *
+#from bigfloat import *
+from collections import defaultdict as ddict
+
+PI="GieseMultipole_PI"
+TWO_OVER_SQRT_PI="GieseMultipole_TWO_OVER_SQRT_PI"
+
+def GetLetter(l):
+    letters = [ "S","P","D","F","G","H","I","J","K","L","M","N","O","P" ]
+    return letters[l]
+
+def Factorial(n):
+    f = 1.
+    for i in range(2,n+1):
+        f *= i
+    return f
+
+def Binomial(l,m):
+    bc = 0.
+    if m >= 0 and m <= l:
+        bc = Factorial(l) / (Factorial(m)*Factorial(l-m))
+    return bc
+
+def DblFactorial(n):
+    f = 1.
+    while n > 0:
+        f = f * n
+        n = n-2
+    return f
+
+def CptAlm(l,m):
+    a = 0
+    if m == 0:
+        a = pow(-1,m) * sqrt( Factorial(l+m)*Factorial(l-m) )
+    else:
+        a = pow(-1,m) * sqrt( 2. * Factorial(l+m)*Factorial(l-m) )
+    return a
+
+def CptAlmVec(lmax):
+    alm = []
+    for l in range( lmax+1 ):
+        for m in range( l+1 ):
+            for cs in range(2):
+                if m == 0 and cs > 0: continue
+                alm.append( CptAlm(l,m) )
+    return alm
+
+
+def lmc2idx(l,m,cs):
+    absm = abs(m)
+    i = -1
+    if absm == 0:
+        if cs == 0:
+            i = l*l
+    if absm > 0 and absm <= l:
+        i = l*l + 2*absm - 1
+        if cs == 1:
+            i += 1
+    f = 1
+    if m < 0:
+        f = pow(-1,absm)
+        if cs > 0:
+            f = -f
+    if l < 0:
+        i = -1
+        f = 0
+    return int(f),i
+
+def HobPref(l,j,u):
+    return pow(2.,l+j-u)*DblFactorial(2*u-1)/( DblFactorial(2*l-1)*DblFactorial(2*j-1) )
+
+
+
+def RlmW(l,m,mcs,j,k,kcs):
+    ik = pow(-1,k)
+    if k == 0:
+        f = 0.5
+    else:
+        f = 1.0
+
+    if mcs == 0:
+        if kcs == 0:
+            fm,im = lmc2idx(l-j,m-k,0)
+            fp,ip = lmc2idx(l-j,m+k,0)
+            fm *= f
+            fp *= ik * f
+        else:
+            fm,im = lmc2idx(l-j,m-k,1)
+            fp,ip = lmc2idx(l-j,m+k,1)
+            fm *= -1
+            fp *= ik
+    else:
+        if kcs == 0:
+            fm,im = lmc2idx(l-j,m-k,1)
+            fp,ip = lmc2idx(l-j,m+k,1)
+            fm *= f
+            fp *= ik * f
+        else:
+            fm,im = lmc2idx(l-j,m-k,0)
+            fp,ip = lmc2idx(l-j,m+k,0)
+            fm *= 1
+            fp *= -ik
+
+    terms = None
+    if im == ip:
+        f = fm+fp
+        i = im
+        if f != 0:
+            if i > -1:
+                terms = (f,"Y[%i]"%(i))
+    else:
+        if im > -1 and ip > -1:
+            if fm == fp:
+                terms = (fp,"(Y[%i]+Y[%i])"%(im,ip))
+            elif fm == -fp:
+                if fm > 0:
+                    terms = (fm,"(Y[%i]-Y[%i])"%(im,ip))
+                else:
+                    terms = (fp,"(Y[%i]-Y[%i])"%(ip,im))
+            else:
+                if fp > 0.:
+                    terms = (1,"(%.16e*Y[%i]+%.16e*Y[%i])"%(fm,im,fp,ip))
+                else:
+                    terms = (1,"(%.16e*Y[%i] %.16e*Y[%i])"%(fm,im,fp,ip))
+        else:
+            if im > -1:
+                i = im
+                f = fm
+            else:
+                i = ip
+                f = fp
+            terms = (f,"Y[%i]"%(i))
+
+    return terms
+
+
+def StoreRlmW(lmax,jmax):
+    Wmat = ddict( lambda: ddict( None ) )
+    for j in range(jmax+1):
+        for k in range(j+1):
+            for kcs in range(2):
+                if k == 0 and kcs > 0: continue
+                fjk,ijk = lmc2idx(j,k,kcs)
+
+                for l in range(lmax+1):
+                    for m in range(l+1):
+                        for mcs in range(2):
+                            if m == 0 and mcs > 0: continue
+                            flm,ilm = lmc2idx(l,m,mcs)
+
+                            Wmat[ilm][ijk] = RlmW(l,m,mcs,j,k,kcs)
+    return Wmat
+
+
+
+
+
+def IlmT(l,m,mcs,j,k,kcs):
+    ik = pow(-1,k)
+    il = pow(-1,l)
+    f = 2. * il
+    if k == 0: f = il
+    if m == 0: f = 0.5*f
+
+    if mcs == 0:
+        if kcs == 0:
+            fm,im = lmc2idx(l+j,m-k,0)
+            fp,ip = lmc2idx(l+j,m+k,0)
+            fm *= ik * f
+            fp *= f
+        else:
+            fm,im = lmc2idx(l+j,m-k,1)
+            fp,ip = lmc2idx(l+j,m+k,1)
+            fm *= -ik * f
+            fp *= f
+    else:
+        if kcs == 0:
+            fm,im = lmc2idx(l+j,m-k,1)
+            fp,ip = lmc2idx(l+j,m+k,1)
+            fm *= ik * f
+            fp *= f
+        else:
+            fm,im = lmc2idx(l+j,m-k,0)
+            fp,ip = lmc2idx(l+j,m+k,0)
+            fm *= ik * f
+            fp *= -f
+
+    terms = None
+    if im == ip:
+        f = fm+fp
+        i = im
+        if f != 0:
+            if i > -1:
+                terms = (f,"Y[%i]"%(i))
+    else:
+        if im > -1 and ip > -1:
+            if fm == fp:
+                terms = (fp,"(Y[%i]+Y[%i])"%(im,ip))
+            elif fm == -fp:
+                if fm > 0:
+                    terms = (fm,"(Y[%i]-Y[%i])"%(im,ip))
+                else:
+                    terms = (fp,"(Y[%i]-Y[%i])"%(ip,im))
+            else:
+                if fp > 0.:
+                    terms = (1,"(%.16e*Y[%i]+%.16e*Y[%i])"%(fm,im,fp,ip))
+                else:
+                    terms = (1,"(%.16e*Y[%i] %.16e*Y[%i])"%(fm,im,fp,ip))
+        else:
+            if im > -1:
+                i = im
+                f = fm
+            else:
+                i = ip
+                f = fp
+            terms = (f,"Y[%i]"%(i))
+
+    return terms
+
+
+def StoreIlmT(lmax,jmax):
+    Wmat = ddict( lambda: ddict( None ) )
+    for j in range(jmax+1):
+        for k in range(j+1):
+            for kcs in range(2):
+                if k == 0 and kcs > 0: continue
+                fjk,ijk = lmc2idx(j,k,kcs)
+
+                for l in range(lmax+1):
+                    for m in range(l+1):
+                        for mcs in range(2):
+                            if m == 0 and mcs > 0: continue
+                            flm,ilm = lmc2idx(l,m,mcs)
+
+                            Wmat[ilm][ijk] = IlmT(l,m,mcs,j,k,kcs)
+    return Wmat
+
+
+
+
+def IlmGrd(l,m,mcs,k,kcs):
+    j = 1
+    terms = None
+    if k == 0: # d/dz
+        fp,ip = lmc2idx(l+j,m,mcs)
+        terms = (-1,"Y[%i]"%(ip))
+        return terms
+    elif kcs == 0: # d/dx
+        fp,ip = lmc2idx(l+j,m+1,mcs)
+        fm,im = lmc2idx(l+j,m-1,mcs)
+        fp *=  0.5
+        fm *= -0.5
+    else: # d/dy
+        ipow = pow(-1,mcs)
+        fp,ip = lmc2idx(l+j,m+1,1-mcs)
+        fm,im = lmc2idx(l+j,m-1,1-mcs)
+        fp *= ipow * 0.5
+        fm *= ipow * 0.5
+
+    terms = None
+    if im == ip:
+        f = fm+fp
+        i = im
+        if f != 0:
+            if i > -1:
+                terms = (f,"Y[%i]"%(i))
+    else:
+        if im > -1 and ip > -1:
+            if fm == fp:
+                terms = (fp,"(Y[%i]+Y[%i])"%(im,ip))
+            elif fm == -fp:
+                if fm > 0:
+                    terms = (fm,"(Y[%i]-Y[%i])"%(im,ip))
+                else:
+                    terms = (fp,"(Y[%i]-Y[%i])"%(ip,im))
+            else:
+                if fp > 0.:
+                    terms = (1,"(%.16e*Y[%i]+%.16e*Y[%i])"%(fm,im,fp,ip))
+                else:
+                    terms = (1,"(%.16e*Y[%i] %.16e*Y[%i])"%(fm,im,fp,ip))
+        else:
+            if im > -1:
+                i = im
+                f = fm
+            else:
+                i = ip
+                f = fp
+            terms = (f,"Y[%i]"%(i))
+    return terms
+
+
+def StoreIlmGrd(lmax):
+    Wmat = ddict( lambda: ddict( None ) )
+    j=1
+#    for k in range(j+1):
+#        for kcs in range(2):
+#            if k == 0 and kcs > 0: continue
+#            fjk,ijk = lmc2idx(j,k,kcs)
+    for k,kcs,gidx in [ (0,0,2), (1,0,0), (1,1,1) ]:
+        for l in range(lmax+1):
+            for m in range(l+1):
+                for mcs in range(2):
+                    if m == 0 and mcs > 0: continue
+                    flm,ilm = lmc2idx(l,m,mcs)
+                    Wmat[ilm][gidx] = IlmGrd(l,m,mcs,k,kcs)
+    return Wmat
+
+
+
+
+def TlmGrd(l,m,mcs,k,kcs):
+    j = 1
+    terms = None
+    if k == 0: # d/dz
+        fp,ip = lmc2idx(l+j,m,mcs)
+        terms = (1,"Y[%i]"%(ip))
+        return terms
+    elif kcs == 0: # d/dx
+        fp,ip = lmc2idx(l+j,m+1,mcs)
+        fm,im = lmc2idx(l+j,m-1,mcs)
+        fp *= -0.5
+        fm *=  0.5
+    else: # d/dy
+        ipow = pow(-1,mcs)
+        fp,ip = lmc2idx(l+j,m+1,1-mcs)
+        fm,im = lmc2idx(l+j,m-1,1-mcs)
+        fp *= -ipow * 0.5
+        fm *= -ipow * 0.5
+
+    if m == 0:
+        fp *= 0.5
+        fm *= 0.5
+    if m-1 == 0:
+        fm *= 2
+    if m+1 == 0:
+        fp *= 2
+
+    terms = None
+    if im == ip:
+        f = fm+fp
+        i = im
+        if f != 0:
+            if i > -1:
+                terms = (f,"Y[%i]"%(i))
+    else:
+        if im > -1 and ip > -1:
+            if fm == fp:
+                terms = (fp,"(Y[%i]+Y[%i])"%(im,ip))
+            elif fm == -fp:
+                if fm > 0:
+                    terms = (fm,"(Y[%i]-Y[%i])"%(im,ip))
+                else:
+                    terms = (fp,"(Y[%i]-Y[%i])"%(ip,im))
+            else:
+                if fp > 0.:
+                    if fm == 1:
+                        terms = (1,"(Y[%i]+%.1f*Y[%i])"%(im,fp,ip))
+                    elif fm == -1:
+                        terms = (1,"(-Y[%i]+%.1f*Y[%i])"%(im,fp,ip))
+                    elif fp == 1:
+                        terms = (1,"(%.1f*Y[%i]+Y[%i])"%(fm,im,ip))
+                    else:
+                        terms = (1,"(%.1f*Y[%i]+%.1f*Y[%i])"%(fm,im,fp,ip))
+                else:
+                    if fm == 1:
+                        terms = (1,"(Y[%i] %.1f*Y[%i])"%(im,fp,ip))
+                    elif fm == -1:
+                        terms = (1,"(-Y[%i] %.1f*Y[%i])"%(im,fp,ip))
+                    elif fp == -1:
+                        terms = (1,"(%.1f*Y[%i]-Y[%i])"%(fm,im,ip))
+                    else:
+                        terms = (1,"(%.1f*Y[%i] %.1f*Y[%i])"%(fm,im,fp,ip))
+        else:
+            if im > -1:
+                i = im
+                f = fm
+            else:
+                i = ip
+                f = fp
+            terms = (f,"Y[%i]"%(i))
+    return terms
+
+
+
+
+def TlmGrdAcc(l,m,mcs,k,kcs):
+    j = 1
+    terms = None
+    if k == 0: # d/dz
+        fp,ip = lmc2idx(l+j,m,mcs)
+        terms = (1,"Y[%i]"%(ip))
+        return terms
+    elif kcs == 0: # d/dx
+        fp,ip = lmc2idx(l+j,m+1,mcs)
+        fm,im = lmc2idx(l+j,m-1,mcs)
+        fp *= -0.5
+        fm *=  0.5
+    else: # d/dy
+        ipow = pow(-1,mcs)
+        fp,ip = lmc2idx(l+j,m+1,1-mcs)
+        fm,im = lmc2idx(l+j,m-1,1-mcs)
+        fp *= -ipow * 0.5
+        fm *= -ipow * 0.5
+
+    if m == 0:
+        fp *= 0.5
+        fm *= 0.5
+    if m-1 == 0:
+        fm *= 2
+    if m+1 == 0:
+        fp *= 2
+
+    if k > 0:
+        fp *= -2
+        fm *= -2
+
+    terms = None
+    if im == ip:
+        f = fm+fp
+        i = im
+        if f != 0:
+            if i > -1:
+                terms = (f,"Y[%i]"%(i))
+    else:
+        if im > -1 and ip > -1:
+            if fm == fp:
+                terms = (fp,"(Y[%i]+Y[%i])"%(im,ip))
+            elif fm == -fp:
+                if fm > 0:
+                    terms = (fm,"(Y[%i]-Y[%i])"%(im,ip))
+                else:
+                    terms = (fp,"(Y[%i]-Y[%i])"%(ip,im))
+            else:
+                if fp > 0.:
+                    if fm == 1:
+                        terms = (1,"(Y[%i]+%.1f*Y[%i])"%(im,fp,ip))
+                    elif fm == -1:
+                        terms = (1,"(-Y[%i]+%.1f*Y[%i])"%(im,fp,ip))
+                    elif fp == 1:
+                        terms = (1,"(%.1f*Y[%i]+Y[%i])"%(fm,im,ip))
+                    else:
+                        terms = (1,"(%.1f*Y[%i]+%.1f*Y[%i])"%(fm,im,fp,ip))
+                else:
+                    if fm == 1:
+                        terms = (1,"(Y[%i] %.1f*Y[%i])"%(im,fp,ip))
+                    elif fm == -1:
+                        terms = (1,"(-Y[%i] %.1f*Y[%i])"%(im,fp,ip))
+                    elif fp == -1:
+                        terms = (1,"(%.1f*Y[%i]-Y[%i])"%(fm,im,ip))
+                    else:
+                        terms = (1,"(%.1f*Y[%i] %.1f*Y[%i])"%(fm,im,fp,ip))
+        else:
+            if im > -1:
+                i = im
+                f = fm
+            else:
+                i = ip
+                f = fp
+            terms = (f,"Y[%i]"%(i))
+    return terms
+
+
+
+
+
+def StoreTlmGrd(lmax):
+    Wmat = ddict( lambda: ddict( None ) )
+    j=1
+#    for k in range(j+1):
+#        for kcs in range(2):
+#            if k == 0 and kcs > 0: continue
+#            fjk,ijk = lmc2idx(j,k,kcs)
+    for k,kcs,gidx in [ (0,0,2), (1,0,0), (1,1,1) ]:
+        for l in range(lmax+1):
+            for m in range(l+1):
+                for mcs in range(2):
+                    if m == 0 and mcs > 0: continue
+                    flm,ilm = lmc2idx(l,m,mcs)
+                    Wmat[ilm][gidx] = TlmGrd(l,m,mcs,k,kcs)
+    return Wmat
+
+
+def StoreTlmGrdAcc(lmax):
+    Wmat = ddict( lambda: ddict( None ) )
+    j=1
+#    for k in range(j+1):
+#        for kcs in range(2):
+#            if k == 0 and kcs > 0: continue
+#            fjk,ijk = lmc2idx(j,k,kcs)
+    for k,kcs,gidx in [ (0,0,2), (1,0,0), (1,1,1) ]:
+        for l in range(lmax+1):
+            for m in range(l+1):
+                for mcs in range(2):
+                    if m == 0 and mcs > 0: continue
+                    flm,ilm = lmc2idx(l,m,mcs)
+                    Wmat[ilm][gidx] = TlmGrdAcc(l,m,mcs,k,kcs)
+    return Wmat
+
+
+
+def PrintIlmIntFromIlm(cpp,hpp,ipp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    Tmat = StoreIlmT(lmax,jmax)
+
+#    if lmax + jmax < 3: 
+        #cpp = ipp
+#        cpp.write("inline ")
+    #hpp.write("void IlmIntFromIlm_%s%s( double const * Ilm, double * T )\n{\n"%(LA,LB))
+    cpp.write("void IlmIntFromIlm_%s%s( double const *__restrict__ Y, double *__restrict__ X )\n{\n"%(LA,LB))
+
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    
+    if jmax > 0:
+        cpp.write("   ccdl::IlmIntFromIlm_%s%s(Y,X);\n"%(LA,GetLetter(jmax-1)))
+
+    j=jmax
+    for k in range(j+1):
+        for kcs in range(2):
+            if k == 0 and kcs > 0: continue
+            fjk,ijk   = lmc2idx(j,k,kcs)
+            fjkm,ijkm  = lmc2idx(j-1,k,kcs)
+            if ijkm < 0: fjkm = 0
+
+            for l in range(lmax+1):
+                for m in range(l+1):
+                    for mcs in range(2):
+                        if m == 0 and mcs > 0: continue
+                        flm,ilm   = lmc2idx(l,m,mcs)
+                        flmp,ilmp = lmc2idx(l+1,m,mcs)
+                        if ilmp < 0: flmp = 0
+                        if ilmp >= na: flmp = 0
+
+                        ii = ilm+ijk*na
+
+                        if ijk > ilm:
+                            p = pow(-1,l+j)
+                            jj = ijk+ilm*na
+                            if p > 0:
+                                cpp.write("   X[%i] =  X[%i]; // (%i,%i) sym\n"%(ii,jj,ilm,ijk))
+                            else:
+                                cpp.write("   X[%i] = -X[%i]; // (%i,%i) sym\n"%(ii,jj,ilm,ijk))
+                        else:
+                            if fjkm == 0 or flmp == 0:
+                                f,s = Tmat[ilm][ijk]
+                                if f == 1:
+                                    cpp.write("   X[%i] = %s;\n"%(ii,s))
+                                elif f == -1:
+                                    cpp.write("   X[%i] = -%s;\n"%(ii,s))
+                                else:
+                                    cpp.write("   X[%i] = %4.1f * %s;\n"%(ii,f,s))
+                            else:
+                                jj = ilmp+ijkm*na
+                                cpp.write("   X[%i] = -X[%i]; // l+1,j-1\n"%(ii,jj))
+    cpp.write("}\n\n")
+
+
+
+def PrintIlmInteraction(cpp,hpp,ipp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    Tmat = StoreIlmT(lmax,jmax)
+
+    if lmax + jmax < 3: 
+        cpp = ipp
+        cpp.write("inline ")
+    hpp.write("void IlmInteraction_%s%s( double const * crd, double const r2, double * T );\n"%(LA,LB))
+    crd="crd"
+    if lmax == 0:
+        crd = "/* crd */"
+
+    cpp.write("void ccdl::IlmInteraction_%s%s( double const *__restrict__ %s, double const r2, double *__restrict__ T )\n{\n"%(LA,LB,crd))
+    if lmax+jmax == 0:
+        cpp.write("   T[0] = 1. / std::sqrt(r2);\n;}\n\n")
+    elif lmax+jmax == 1:
+        cpp.write("""   T[0] = 1. / std::sqrt(r2);
+   double a = T[0]/r2;
+   T[1] = -a * crd[2];
+   a *= 2.;
+   T[2] = a * crd[0];
+   T[3] = a * crd[1];
+}
+
+""")
+    elif lmax+jmax == 2:
+        if lmax == 2:
+            cpp.write("""   double const oor2 = 1. / r2;
+   T[0] = std::sqrt(oor2);
+   double a = 2.*oor2*T[0];
+   double c = a*3.*oor2;
+   double b = c * crd[2];
+   T[1] = -0.5*a * crd[2];
+   T[2] =      a * crd[0];
+   T[3] =      a * crd[1];
+   T[4] =  0.5*(b * crd[2] - a);
+   T[5] = -b * crd[0];
+   T[6] = -b * crd[1];
+   T[7] = -c * (crd[1]*crd[1]-crd[0]*crd[0]);
+   T[8] =  c * 2. * crd[1]*crd[0];
+}
+
+""")
+        else:
+            cpp.write("""   double const oor2 = 1. / r2;
+   T[0] = std::sqrt(oor2);
+   double a = oor2*T[0];
+   double c = a*3.*oor2;
+   double b = c * crd[2];
+   double Y4 = b * crd[2] - a;
+   double Y7 = -c * (crd[1]*crd[1]-crd[0]*crd[0]);
+   T[1] =    -a * crd[2];
+   T[2] =  2.*a * crd[0];
+   T[3] =  2.*a * crd[1];
+   T[4] = -T[1]; // (0,1) sym
+   T[5] = -Y4;
+   T[6] =  2.*b * crd[0];
+   T[7] =  2.*b * crd[1];
+   T[8] = -T[2]; // (0,2) sym
+   T[9] =  T[6]; // (1,2) sym
+   T[10] =  2. * (Y4-Y7);
+   T[11] = -4.*c * crd[1]*crd[0];
+   T[12] = -T[3]; // (0,3) sym
+   T[13] =  T[7]; // (1,3) sym
+   T[14] =  T[11]; // (2,3) sym
+   T[15] =  2. * (Y4+Y7);
+}
+
+""")
+    else:
+        lj = lmax+jmax
+        nlm = (lj+1)*(lj+1)
+        cpp.write("   double X[%i];\n"%(nlm))
+        cpp.write("   ccdl::SolidHarm_Ilm_%s(crd,r2,X);\n"%(GetLetter(lj)))
+        cpp.write("   ccdl::IlmIntFromIlm_%s%s(X,T);\n"%(LA,LB))
+        cpp.write("}\n\n")
+
+
+
+def PrintZlmInteraction(cpp,hpp,ipp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    Tmat = StoreIlmT(lmax,jmax)
+
+    if lmax + jmax < 3: 
+        cpp = ipp
+        cpp.write("inline ")
+    hpp.write("void PtExpInt_%s%s( double const * crd, double const r2, double * T );\n"%(LA,LB))
+    crd="crd"
+    if lmax == 0:
+        crd = "/* crd */"
+
+    cpp.write("void ccdl::PtExpInt_%s%s( double const *__restrict__ %s, double const r2, double *__restrict__ T )\n{\n"%(LA,LB,crd))
+    if lmax+jmax == 0:
+        cpp.write("   T[0] = 1. / std::sqrt(r2);\n;}\n\n")
+    elif lmax+jmax == 1:
+        cpp.write("""   T[0] = 1. / std::sqrt(r2);
+   double a = T[0]/r2;
+   T[1] = -a * crd[2];
+   T[2] = -a * crd[0];
+   T[3] = -a * crd[1];
+}
+
+""")
+    elif lmax+jmax == 2:
+        if lmax == 2:
+            cpp.write("""   double const oor2 = 1. / r2;
+   T[0] = std::sqrt(oor2);
+   double a = 2.*oor2*T[0];
+   double c = a*3.*oor2;
+   double b = c * crd[2];
+   T[1] = -0.5*a * crd[2];
+   T[2] = -0.5*a * crd[0];
+   T[3] = -0.5*a * crd[1];
+   T[4] =  0.25*(b * crd[2] - a);
+   b /= 3.4641016151377544;
+   T[5] = b * crd[0];
+   T[6] = b * crd[1];
+   c /= 6.9282032302755088;
+   T[7] = -c * (crd[1]*crd[1]-crd[0]*crd[0]);
+   T[8] =  c * 2. * crd[1]*crd[0];
+}
+
+""")
+        else:
+            cpp.write("""   double const oor2 = 1. / r2;
+   T[0] = std::sqrt(oor2);
+   double a = oor2*T[0];
+   double c = a*3.*oor2;
+   double b = c * crd[2];
+   double Y4 = b * crd[2] - a;
+   double Y7 = -c * (crd[1]*crd[1]-crd[0]*crd[0]);
+   T[1] =    -a * crd[2];
+   T[2] =    -a * crd[0];
+   T[3] =    -a * crd[1];
+   T[4] = -T[1]; // (0,1) sym
+   T[5] = -Y4;  // 1,1
+   T[6] = -b * crd[0]; // 2,1
+   T[7] = -b * crd[1]; // 3,1
+   T[8] = -T[2]; // (0,2) sym
+   T[9] =  T[6]; // (1,2) sym
+   T[10] =  0.5 * (Y4-Y7); // 2,2
+   T[11] = -c * crd[1]*crd[0]; // 3,2
+   T[12] = -T[3]; // (0,3) sym
+   T[13] =  T[7]; // (1,3) sym
+   T[14] =  T[11]; // (2,3) sym
+   T[15] =  0.5 * (Y4+Y7); // 3,3
+}
+
+""")
+    else:
+        lj = lmax+jmax
+        nlm = (lj+1)*(lj+1)
+        cpp.write("   double X[%i];\n"%(nlm))
+        cpp.write("   ccdl::SolidHarm_Ilm_%s(crd,r2,X);\n"%(GetLetter(lj)))
+        cpp.write("   ccdl::IlmIntFromIlm_%s%s(X,T);\n"%(LA,LB))
+        if jmax == 0:
+            cpp.write(" for ( int i=0; i<%i; ++i ) T[i] /= GlobalAlmC[i];\n"%((lmax+1)*(lmax+1)))
+        else:
+            cpp.write("   --T; for ( int j=0; j<%i; ++j ) for ( int i=0; i<%i; ++i ) *(++T) /= ( GlobalAlmC[i]*GlobalAlmC[j] );\n"%( (jmax+1)*(lmax+1), (lmax+1)*(lmax+1)))
+        cpp.write("}\n\n")
+
+    
+
+
+def PrintZlmGrd(cpp,hpp,ipp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    Tmat = StoreIlmT(lmax,jmax)
+
+    if lmax == 0 or ( lmax == 1 and jmax == 0 ): 
+        cpp = ipp
+        cpp.write("inline ")
+    hpp.write("void PtExpGrd_%s%s( double const * crd, double const r2, double * T, double * dT );\n"%(LA,LB))
+    crd="crd"
+#    if lmax == 0:
+#        crd = "/* crd */"
+
+    cpp.write("void ccdl::PtExpGrd_%s%s( double const *__restrict__ %s, double const r2, double *__restrict__ T, double *__restrict__ dT )\n{\n"%(LA,LB,crd))
+
+    lj = lmax+jmax
+    nlm = (lj+1)*(lj+1)
+    lj1 = lj+1
+    nlm1 = (lj1+1)*(lj1+1)
+    nj = (jmax+1)*(jmax+1)
+    nl = (lmax+1)*(lmax+1)
+    nl1 = (lmax+2)*(lmax+2)
+
+####
+    if lmax == 0:
+        cpp.write("""
+   T[0] = 1. / std::sqrt(r2);
+   double a = -T[0]/r2;
+   dT[0] = a * crd[0];
+   dT[1] = a * crd[1];
+   dT[2] = a * crd[2];
+}
+
+""")        
+        return
+####
+    if lmax == 1 and jmax == 0:
+        cpp.write(""" double Y[5];
+   double const oor2 = 1. / r2;
+   T[0] = std::sqrt(oor2);
+   double a = -oor2*T[0];
+   double c = a*3.*oor2;
+   double b = c * crd[2];
+   T[1] = a * crd[2];
+   T[2] = a * crd[0];
+   T[3] = a * crd[1];
+// these are already scaled by an extra -0.5
+   Y[0] =  0.5*(b * crd[2] - a); 
+   Y[1] = -b * crd[0];
+   Y[2] = -b * crd[1];
+// these have another -0.5 in it
+   Y[3] = 0.5 * c * (crd[1]*crd[1]-crd[0]*crd[0]);
+   Y[4] = -c * crd[1]*crd[0];
+   *(dT)   = T[2];
+   *(++dT) = T[3];
+   *(++dT) = T[1];
+
+   *(++dT) = Y[1];
+   *(++dT) = Y[2];
+   *(++dT) = -2.*Y[0];
+
+   *(++dT) = (Y[0]+Y[3]);
+   *(++dT) = Y[4];
+   *(++dT) = Y[1];
+
+   *(++dT) = Y[4];
+   *(++dT) = (Y[0]-Y[3]);
+   *(++dT) = Y[2];
+}
+
+""")        
+        return
+####
+    cpp.write("   double X[%i];\n"%(nl1*nj))
+    cpp.write("   ccdl::SolidHarm_Ilm_%s(crd,r2,dT);\n"%(GetLetter(lj1)))
+    cpp.write("   ccdl::IlmIntFromIlm_%s%s(dT,X);\n"%(GetLetter(lmax+1),LB))
+    cpp.write("   ccdl::IlmInteractionGrd_%s(%i,X,dT);\n"%(LA,nj))
+    if jmax == 0:
+        cpp.write("""   --T; --dT;
+   for ( int i=0; i<%i; ++i ) 
+      {
+          *(++T)  = X[i]/GlobalAlmC[i];
+          *(++dT) /= GlobalAlmC[i];
+          *(++dT) /= GlobalAlmC[i];
+          *(++dT) /= GlobalAlmC[i];
+      };
+"""%((lmax+1)*(lmax+1)))
+    else:
+        cpp.write("""   --T; --dT;
+   for ( int j=0; j<%i; ++j ) 
+      for ( int i=0; i<%i; ++i )
+         {
+             double c = 1./( GlobalAlmC[i]*GlobalAlmC[j] );
+             *(++T)   = X[i+j*%i]*c;
+             *(++dT) *= c;
+             *(++dT) *= c;
+             *(++dT) *= c;
+         };
+"""%( (jmax+1)*(jmax+1), (lmax+1)*(lmax+1), (lmax+2)*(lmax+2) ))
+    cpp.write("}\n\n")
+
+    
+
+
+
+def PrintZlmPot(cpp,hpp,ipp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    Tmat = StoreIlmT(lmax,jmax)
+
+    if lmax + jmax < 3: 
+        cpp = ipp
+        cpp.write("inline ")
+    hpp.write("void PtExpPot_%s%s( double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb );\n"%(LA,LB))
+    crd="crd"
+    if lmax == 0:
+        crd = "/* crd */"
+
+    cpp.write("void ccdl::PtExpPot_%s%s( double const *__restrict__ %s, double const r2, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb )\n{\n"%(LA,LB,crd))
+
+    lj = lmax+jmax
+    nlm = (lj+1)*(lj+1)
+    lj1 = lj+1
+    nlm1 = (lj1+1)*(lj1+1)
+    nj = (jmax+1)*(jmax+1)
+    nl = (lmax+1)*(lmax+1)
+    nl1 = (lmax+2)*(lmax+2)
+
+
+#     if lmax == jmax:
+#         cpp.write("""
+# for ( int i=0; i<%i; ++i )
+# {
+#    QA[i] = qa[i] / GlobalAlmC[i];
+#    QB[i] = qb[i] / GlobalAlmC[i];
+#    PA[i] = 0.;
+#    PB[i] = 0.;
+# }
+# """%(nl))
+#     else:
+#         cpp.write("""
+# for ( int i=0; i<%i; ++i )
+# {
+#    QA[i] = qa[i] / GlobalAlmC[i];
+#    PA[i] = 0.;
+# }
+# """%(nl))
+#         if jmax == 0:
+#             cpp.write("""
+# *QB = *qb;
+# *PB = 0.;
+# """)
+#         else:
+#             cpp.write("""
+# for ( int i=0; i<%i; ++i )
+# {
+#    QB[i] = qb[i] / GlobalAlmC[i];
+#    PB[i] = 0.;
+# }
+# """%(nj))
+    if lmax == 0:
+        cpp.write("""   double T = 1. / std::sqrt(r2);
+   *pa += T * *qb;
+   *pb += T * *qa;
+}
+""")
+        return
+
+    cpp.write("""   double T[%i];\n"""%(nl*nj))
+
+    if lmax + jmax < 3:
+        cpp.write("   ccdl::PtExpInt_%s%s(crd,r2,T);\n"%(LA,LB))
+        if jmax == 0:
+            cpp.write("""
+   for ( int i=0; i<%i; ++i )
+      {
+        pa[i] += T[i] * *qb;
+        *pb   += T[i] * qa[i];
+      };
+}
+"""%(nl))
+        else:
+            cpp.write("""
+  for ( int j=0; j<%i; ++j )
+     for ( int i=0; i<%i; ++i )
+        {
+          pa[i] += T[i+j*%i]  * qb[j];
+          pb[j] += T[i+j*%i]  * qa[i];
+        };
+}
+"""%(nj,nl,nl,nl))
+    else:
+        cpp.write("   ccdl::IlmInteraction_%s%s(crd,r2,T);\n"%(LA,LB))
+        if jmax == 0:
+            cpp.write("""
+   for ( int i=0; i<%i; ++i )
+      {
+        double a = T[i] / GlobalAlmC[i];
+        pa[i] += a * *qb;
+        *pb += a * qa[i];
+      };
+}
+"""%(nl))
+        else:
+            cpp.write("""
+  for ( int j=0; j<%i; ++j )
+     for ( int i=0; i<%i; ++i )
+        {
+          double a = T[i+j*%i] / ( GlobalAlmC[i] * GlobalAlmC[j] );
+          pa[i] += a * qb[j];
+          pb[j] += a * qa[i];
+        };
+}
+"""%(nj,nl,nl))
+
+
+
+
+
+
+
+def PrintZlmPotGrd(cpp,hpp,ipp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    Tmat = StoreIlmT(lmax,jmax)
+
+    if lmax == 0 or (lmax==1 and jmax == 0): 
+        cpp = ipp
+        cpp.write("inline ")
+    hpp.write("void PtExpPotGrd_%s%s( double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb, double * g );\n"%(LA,LB))
+    crd="crd"
+
+    cpp.write("void ccdl::PtExpPotGrd_%s%s( double const *__restrict__ %s, double const r2, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb, double *__restrict__ g )\n{\n"%(LA,LB,crd))
+
+    lj = lmax+jmax
+    nlm = (lj+1)*(lj+1)
+    lj1 = lj+1
+    nlm1 = (lj1+1)*(lj1+1)
+    nj = (jmax+1)*(jmax+1)
+    nl = (lmax+1)*(lmax+1)
+    nl1 = (lmax+2)*(lmax+2)
+
+    if lmax == 0:
+        cpp.write("""  double T = 1. / std::sqrt(r2);
+  double a = - (*qa) * (*qb) * T / r2;
+  *pa += T * *qb;
+  *pb += T * *qa;
+  g[0] = a * crd[0];
+  g[1] = a * crd[1];
+  g[2] = a * crd[2];
+}
+""")
+        return
+    if lmax == 1 and jmax == 0:
+        cpp.write("""   double T[4],Y[5];
+   double const oor2 = 1. / r2;
+   T[0] = std::sqrt(oor2);
+   double a = -oor2*T[0];
+   double c = a*3.*oor2;
+   double b = c * crd[2];
+   T[1] = a * crd[2];
+   T[2] = a * crd[0];
+   T[3] = a * crd[1];
+   pa[0] += T[0]**qb;
+   pa[1] += T[1]**qb;
+   pa[2] += T[2]**qb;
+   pa[3] += T[3]**qb;
+   *pb   += qa[0]*T[0] + qa[1]*T[1] + qa[2]*T[2] + qa[3]*T[3];
+// these are already scaled by an extra -0.5
+   Y[0] =  0.5*(b * crd[2] - a); 
+   Y[1] = -b * crd[0];
+   Y[2] = -b * crd[1];
+// these have another -0.5 in it
+   Y[3] = 0.5 * c * (crd[1]*crd[1]-crd[0]*crd[0]);
+   Y[4] = -c * crd[1]*crd[0];
+   g[0] = *qb * ( qa[0]*T[2] + qa[1]*Y[1] + qa[2]*(Y[0]+Y[3]) + qa[3]*Y[4] );
+   g[1] = *qb * ( qa[0]*T[3] + qa[1]*Y[2] + qa[2]*Y[4] + qa[3]*(Y[0]-Y[3]) );
+   g[2] = *qb * ( qa[0]*T[1] + qa[1]*(-2.*Y[0]) + qa[2]*Y[1] + qa[3]*Y[2]  );
+}
+""")
+        return
+
+
+    cpp.write("   double QA[%i],QB[%i],PA[%i],PB[%i],T[%i];\n"%(nl,nj,nl,nj,nl1*nj))
+
+    if lmax == jmax:
+        cpp.write("""
+   for ( int i=0; i<%i; ++i )
+   {
+      QA[i] = qa[i] / GlobalAlmC[i];
+      QB[i] = qb[i] / GlobalAlmC[i];
+      PA[i] = 0.;
+      PB[i] = 0.;
+   }
+"""%(nl))
+    else:
+        cpp.write("""
+   for ( int i=0; i<%i; ++i )
+   {
+      QA[i] = qa[i] / GlobalAlmC[i];
+      PA[i] = 0.;
+   }
+"""%(nl))
+        if jmax == 0:
+            cpp.write("""   *QB = *qb;
+   *PB = 0.;
+""")
+        else:
+            cpp.write("""   for ( int i=0; i<%i; ++i )
+   {
+      QB[i] = qb[i] / GlobalAlmC[i];
+      PB[i] = 0.;
+   }
+"""%(nj))
+
+
+
+    if lmax + jmax < 3:
+        cpp.write("   ccdl::IlmInteraction_%s%s(crd,r2,T);\n"%(GetLetter(lmax+1),LB))
+        if jmax == 0:
+            cpp.write("""
+   for ( int i=0; i<%i; ++i )
+      {
+        PA[i] += T[i] * *QB;
+        *PB   += T[i] * QA[i];
+      };
+
+"""%(nl))
+        else:
+            cpp.write("""
+  for ( int j=0; j<%i; ++j )
+     for ( int i=0; i<%i; ++i )
+        {
+          PA[i] += T[i+j*%i]  * QB[j];
+          PB[j] += T[i+j*%i]  * QA[i];
+        };
+
+"""%(nj,nl,nl1,nl1))
+    else:
+        if lmax > 4:
+            cpp.write("   double Y[%i];\n"%( (lmax+jmax+2)*(lmax+jmax+2) ))
+            cpp.write("   ccdl::SolidHarm_Ilm_%s(crd,r2,Y);\n"%(GetLetter(lj1)))
+            cpp.write("   ccdl::IlmIntFromIlm_%s%s(Y,T);\n"%(GetLetter(lmax+1),LB))
+        else:
+            cpp.write("   ccdl::IlmInteraction_%s%s(crd,r2,T);\n"%(GetLetter(lmax+1),LB))
+        if jmax == 0:
+            cpp.write("""
+   for ( int i=0; i<%i; ++i )
+      {
+        PA[i] += T[i] * *QB;
+        *PB += T[i] * QA[i];
+      };
+
+"""%(nl))
+        else:
+            cpp.write("""
+  for ( int j=0; j<%i; ++j )
+     for ( int i=0; i<%i; ++i )
+        {
+          PA[i] += T[i+j*%i] * QB[j];
+          PB[j] += T[i+j*%i] * QA[i];
+        };
+"""%(nj,nl,nl1,nl1))
+
+
+    cpp.write("   g[0] = 0.; g[1] = 0.; g[2] = 0.;\n")
+    cpp.write("   ccdl::IlmInteractionGrdAcc_%s(%i,QA,QB,T,g);\n"%(GetLetter(lmax),nj))
+
+
+
+    if lmax == jmax:
+        cpp.write("""
+   for ( int i=0; i<%i; ++i )
+   {
+      pa[i] += PA[i] / GlobalAlmC[i];
+      pb[i] += PB[i] / GlobalAlmC[i];
+   }
+"""%(nl))
+    else:
+        cpp.write("""
+   for ( int i=0; i<%i; ++i )
+      pa[i] += PA[i] / GlobalAlmC[i];
+"""%(nl))
+        if jmax == 0:
+            cpp.write("""
+   *pb += *PB;
+""")
+        else:
+            cpp.write("""
+   for ( int i=0; i<%i; ++i )
+      pb[i] += PB[i] / GlobalAlmC[i];
+"""%(nj))
+
+    cpp.write("}\n\n")
+
+
+
+
+
+
+
+def PrintClmW(fh,lmax,jmax):
+    W = StoreRlmW(lmax,jmax)
+
+    Alm = CptAlmVec( max(lmax,jmax) )
+    visited = ddict( None )
+
+    nlm = (lmax+1)*(lmax+1)
+    njk = (jmax+1)*(jmax+1)
+    for ijk in range( njk ):
+        for ilm in range( nlm ):
+            t = W[ilm][ijk]
+            idx = ilm+ijk*nlm
+            #print "// ",ilm,ijk,t
+            if t is not None:
+                fh.write( "// %i %i\n"%(ilm+1,ijk+1) )
+                f = t[0] * Alm[ilm] / Alm[ijk]
+                s = t[1]
+                sgnterm = ""
+                absterm = ""
+                if f == 1:
+                    absterm = s
+                elif f == -1:
+                    absterm = s
+                    sgnterm = "-"
+                else:
+                    absterm = "%.16e * %s"%(abs(f),s)
+                    if f < 0:
+                        sgnterm = "-"
+                if absterm in visited:
+                    v = visited[absterm]
+                    if sgnterm == v[1]:
+                        if v[0] == 0:
+                            fh.write( "W[%i] = 1.;\n"%(idx) )
+                        else:
+                            fh.write( "W[%i] = W[%i];\n"%(idx,v[0]) )
+                    else:
+                        fh.write( "W[%i] = -W[%i];\n"%(idx,v[0]) )
+                else:
+                    visited[absterm] = (idx,sgnterm)
+                    if absterm == "Y[0]" and sgnterm == "":
+                        fh.write( "W[%i] = 1.;\n"%(idx) )
+                    else:
+                        fh.write( "W[%i] = %s%s;\n"%(idx,sgnterm,absterm) )
+                    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def PrintClmWBlock(cpp,hpp,lmax,jmax):
+    W = StoreRlmW(lmax,jmax)
+
+
+    #hpp.write("void ClmWFromRlm_%s%s( double const * Rlm, double * Wtilde );\n"%(GetLetter(lmax),GetLetter(jmax)))
+    if lmax+jmax < 5: cpp.write("inline ")
+    Y = "Y"
+    if (lmax == 0) or (lmax==1 and jmax==1): Y="/* Y */"
+    cpp.write("void ClmWFromRlm_%s%s( double const *__restrict__ %s, double *__restrict__ W )\n{\n"%(GetLetter(lmax),GetLetter(jmax),Y))
+
+    if jmax > 1:
+        cpp.write( "   ClmWFromRlm_%s%s(Y,W);\n"%(GetLetter(lmax),GetLetter(jmax-1)) );
+
+    Alm = CptAlmVec( max(lmax,jmax) )
+    visited = ddict( None )
+
+    nlm = (lmax+1)*(lmax+1)
+    njk = (jmax+1)*(jmax+1)
+    for ijk in range( njk ):
+        for ilm in range( nlm ):
+            t = W[ilm][ijk]
+            idx = ilm+ijk*nlm
+            #print "// ",ilm,ijk,t
+            if t is not None:
+                f = t[0] * Alm[ilm] / Alm[ijk]
+                s = t[1]
+                sgnterm = ""
+                absterm = ""
+                if f == 1:
+                    absterm = s
+                elif f == -1:
+                    absterm = s
+                    sgnterm = "-"
+                else:
+                    absterm = "%.16e * %s"%(abs(f),s)
+                    if f < 0:
+                        sgnterm = "-"
+
+                
+                if ijk >= jmax*jmax:
+                    if absterm in visited:
+                        v = visited[absterm]
+#                        if v[0] < nlm:
+#                            print lmax,jmax,"using",v[0]
+                        if sgnterm == v[1]:
+                            if v[0] == 0:
+                                cpp.write( "   W[%i] = 1.;\n"%(idx) )
+                            else:
+                                cpp.write( "   W[%i] = W[%i];\n"%(idx,v[0]) )
+                        else:
+                            cpp.write( "   W[%i] = -W[%i];\n"%(idx,v[0]) )
+                    else:
+                        if idx == 0 or idx >= nlm:
+                            #print lmax,jmax,"inserting",idx
+                            visited[absterm] = (idx,sgnterm)
+                        if absterm == "Y[0]" and sgnterm == "":
+                            cpp.write( "   W[%i] = 1.;\n"%(idx) )
+                        else:
+                            cpp.write( "   W[%i] = %s%s;\n"%(idx,sgnterm,absterm) )
+                else:
+                    if not absterm in visited:
+                        if idx == 0 or idx >= nlm:
+#                            print "inserting",idx
+                            visited[absterm] = (idx,sgnterm)
+
+    cpp.write("}\n\n")
+
+
+def PrintRlm(cpp,hpp,ipp,lmax):
+    hpp.write("void SolidHarm_Rlm_%s( double const * crd, double const r2, double * Rlm );\n"%(GetLetter(lmax)))
+    if lmax < 3:
+        cpp = ipp
+        cpp.write("inline ")
+
+    crd = "crd"
+    if lmax < 1: crd = "/* crd */"
+    r2 = "r2"
+    if lmax < 2: r2 = "/* r2 */"
+
+    cpp.write("void ccdl::SolidHarm_Rlm_%s( double const *__restrict__ %s, double const %s, double *__restrict__ Y )\n{\n"%(GetLetter(lmax),crd,r2))
+    if lmax > 2:
+        cpp.write("   double a,b;\n");
+    for l in range(lmax+1):
+        if l == 0:
+            cpp.write("   Y[0] = 1.;\n" )
+            continue
+        if l == 1:
+            cpp.write("""   Y[1] = crd[2];
+   Y[2] = -0.50000000000000000000 * crd[0];
+   Y[3] = -0.50000000000000000000 * crd[1];
+""")
+            continue
+        if l == 2:
+            cpp.write("""   Y[4] = 0.25000000000000000000 * ( 3.0 * crd[2] * crd[2] - r2 );
+   Y[5] = crd[2] * Y[2];
+   Y[6] = crd[2] * Y[3];
+   Y[7] = 0.25000000000000000000 * ( crd[1]*Y[3] - crd[0]*Y[2] );
+   Y[8] = -0.25000000000000000000 * ( crd[1]*Y[2] + crd[0]*Y[3] );
+""")
+            continue
+            
+        m=0
+        cs=0
+        f,idx = lmc2idx(l,m,cs)
+        fa,ia = lmc2idx(l-1,m,cs)
+        fb,ib = lmc2idx(l-2,m,cs)
+        if ib < 0:
+            cpp.write("   Y[%i] = %.16e*( %.1f * crd[2]*Y[%i] );\n"%(idx,1./(l*l),(2*l-1),ia) )
+        elif ib == 0:
+            cpp.write("   Y[%i] = %.16e*( %.1f * crd[2]*Y[%i] - r2 );\n"%(idx,1./(l*l),(2*l-1),ia) )
+        else:
+            cpp.write("   Y[%i] = %.16e*( %.1f * crd[2]*Y[%i] - r2*Y[%i]);\n"%(idx,1./(l*l),(2*l-1),ia,ib) )
+
+        for m in range(1,l-1):
+            b = 1 / float( (l+m)*(l-m) )
+            a = float(2*l-1)*b
+            cpp.write("   a = %.16e * crd[2];\n"%(a))
+            cpp.write("   b = %.16e * r2;\n"%(b))
+
+            cpp.write("   Y[%i] = a*Y[%i] - b*Y[%i];\n"%(\
+                    lmc2idx(l,m,0)[1], lmc2idx(l-1,m,0)[1], lmc2idx(l-2,m,0)[1] ))
+            cpp.write("   Y[%i] = a*Y[%i] - b*Y[%i];\n"%(\
+                    lmc2idx(l,m,1)[1], lmc2idx(l-1,m,1)[1], lmc2idx(l-2,m,1)[1] ))
+
+        if l-1 > 0:
+            m=l-1
+            cpp.write("   Y[%i] = crd[2]*Y[%i];\n"%(\
+                    lmc2idx(l,m,0)[1], lmc2idx(l-1,m,0)[1] ))
+            cpp.write("   Y[%i] = crd[2]*Y[%i];\n"%(\
+                    lmc2idx(l,m,1)[1], lmc2idx(l-1,m,1)[1] ))
+
+        m=l
+        f,idx = lmc2idx(l,m,0)
+        fa,ia = lmc2idx(l-1,m-1,0)
+        fb,ib = lmc2idx(l-1,m-1,1)
+        a = 0.5 / m
+        cpp.write("   Y[%i] = %.16e * (crd[1]*Y[%i]-crd[0]*Y[%i]);\n"%(idx,a,ib,ia))
+        cpp.write("   Y[%i] = %.16e * (crd[1]*Y[%i]+crd[0]*Y[%i]);\n"%(idx+1,-a,ia,ib))
+
+    cpp.write("}\n\n")
+
+
+
+
+
+
+def PrintIlm(cpp,hpp,ipp,lmax):
+    hpp.write("void SolidHarm_Ilm_%s( double const * crd, double const r2, double * Ilm );\n"%(GetLetter(lmax)))
+    if lmax < 3:
+        cpp = ipp
+        cpp.write("inline ")
+
+    crd = "crd"
+    if lmax < 1: crd = "/* crd */"
+    r2 = "r2"
+
+    cpp.write("void ccdl::SolidHarm_Ilm_%s( double const *__restrict__ %s, double const %s, double *__restrict__ Y )\n{\n"%(GetLetter(lmax),crd,r2))
+#    if lmax > 2:
+#        cpp.write("   double a,b,tmp;\n");
+
+
+    if lmax == 2:
+        cpp.write("""   double const oor2 = 1. / r2;
+   Y[0] = std::sqrt(oor2);
+   double a = oor2*Y[0];
+   double c = a*3.*oor2;
+   double b = c * crd[2];
+   Y[1] =  a * crd[2];
+   Y[2] = -a * crd[0];
+   Y[3] = -a * crd[1];
+   Y[4] =  b * crd[2] - a;
+   Y[5] = -b * crd[0];
+   Y[6] = -b * crd[1];
+   Y[7] = -c * (crd[1]*crd[1]-crd[0]*crd[0]);
+   Y[8] =  c * 2. * crd[1]*crd[0];
+}
+""")
+        return
+
+
+
+
+    if lmax == 0:
+        cpp.write("   Y[0] = 1. / std::sqrt(r2);\n}\n\n")
+        return
+    if lmax > 0:
+        cpp.write("   double const oor2 = 1. / r2;\n")
+
+
+
+    for l in range(lmax+1):
+        if l == 0:
+            cpp.write("   Y[0] = std::sqrt(oor2);\n")
+            continue
+        if l == 1:
+             cpp.write("""   double a = oor2*Y[0];
+   Y[1] = a * crd[2];
+   Y[2] = -a * crd[0];
+   Y[3] = -a * crd[1];
+""")
+             continue
+        if l == 2:
+            cpp.write("""   a = 3. * oor2 * crd[2];
+   Y[4] = a * Y[1] - oor2 * Y[0];
+   Y[5] = a * Y[2];
+   Y[6] = a * Y[3];
+   Y[7] =  3.*oor2 * (crd[1]*Y[3]-crd[0]*Y[2]);
+   Y[8] = -6.*oor2 * crd[0]*Y[3];
+""")
+            continue
+            
+        m=0
+        cs=0
+        f,idx = lmc2idx(l,m,cs)
+        fa,ia = lmc2idx(l-1,m,cs)
+        fb,ib = lmc2idx(l-2,m,cs)
+        #cpp.write("tmp = %.1f * oor2; a = tmp * crd[2];\n"%(2*l-1))
+        
+        cpp.write("   a = %.1f*crd[2]*oor2;\n"%(2*l-1))
+
+        if ib < 0:
+            cpp.write("   Y[%i] = %.1f * oor2 * Y[%i];\n"%(idx,2*l-1,ia) )
+#        elif ib == 0:
+#            cpp.write("   Y[%i] = %.16e*( %.1f * crd[2]*Y[%i] - r2 );\n"%(idx,1./(l*l),(2*l-1),ia) )
+        else:
+            cpp.write("   Y[%i] = a*Y[%i] - %.1f*oor2*Y[%i];\n"%(idx,(l-1)*(l-1)-0*0,ia,ib) )
+
+        for m in range(1,l-1):
+            b = 1 / float( (l+m)*(l-m) )
+            a = float(2*l-1)*b
+            #cpp.write("   a = %.16e * crd[2];\n"%(a))
+            #cpp.write("   b = %.16e * r2;\n"%(b))
+
+            cpp.write("   Y[%i] = a*Y[%i] - %.1f*oor2*Y[%i];\n"%(\
+                    lmc2idx(l,m,0)[1], 
+                    lmc2idx(l-1,m,0)[1], (l-1)*(l-1)-m*m,
+                    lmc2idx(l-2,m,0)[1] ))
+            cpp.write("   Y[%i] = a*Y[%i] - %.1f*oor2*Y[%i];\n"%(\
+                    lmc2idx(l,m,1)[1], 
+                    lmc2idx(l-1,m,1)[1], (l-1)*(l-1)-m*m,
+                    lmc2idx(l-2,m,1)[1] ))
+
+        if l-1 > 0:
+            m=l-1
+            cpp.write("   Y[%i] = a*Y[%i];\n"%(\
+                    lmc2idx(l,m,0)[1], 
+                    lmc2idx(l-1,m,0)[1] ))
+            cpp.write("   Y[%i] = a*Y[%i];\n"%(\
+                    lmc2idx(l,m,1)[1], 
+                    lmc2idx(l-1,m,1)[1] ))
+
+        m=l
+        f,idx = lmc2idx(l,m,0)
+        fa,ia = lmc2idx(l-1,m-1,0)
+        fb,ib = lmc2idx(l-1,m-1,1)
+        a = 2*m-1;
+        cpp.write("   Y[%i] =  %.1f*oor2 * (crd[1]*Y[%i]-crd[0]*Y[%i]);\n"%(idx,a,ib,ia))
+        cpp.write("   Y[%i] = -%.1f*oor2 * (crd[1]*Y[%i]+crd[0]*Y[%i]);\n"%(idx+1,a,ia,ib))
+
+    cpp.write("}\n\n")
+
+
+
+
+def PrintIlmGrd(cpp,hpp,ipp,lmax):
+
+    D = StoreIlmGrd(lmax)
+
+    hpp.write("void SolidHarm_dIlm_%s( double const * Ilm, double * dIlm );\n"%(GetLetter(lmax)))
+    if lmax < 3:
+        cpp = ipp
+        cpp.write("inline ")
+
+    cpp.write("void ccdl::SolidHarm_dIlm_%s( double const *__restrict__ Y, double *__restrict__ dIlm )\n{\n"%(GetLetter(lmax)))
+    lmin = 0
+    if lmax > 5:
+        cpp.write("   ccdl::SolidHarm_dIlm_%s(Y,dIlm);\n"%(GetLetter(lmax-1)))
+        lmin = lmax
+    #gs = [1,2,0]
+    for l in range(lmin,lmax+1):            
+        for m in range(l+1):
+            for mcs in range(2):
+                if mcs == 1 and m == 0: continue
+                f,idx = lmc2idx(l,m,mcs)
+                for g in range(3):
+                    f,s = D[idx][g]
+                    if f == 1:
+                        cpp.write("   dIlm[%i] = %s;\n"%(g+idx*3,s))
+                    elif f == -1:
+                        cpp.write("   dIlm[%i] = -%s;\n"%(g+idx*3,s))
+                    else:
+                        cpp.write("   dIlm[%i] = %.16e * %s;\n"%(g+idx*3,f,s))
+
+    cpp.write("}\n\n")
+
+
+
+
+def PrintTlmGrd(cpp,hpp,ipp,lmax):
+
+    D = StoreTlmGrd(lmax)
+
+#    hpp.write("void IlmInteractionGrd_%s( int ncol, double const * Ilm, double * dIlm );\n"%(GetLetter(lmax)))
+#    if lmax < 3:
+#        cpp = ipp
+#        cpp.write("inline ")
+
+    cpp.write("void IlmInteractionGrd_%s( int ncol, double const *__restrict__ Y, double *__restrict__ dIlm )\n{\n"%(GetLetter(lmax)))
+    lmin = 0
+    cpp.write("   --dIlm;\n   for ( int i=0; i<ncol; ++i, Y += %i )\n      {\n"%((lmax+2)*(lmax+2)))
+    #gs = [1,2,0]
+    for l in range(lmin,lmax+1):            
+        for m in range(l+1):
+            for mcs in range(2):
+                if mcs == 1 and m == 0: continue
+                f,idx = lmc2idx(l,m,mcs)
+                for g in range(3):
+                    f,s = D[idx][g]
+                    # if f == 1:
+                    #     cpp.write("         dIlm[%i] = %s;\n"%(g+idx*3,s))
+                    # elif f == -1:
+                    #     cpp.write("         dIlm[%i] = -%s;\n"%(g+idx*3,s))
+                    # else:
+                    #     cpp.write("         dIlm[%i] = %.16e * %s;\n"%(g+idx*3,f,s))
+                    if f == 1:
+                        cpp.write("         *(++dIlm) = %s;\n"%(s))
+                    elif f == -1:
+                        cpp.write("         *(++dIlm) = -%s;\n"%(s))
+                    else:
+                        cpp.write("         *(++dIlm) = %.1f * %s;\n"%(f,s))
+
+
+    cpp.write("      }\n")
+    cpp.write("}\n\n")
+
+
+
+
+def PrintTlmGrdAcc_VERSION1_OK(cpp,hpp,ipp,lmax):
+
+    D = StoreTlmGrdAcc(lmax)
+
+    cpp.write("void IlmInteractionGrdAcc_%s( int ncol, double const *__restrict__ qa, double *__restrict__ qb, double const *__restrict__ Y, double *__restrict__ g )\n{\n"%(GetLetter(lmax)))
+    lmin = 0
+    cpp.write("   double qq;\n   for ( int i=0; i<ncol; ++i, Y += %i )\n      {\n"%((lmax+2)*(lmax+2)))
+    #gs = [1,2,0]
+    for l in range(lmin,lmax+1):            
+        for m in range(l+1):
+            for mcs in range(2):
+                if mcs == 1 and m == 0: continue
+                f,idx = lmc2idx(l,m,mcs)
+                cpp.write("         qq = qa[%i]*qb[i];\n"%(idx));
+                for g in range(3):
+                    f,s = D[idx][g]
+                    # if f == 1:
+                    #     cpp.write("         dIlm[%i] = %s;\n"%(g+idx*3,s))
+                    # elif f == -1:
+                    #     cpp.write("         dIlm[%i] = -%s;\n"%(g+idx*3,s))
+                    # else:
+                    #     cpp.write("         dIlm[%i] = %.16e * %s;\n"%(g+idx*3,f,s))
+                    if f == 1:
+                        cpp.write("         g[%i] += %s * qq;\n"%(g,s))
+                    elif f == -1:
+                        cpp.write("         g[%i] -= %s * qq;\n"%(g,s))
+                    else:
+                        cpp.write("         g[%i] += %.1f * %s * qq;\n"%(g,f,s))
+
+    cpp.write("      }\n")
+    cpp.write("   g[0] *= -0.5; g[1] *= -0.5;\n")
+    cpp.write("}\n\n")
+
+
+
+def PrintTlmGrdAcc(cpp,hpp,ipp,lmax):
+
+    D = StoreTlmGrdAcc(lmax)
+
+    cpp.write("void IlmInteractionGrdAcc_%s( int ncol, double const *__restrict__ qa, double *__restrict__ qb, double const *__restrict__ Y, double *__restrict__ g )\n{\n"%(GetLetter(lmax)))
+    lmin = 0
+    cpp.write("   for ( int i=0; i<ncol; ++i, Y += %i )\n      {\n"%((lmax+2)*(lmax+2)))
+    #gs = [1,2,0]
+
+    for g in range(3):
+        cpp.write("        g[%i] += qb[i]*("%(g))
+        sep = " "
+        for l in range(lmin,lmax+1):            
+            for m in range(l+1):
+                for mcs in range(2):
+                    if mcs == 1 and m == 0: continue
+                    f,idx = lmc2idx(l,m,mcs)
+                    f,s = D[idx][g]
+
+                    if f == 1:
+                        cpp.write("%s(%s)*qa[%i]"%(sep,s,idx))
+                    elif f == -1:
+                        cpp.write("%s(-%s)*qa[%i]"%(sep,s,idx))
+                    else:
+                        cpp.write("%s(%.16e*%s)*qa[%i]"%(sep,f,s,idx))
+                    sep = "+"
+        cpp.write(");\n")
+
+    cpp.write("      }\n")
+    cpp.write("   g[0] *= -0.5; g[1] *= -0.5;\n")
+    cpp.write("}\n\n")
+
+
+
+
+
+
+
+
+def PrintAlmCoef(cpp,lmax):
+    alm = CptAlmVec(lmax)
+    cpp.write("double const GlobalAlmC[] = {");
+    cpp.write(",".join("%.16e"%(c) for c in alm))
+    cpp.write("};\n\n");
+    cpp.write("\n\n")
+
+def PrintClmFromCrdBlock(cpp,hpp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+    hpp.write("void ClmTranslation_%s%s( double const * crd, double const r2, double * W );\n"%(LA,LB))
+    #if lmax+jmax < 5: cpp.write("inline ")
+    crd = "crd"
+    r2 = "r2"
+    if lmax < 1: crd = "/* crd */"
+    if lmax+jmax< 2: r2 = "/* r2 */"
+    cpp.write("void ccdl::ClmTranslation_%s%s( double const *__restrict__ %s, double const %s, double *__restrict__ W )\n{\n"%(LA,LB,crd,r2))
+    if lmax == 0 and jmax == 0:
+        cpp.write("""   *W=1.;\n}\n""")
+        return
+
+    if lmax == 1 and jmax == 0:
+        cpp.write("""
+  W[0]=1.0;
+  W[1]= crd[2];
+  W[2]= crd[0];
+  W[3]= crd[1];
+""")
+#     elif lmax == 1 and jmax == 1:
+#         cpp.write("""
+#   W[0]=1.0;
+#   W[1]= crd[2];
+#   W[2]= -5.000000000000000E-01*crd[0];
+#   W[3]= -5.000000000000000E-01*crd[1];
+#   W[5] = 1.0;
+#   W[10] = 1.0;
+#   W[15] = 1.0;
+# """)
+    elif lmax == 2 and jmax == 0:
+        cpp.write("""
+  W[0]=1.0;
+  W[1]= crd[2];
+  W[2]= -5.000000000000000E-01*crd[0];
+  W[3]= -5.000000000000000E-01*crd[1];
+  W[4]= 2.500000000000000E-01*(3. * crd[2] * crd[2] - r2);
+  W[5] = crd[2]*W[2];
+  W[6] = crd[2]*W[3];
+  W[7]= 2.500000000000000E-01*( crd[1]*W[3]-crd[0]*W[2] );
+  W[8]= -2.500000000000000E-01*( crd[1]*W[2]+crd[0]*W[3] );
+  W[2] *=    -2.0000000000000000e+00; // (3,1)
+  W[3] *=    -2.0000000000000000e+00; // (4,1)
+  W[4] *=     2.0000000000000000e+00; // (5,1)
+  W[5] *=    -3.4641016151377544e+00; // (6,1)
+  W[6] *=    -3.4641016151377544e+00; // (7,1)
+  W[7] *=     6.9282032302755088e+00; // (8,1)
+  W[8] *=     6.9282032302755088e+00; // (9,1)
+""")
+    elif lmax == 2 and jmax == 2:
+        cpp.write("""
+  double Rlm[9];
+  Rlm[0]=1.0;
+  Rlm[1]= crd[2];
+  Rlm[2]= -5.000000000000000E-01*crd[0];
+  Rlm[3]= -5.000000000000000E-01*crd[1];
+  Rlm[4]= 2.500000000000000E-01*(3. * crd[2] * crd[2] - r2);
+  Rlm[5] = crd[2]*Rlm[2];
+  Rlm[6] = crd[2]*Rlm[3];
+  Rlm[7]= 2.500000000000000E-01*( crd[1]*Rlm[3]-crd[0]*Rlm[2] );
+  Rlm[8]= -2.500000000000000E-01*( crd[1]*Rlm[2]+crd[0]*Rlm[3] );
+
+  W[0] = 1.0; // (1,1)
+  W[1] =     1.0000000000000000e+00 * Rlm[1]; // (2,1)
+  W[2] =    -2.0000000000000000e+00 * Rlm[2]; // (3,1)
+  W[3] =    -2.0000000000000000e+00 * Rlm[3]; // (4,1)
+  W[4] =     2.0000000000000000e+00 * Rlm[4]; // (5,1)
+  W[5] =    -3.4641016151377544e+00 * Rlm[5]; // (6,1)
+  W[6] =    -3.4641016151377544e+00 * Rlm[6]; // (7,1)
+  W[7] =     6.9282032302755088e+00 * Rlm[7]; // (8,1)
+  W[8] =     6.9282032302755088e+00 * Rlm[8]; // (9,1)
+  W[10] = 1.0; // (2,2)
+  W[13] =     2.0000000000000000e+00 * Rlm[1]; // (5,2)
+  W[14] =    -3.4641016151377544e+00 * Rlm[2]; // (6,2)
+  W[15] =    -3.4641016151377544e+00 * Rlm[3]; // (7,2)
+  W[20] = 1.0;     // (3,3)
+  W[22] = -W[2];   // (5,3)
+  W[23] =     1.7320508075688772e+00 * Rlm[1]; // (6,3)
+  W[25] =  W[14];  // (8,3)
+  W[26] =  W[15];  // (9,3)
+  W[30] = 1.0;     // (4,4)
+  W[31] = -W[3];   // (5,4)
+  W[33] =  W[23];  // (7,4)
+  W[34] = -W[26];  // (8,4)
+  W[35] =  W[25];  // (9,4)
+  W[40] = 1.0; // (5,5)
+  W[50] = 1.0; // (6,6)
+  W[60] = 1.0; // (7,7)
+  W[70] = 1.0; // (8,8)
+  W[80] = 1.0; // (9,9)
+""")
+    else:
+        cpp.write("   ccdl::SolidHarm_Rlm_%s(crd,r2,W);\n"%(LA))
+        if jmax > 0:
+            cpp.write("   ClmWFromRlm_%s%s(W,W);\n"%(LA,LB))
+        if lmax > 0:
+            cpp.write("   for ( int i=2; i<%i; ++i ) W[i] *= GlobalAlmC[i];\n"%( (lmax+1)*(lmax+1) ) )
+    cpp.write("}\n\n")
+
+
+def PrintExpHobMatBlk(cpp,lmax,jmax):
+    W = StoreRlmW(lmax,jmax)
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+    cpp.write("template <int NA>\n")
+    if lmax+jmax < 6: cpp.write("inline ")
+    cpp.write("void ExpHobMatBlk_%s%s( double const *__restrict__ W, double const *__restrict__ O, double *__restrict__ X )\n{\n"%(LA,LB))
+    
+#    print lmax,jmax
+
+    na = 2*lmax+1
+    nb = 2*jmax+1
+    nc = (jmax+1)*(jmax+1)
+
+
+    for sijk in range(nb):
+        ijk = jmax*jmax + sijk
+
+        if jmax == lmax:
+            for l in range(lmax):
+                for m in range(2*l+1):
+                    ilm = l*l+m
+
+                    if ijk == 0:
+                        x  = "X[%i]"%(ilm)
+                        if ilm == 0:
+                            xt = "X[0]"
+                        elif ilm == 1:
+                            xt = "X[NA]"
+                        else:
+                            xt = "X[NA*%i]"%(ilm)
+                    elif ijk == 1:
+                        x  = "X[%i+NA]"%(ilm)
+                        if ilm == 0:
+                            x  = "X[NA]"
+                            xt = "X[1]"
+                        elif ilm == 1:
+                            xt = "X[1+NA]"
+                        else:
+                            xt = "X[1+NA*%i]"%(ilm)
+                    else:
+                        if ilm == 0:
+                            x  = "X[NA*%i]"%(ijk)
+                            xt = "X[%i]"%(ijk)
+                        elif ilm == 1:
+                            x  = "X[1+NA*%i]"%(ijk)
+                            xt = "X[%i+NA]"%(ijk)
+                        else:
+                            x  = "X[%i+NA*%i]"%(ilm,ijk)
+                            xt = "X[%i+NA*%i]"%(ijk,ilm)
+
+                    if (l+jmax)%2 == 0:
+                        cpp.write(x+" =  "+xt+";\n")
+                    else:
+                        cpp.write(x+" = -"+xt+";\n")
+
+
+
+        for silm in range(na):
+            ilm = lmax*lmax + silm
+            terms = []
+            for lu in range(jmax+1):
+                lterms = []
+                for mu in range(2*lu+1):
+                    iuv = lu*lu+mu
+                    if ilm==iuv and ijk==iuv:
+                        lterms.append("1.")
+                    else:
+                        wa = W[ilm][iuv]
+                        wb = W[ijk][iuv]
+                        if (wa is not None and wb is not None) or jmax==0:
+                            if iuv == 0:
+                                a = "W[%i]"%(ilm)
+                                b = "W[%i]"%(ijk)
+                            elif iuv == 1:
+                                a = "W[%i+NA]"%(ilm)
+                                b = "W[%i+NA]"%(ijk)
+                            else:
+                                a = "W[%i+NA*%i]"%(ilm,iuv)
+                                b = "W[%i+NA*%i]"%(ijk,iuv)
+                            if a == "W[0]" or ilm==iuv:
+                                lterms.append("%s"%(b))
+                            elif b == "W[0]" or ijk==iuv:
+                                lterms.append("%s"%(a))
+                            else:
+                                lterms.append("%s*%s"%(a,b))
+                if len(lterms) > 0:
+                    if len(lterms) > 1:
+                        terms.append( "O[%i]*("%(lmax+jmax-lu) + "+".join(lterms) + ")" )
+                    else:
+                        if lterms[0] == "1.":
+                            terms.append( "O[%i]"%(lmax+jmax-lu) )
+                        else:
+                            terms.append( "O[%i]*"%(lmax+jmax-lu) + "+".join(lterms) )
+
+            if ijk == 0:
+                x  = "X[%i]"%(ilm)
+                if ilm == 0:
+                    xt = "X[0]"
+                elif ilm == 1:
+                    xt = "X[NA]"
+                else:
+                    xt = "X[NA*%i]"%(ilm)
+            elif ijk == 1:
+                x  = "X[%i+NA]"%(ilm)
+                if ilm == 0:
+                    xt = "X[1]"
+                elif ilm == 1:
+                    xt = "X[1+NA]"
+                else:
+                    xt = "X[1+NA*%i]"%(ilm)
+            else:
+                x  = "X[%i+NA*%i]"%(ilm,ijk)
+                if ilm == 0:
+                    xt = "X[%i]"%(ijk)
+                elif ilm == 1:
+                    xt = "X[%i+NA]"%(ijk)
+                else:
+                    xt = "X[%i+NA*%i]"%(ijk,ilm)
+
+            if ilm >= ijk:
+                if jmax%2 == 0:
+                    cpp.write(x+" =  " + "+".join(terms) + ";\n")
+                else:
+                    cpp.write(x+" = -" + "-".join(terms) + ";\n")
+            else:
+                if (lmax+jmax)%2 == 0:
+                    cpp.write(x+" =  "+xt+";\n")
+                else:
+                    cpp.write(x+" = -"+xt+";\n")
+
+            
+        
+
+    cpp.write("}\n\n")
+
+
+def PrintExpHobMatIntegrals(cpp,hpp,lmax,jmax):
+    W = StoreRlmW(lmax,jmax)
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    if lmax + jmax < 5: cpp.write("inline ")
+    W = "W"
+    if lmax < 1: W="/* W */"
+    cpp.write("void ExpHobMat_%s%s( double const *__restrict__ %s, double const *__restrict__ O, double *__restrict__ X)\n{\n"%(LA,LB,W))
+
+    na = (lmax+1)*(lmax+1);
+    nb = (jmax+1)*(jmax+1);
+
+    if jmax > 0:
+        cpp.write("   double o[%i];\n"%(lmax+jmax+1))
+    for l in range(lmax+1):
+        for m in range(2*l+1):
+            i = l*l+m
+            p = HobPref(l,0,0)
+            if i == 0:
+                cpp.write("   X[0] = O[0];\n")
+            else:
+                if m == 0:
+                    if l == 1:
+                        cpp.write("   double t = ")
+                    else:
+                        cpp.write("   t = ")
+                    cpp.write("%.15e*O[%i];\n"%(p,l))
+                cpp.write("   X[%i] = t*W[%i];\n"%(i,i))
+
+    for j in range(1,jmax+1):
+        for l in range(lmax+1):
+            if l < j: continue
+            for u in range(j+1):
+                uu = j-u
+                p = HobPref(l,j,uu)
+                iu = l+u
+                if p == 1:
+                    cpp.write("   o[%i] = O[%i];\n"%(iu,iu))
+                else:
+                    cpp.write("   o[%i] = %.15e*O[%i];\n"%(iu,p,iu))
+
+            cpp.write("   ExpHobMatBlk_%s%s<%i>(W,o,X);\n"%(GetLetter(l),GetLetter(j),na))
+    cpp.write("}\n\n")
+    
+
+
+def Xele(i,j):
+    x = ""
+    if j == 0:
+        x = "X[%i]"%(i)
+    elif j == 1:
+        x = "X[%i+NA]"%(i)
+    else:
+        x = "X[%i+NA*%i]"%(i,j)
+    return x
+
+def TuplesToStr(xterms):
+    s = ""
+    if len(xterms) > 0:
+        d = ddict( lambda: ddict( float ) )
+        for t in xterms:
+            d[ t[1] ][ t[2] ] += t[0]
+            ts = []
+            for k1 in sorted(d):
+                for k2 in sorted(d[k1]):
+                    ts.append( "(%.15e*%s)"%(d[k1][k2],Xele(k1,k2)) )
+        s = " + " + "+".join(ts)
+    return s
+        
+
+def PrintHobGradBlock(cpp,hpp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    cpp.write("template <int NA>\n")
+    if lmax + jmax < 5: cpp.write("inline ")
+    cpp.write("void ExpHobGrdBlk_%s%s( double const *__restrict__ tcrd, double const *__restrict__ X, double *__restrict__ G )\n{\n"%(LA,LB))
+
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    
+    for j in range(jmax+1):
+        for k in range(j+1):
+            for kcs in range(2):
+                if k == 0 and kcs > 0: continue
+
+                fjk,ijk   = lmc2idx(j,k,kcs)
+                fjkm,ijkm  = lmc2idx(j-1,k,kcs)
+                fjkpc,ijkpc = lmc2idx(j-1,k+1,kcs)
+                fjkmc,ijkmc = lmc2idx(j-1,k-1,kcs)
+                fjkps,ijkps = lmc2idx(j-1,k+1,1-kcs)
+                fjkms,ijkms = lmc2idx(j-1,k-1,1-kcs)
+                
+                if ijkm < 0: fjkm = 0
+                if ijkpc < 0: fjkpc = 0
+                if ijkmc < 0: fjkmc = 0
+                if ijkps < 0: fjkps = 0
+                if ijkms < 0: fjkms = 0
+
+
+                for l in range(lmax+1):
+                    for m in range(l+1):
+                        for mcs in range(2):
+                            if m == 0 and mcs > 0: continue
+
+                            flm,ilm   = lmc2idx(l,m,mcs)
+                            flmm,ilmm  = lmc2idx(l-1,m,mcs)
+                            flmpc,ilmpc = lmc2idx(l-1,m+1,mcs)
+                            flmmc,ilmmc = lmc2idx(l-1,m-1,mcs)
+                            flmps,ilmps = lmc2idx(l-1,m+1,1-mcs)
+                            flmms,ilmms = lmc2idx(l-1,m-1,1-mcs)
+
+                            if ilmm < 0: flmm = 0
+                            if ilmpc < 0: flmpc = 0
+                            if ilmmc < 0: flmmc = 0
+                            if ilmps < 0: flmps = 0
+                            if ilmms < 0: flmms = 0
+
+                            if lmax == jmax and ijk >= jmax*jmax:
+                                if ilm < ijk:
+                                    if (l+j)%2 == 0:
+
+                                        cpp.write("%s =  %s;\n"%(Xele(0+3*ilm,3*ijk).replace("X","G"),Xele(0+3*ijk,3*ilm).replace("X","G")))
+                                        cpp.write("%s =  %s;\n"%(Xele(1+3*ilm,3*ijk).replace("X","G"),Xele(1+3*ijk,3*ilm).replace("X","G")))
+                                        cpp.write("%s =  %s;\n"%(Xele(2+3*ilm,3*ijk).replace("X","G"),Xele(2+3*ijk,3*ilm).replace("X","G")))
+
+
+                                    else:
+
+                                        cpp.write("%s = -%s;\n"%(Xele(0+3*ilm,3*ijk).replace("X","G"),Xele(0+3*ijk,3*ilm).replace("X","G")))
+                                        cpp.write("%s = -%s;\n"%(Xele(1+3*ilm,3*ijk).replace("X","G"),Xele(1+3*ijk,3*ilm).replace("X","G")))
+                                        cpp.write("%s = -%s;\n"%(Xele(2+3*ilm,3*ijk).replace("X","G"),Xele(2+3*ijk,3*ilm).replace("X","G")))
+
+                            if ilm < lmax*lmax or ijk < jmax*jmax: continue
+
+                            if ilm < ijk:
+                                if (l+j)%2 == 0:
+                                    cpp.write("%s =  %s;\n"%(Xele(0+3*ilm,3*ijk).replace("X","G"),Xele(0+3*ijk,3*ilm).replace("X","G")))
+                                    cpp.write("%s =  %s;\n"%(Xele(1+3*ilm,3*ijk).replace("X","G"),Xele(1+3*ijk,3*ilm).replace("X","G")))
+                                    cpp.write("%s =  %s;\n"%(Xele(2+3*ilm,3*ijk).replace("X","G"),Xele(2+3*ijk,3*ilm).replace("X","G")))
+
+
+                                else:
+
+                                    cpp.write("%s = -%s;\n"%(Xele(0+3*ilm,3*ijk).replace("X","G"),Xele(0+3*ijk,3*ilm).replace("X","G")))
+                                    cpp.write("%s = -%s;\n"%(Xele(1+3*ilm,3*ijk).replace("X","G"),Xele(1+3*ijk,3*ilm).replace("X","G")))
+                                    cpp.write("%s = -%s;\n"%(Xele(2+3*ilm,3*ijk).replace("X","G"),Xele(2+3*ijk,3*ilm).replace("X","G")))
+
+
+                            else:
+
+                                xterms = []
+                                yterms = []
+                                zterms = []
+
+
+                                if flmm != 0:
+                                    a = 2 * flmm * CptAlm(l,m) / ( CptAlm(l-1,m) * (2*l-1) )
+                                    if ilmm < ijk:
+                                        a=a*pow(-1,l+j-1)
+                                        zterms.append( (a,ijk,ilmm) )
+                                    else:
+                                        zterms.append( (a,ilmm,ijk) )
+
+                                if fjkm != 0:
+                                    a = -2 * fjkm * CptAlm(j,k) / ( CptAlm(j-1,k) * (2*j-1) )
+                                    if ilm < ijkm:
+                                        a=a*pow(-1,l+j-1)
+                                        zterms.append( (a,ijkm,ilm) )
+                                    else:
+                                        zterms.append( (a,ilm,ijkm) )
+
+
+
+                                if flmpc != 0:
+                                    a = flmpc * CptAlm(l,m) / ( CptAlm(l-1,m+1) * (2*l-1) )
+                                    if ilmpc < ijk:
+                                        a=a*pow(-1,l+j-1)
+                                        xterms.append( (a,ijk,ilmpc) )
+                                    else:
+                                        xterms.append( (a,ilmpc,ijk) )
+
+
+                                if flmmc != 0:
+                                    a = - flmmc * CptAlm(l,m) / ( CptAlm(l-1,m-1) * (2*l-1) )
+                                    if ilmmc < ijk:
+                                        a=a*pow(-1,l+j-1)
+                                        xterms.append( (a,ijk,ilmmc) )
+                                    else:
+                                        xterms.append( (a,ilmmc,ijk) )
+
+                                if fjkpc != 0:
+                                    a = - fjkpc * CptAlm(j,k) / ( CptAlm(j-1,k+1) * (2*j-1) )
+                                    if ilm < ijkpc:
+                                        a=a*pow(-1,l+j-1)
+                                        xterms.append( (a,ijkpc,ilm) )
+                                    else:
+                                        xterms.append( (a,ilm,ijkpc) )
+
+                                if fjkmc != 0:
+                                    a =  fjkmc * CptAlm(j,k) / ( CptAlm(j-1,k-1) * (2*j-1) )
+                                    if ilm < ijkmc:
+                                        a=a*pow(-1,l+j-1)
+                                        xterms.append( (a,ijkmc,ilm) )
+                                    else:
+                                        xterms.append( (a,ilm,ijkmc) )
+
+
+                                if flmps != 0:
+                                    a = flmps * pow(-1,mcs) * CptAlm(l,m) / ( CptAlm(l-1,m+1) * (2*l-1) )
+                                    if ilmps < ijk:
+                                        a=a*pow(-1,l+j-1)
+                                        yterms.append( (a,ijk,ilmps) )
+                                    else:
+                                        yterms.append( (a,ilmps,ijk) )
+
+                                if flmms != 0:
+                                    a = flmms * pow(-1,mcs) * CptAlm(l,m) / ( CptAlm(l-1,m-1) * (2*l-1) )
+                                    if ilmms < ijk:
+                                        a=a*pow(-1,l+j-1)
+                                        yterms.append( (a,ijk,ilmms) )
+                                    else:
+                                        yterms.append( (a,ilmms,ijk) )
+
+                                if fjkps != 0:
+                                    a = - fjkps * pow(-1,kcs) * CptAlm(j,k) / ( CptAlm(j-1,k+1) * (2*j-1) )
+                                    if ilm < ijkps:
+                                        a=a*pow(-1,l+j-1)
+                                        yterms.append( (a,ijkps,ilm) )
+                                    else:
+                                        yterms.append( (a,ilm,ijkps) )
+
+                                if fjkms != 0:
+                                    a = - fjkms * pow(-1,kcs) * CptAlm(j,k) / ( CptAlm(j-1,k-1) * (2*j-1) )
+                                    if ilm < ijkms:
+                                        a=a*pow(-1,l+j-1)
+                                        yterms.append( (a,ijkms,ilm) )
+                                    else:
+                                        yterms.append( (a,ilm,ijkms) )
+
+
+                                cpp.write("%s = "%(Xele(0+3*ilm,3*ijk).replace("X","G")))
+
+                                cpp.write("tcrd[0]*%s"%(Xele(ilm,ijk)))
+                                cpp.write("%s"%(TuplesToStr(xterms)))
+                                cpp.write(";\n")
+
+
+                                cpp.write("%s = "%(Xele(1+3*ilm,3*ijk).replace("X","G")))
+                                cpp.write("tcrd[1]*%s"%(Xele(ilm,ijk)))
+                                cpp.write("%s"%(TuplesToStr(yterms)))
+                                cpp.write(";\n")
+
+                                cpp.write("%s = "%(Xele(2+3*ilm,3*ijk).replace("X","G")))
+                                cpp.write("tcrd[2]*%s"%(Xele(ilm,ijk)))
+                                cpp.write("%s"%(TuplesToStr(zterms)))
+
+                                cpp.write(";\n")
+
+
+
+    cpp.write("}\n\n")
+
+
+
+
+
+
+
+
+
+
+def PrintHobGradAcc(cpp,hpp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    cpp.write("template <int NA,int LB>\n")
+    if lmax + jmax < 5: cpp.write("inline ")
+    cpp.write("void ExpHobGrdAcc_%s%s( double const *__restrict__ tcrd, double const *__restrict__ qa, double const *__restrict__ qb, double const *__restrict__ X, double *__restrict__ G )\n{\n"%(LA,LB))
+
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    
+    cpp.write("double qq;\n")
+
+    for j in range(jmax+1):
+        for k in range(j+1):
+            for kcs in range(2):
+                if k == 0 and kcs > 0: continue
+
+                fjk,ijk   = lmc2idx(j,k,kcs)
+                fjkm,ijkm  = lmc2idx(j-1,k,kcs)
+                fjkpc,ijkpc = lmc2idx(j-1,k+1,kcs)
+                fjkmc,ijkmc = lmc2idx(j-1,k-1,kcs)
+                fjkps,ijkps = lmc2idx(j-1,k+1,1-kcs)
+                fjkms,ijkms = lmc2idx(j-1,k-1,1-kcs)
+                
+                if ijkm < 0: fjkm = 0
+                if ijkpc < 0: fjkpc = 0
+                if ijkmc < 0: fjkmc = 0
+                if ijkps < 0: fjkps = 0
+                if ijkms < 0: fjkms = 0
+
+
+                for l in range(lmax+1):
+                    for m in range(l+1):
+                        for mcs in range(2):
+                            if m == 0 and mcs > 0: continue
+
+                            flm,ilm   = lmc2idx(l,m,mcs)
+                            flmm,ilmm  = lmc2idx(l-1,m,mcs)
+                            flmpc,ilmpc = lmc2idx(l-1,m+1,mcs)
+                            flmmc,ilmmc = lmc2idx(l-1,m-1,mcs)
+                            flmps,ilmps = lmc2idx(l-1,m+1,1-mcs)
+                            flmms,ilmms = lmc2idx(l-1,m-1,1-mcs)
+
+                            if ilmm < 0: flmm = 0
+                            if ilmpc < 0: flmpc = 0
+                            if ilmmc < 0: flmmc = 0
+                            if ilmps < 0: flmps = 0
+                            if ilmms < 0: flmms = 0
+
+                            # if lmax == jmax and ijk >= jmax*jmax:
+                            #     if ilm < ijk:
+                            #         if (l+j)%2 == 0:
+
+                            #             cpp.write("%s =  %s;\n"%(Xele(0+3*ilm,3*ijk).replace("X","G"),Xele(0+3*ijk,3*ilm).replace("X","G")))
+                            #             cpp.write("%s =  %s;\n"%(Xele(1+3*ilm,3*ijk).replace("X","G"),Xele(1+3*ijk,3*ilm).replace("X","G")))
+                            #             cpp.write("%s =  %s;\n"%(Xele(2+3*ilm,3*ijk).replace("X","G"),Xele(2+3*ijk,3*ilm).replace("X","G")))
+
+
+                            #         else:
+
+                            #             cpp.write("%s = -%s;\n"%(Xele(0+3*ilm,3*ijk).replace("X","G"),Xele(0+3*ijk,3*ilm).replace("X","G")))
+                            #             cpp.write("%s = -%s;\n"%(Xele(1+3*ilm,3*ijk).replace("X","G"),Xele(1+3*ijk,3*ilm).replace("X","G")))
+                            #             cpp.write("%s = -%s;\n"%(Xele(2+3*ilm,3*ijk).replace("X","G"),Xele(2+3*ijk,3*ilm).replace("X","G")))
+
+                            if ilm < lmax*lmax or ijk < jmax*jmax: continue
+
+                            if ilm < ijk:
+                                pass
+                                # if (l+j)%2 == 0:
+                                #     cpp.write("%s =  %s;\n"%(Xele(0+3*ilm,3*ijk).replace("X","G"),Xele(0+3*ijk,3*ilm).replace("X","G")))
+                                #     cpp.write("%s =  %s;\n"%(Xele(1+3*ilm,3*ijk).replace("X","G"),Xele(1+3*ijk,3*ilm).replace("X","G")))
+                                #     cpp.write("%s =  %s;\n"%(Xele(2+3*ilm,3*ijk).replace("X","G"),Xele(2+3*ijk,3*ilm).replace("X","G")))
+
+
+                                # else:
+
+                                #     cpp.write("%s = -%s;\n"%(Xele(0+3*ilm,3*ijk).replace("X","G"),Xele(0+3*ijk,3*ilm).replace("X","G")))
+                                #     cpp.write("%s = -%s;\n"%(Xele(1+3*ilm,3*ijk).replace("X","G"),Xele(1+3*ijk,3*ilm).replace("X","G")))
+                                #     cpp.write("%s = -%s;\n"%(Xele(2+3*ilm,3*ijk).replace("X","G"),Xele(2+3*ijk,3*ilm).replace("X","G")))
+
+
+                            else:
+
+                                xterms = []
+                                yterms = []
+                                zterms = []
+
+
+                                if flmm != 0:
+                                    a = 2 * flmm * CptAlm(l,m) / ( CptAlm(l-1,m) * (2*l-1) )
+                                    if ilmm < ijk:
+                                        a=a*pow(-1,l+j-1)
+                                        zterms.append( (a,ijk,ilmm) )
+                                    else:
+                                        zterms.append( (a,ilmm,ijk) )
+
+                                if fjkm != 0:
+                                    a = -2 * fjkm * CptAlm(j,k) / ( CptAlm(j-1,k) * (2*j-1) )
+                                    if ilm < ijkm:
+                                        a=a*pow(-1,l+j-1)
+                                        zterms.append( (a,ijkm,ilm) )
+                                    else:
+                                        zterms.append( (a,ilm,ijkm) )
+
+
+
+                                if flmpc != 0:
+                                    a = flmpc * CptAlm(l,m) / ( CptAlm(l-1,m+1) * (2*l-1) )
+                                    if ilmpc < ijk:
+                                        a=a*pow(-1,l+j-1)
+                                        xterms.append( (a,ijk,ilmpc) )
+                                    else:
+                                        xterms.append( (a,ilmpc,ijk) )
+
+
+                                if flmmc != 0:
+                                    a = - flmmc * CptAlm(l,m) / ( CptAlm(l-1,m-1) * (2*l-1) )
+                                    if ilmmc < ijk:
+                                        a=a*pow(-1,l+j-1)
+                                        xterms.append( (a,ijk,ilmmc) )
+                                    else:
+                                        xterms.append( (a,ilmmc,ijk) )
+
+                                if fjkpc != 0:
+                                    a = - fjkpc * CptAlm(j,k) / ( CptAlm(j-1,k+1) * (2*j-1) )
+                                    if ilm < ijkpc:
+                                        a=a*pow(-1,l+j-1)
+                                        xterms.append( (a,ijkpc,ilm) )
+                                    else:
+                                        xterms.append( (a,ilm,ijkpc) )
+
+                                if fjkmc != 0:
+                                    a =  fjkmc * CptAlm(j,k) / ( CptAlm(j-1,k-1) * (2*j-1) )
+                                    if ilm < ijkmc:
+                                        a=a*pow(-1,l+j-1)
+                                        xterms.append( (a,ijkmc,ilm) )
+                                    else:
+                                        xterms.append( (a,ilm,ijkmc) )
+
+
+                                if flmps != 0:
+                                    a = flmps * pow(-1,mcs) * CptAlm(l,m) / ( CptAlm(l-1,m+1) * (2*l-1) )
+                                    if ilmps < ijk:
+                                        a=a*pow(-1,l+j-1)
+                                        yterms.append( (a,ijk,ilmps) )
+                                    else:
+                                        yterms.append( (a,ilmps,ijk) )
+
+                                if flmms != 0:
+                                    a = flmms * pow(-1,mcs) * CptAlm(l,m) / ( CptAlm(l-1,m-1) * (2*l-1) )
+                                    if ilmms < ijk:
+                                        a=a*pow(-1,l+j-1)
+                                        yterms.append( (a,ijk,ilmms) )
+                                    else:
+                                        yterms.append( (a,ilmms,ijk) )
+
+                                if fjkps != 0:
+                                    a = - fjkps * pow(-1,kcs) * CptAlm(j,k) / ( CptAlm(j-1,k+1) * (2*j-1) )
+                                    if ilm < ijkps:
+                                        a=a*pow(-1,l+j-1)
+                                        yterms.append( (a,ijkps,ilm) )
+                                    else:
+                                        yterms.append( (a,ilm,ijkps) )
+
+                                if fjkms != 0:
+                                    a = - fjkms * pow(-1,kcs) * CptAlm(j,k) / ( CptAlm(j-1,k-1) * (2*j-1) )
+                                    if ilm < ijkms:
+                                        a=a*pow(-1,l+j-1)
+                                        yterms.append( (a,ijkms,ilm) )
+                                    else:
+                                        yterms.append( (a,ilm,ijkms) )
+
+
+#                                cpp.write("%s = "%(Xele(0+3*ilm,3*ijk).replace("X","G")))
+
+                                if l > j:
+                                    s = "+"
+                                    if (l+j)%2 == 1:
+                                        s = "-"
+                                    cpp.write("if ( LB > %i ) { qq = qa[%i]*qb[%i] %s qa[%i]*qb[%i]; } else { qq = qa[%i]*qb[%i]; };\n"%(l-1,ilm,ijk,s,ijk,ilm,ilm,ijk))
+                                elif ilm == ijk:
+                                    cpp.write("qq = qa[%i]*qb[%i];\n"%(ilm,ijk))
+                                else:
+                                    cpp.write("qq = qa[%i]*qb[%i] + qa[%i]*qb[%i];\n"%(ilm,ijk,ijk,ilm))
+                                cpp.write("G[0] += qq * ( ")
+                                cpp.write("tcrd[0]*%s"%(Xele(ilm,ijk)))
+                                cpp.write("%s"%(TuplesToStr(xterms)))
+                                cpp.write(" );\n")
+
+
+                                cpp.write("G[1] += qq * ( ")
+                                cpp.write("tcrd[1]*%s"%(Xele(ilm,ijk)))
+                                cpp.write("%s"%(TuplesToStr(yterms)))
+                                cpp.write(" );\n")
+
+                                cpp.write("G[2] += qq * ( ")
+                                #cpp.write("%s = "%(Xele(2+3*ilm,3*ijk).replace("X","G")))
+                                cpp.write("tcrd[2]*%s"%(Xele(ilm,ijk)))
+                                cpp.write("%s"%(TuplesToStr(zterms)))
+                                cpp.write(" );\n")
+
+    cpp.write("}\n\n")
+
+
+
+
+
+
+
+
+
+
+
+def PrintExpIntegralsCommon(cpp,lmax,jmax,offset=0,rlm=True,acc=False):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1+offset
+    if offset == 0 and acc:
+        o += 1
+    if jmax == 0:
+        if lmax == 1 and (offset == 0 or not rlm) and not acc:
+            cpp.write("""   T[1] *= 2.;
+   X[0] = T[0];
+   X[1] = T[1]*crd[2];
+   X[2] = T[1]*crd[0];
+   X[3] = T[1]*crd[1];
+""")
+#        elif lmax == 1 and offset != 0 and rlm:
+        elif lmax == 1 and ( offset != 0 or (offset == 0 and acc) ):
+            cpp.write("""   X[0] = T[%i];
+   X[1] = 2.*T[%i]*crd[2];
+   X[2] = 2.*T[%i]*crd[0];
+   X[3] = 2.*T[%i]*crd[1];
+"""%(0+offset,1+offset,1+offset,1+offset))
+
+        else:
+            aux = offset
+            if not rlm and not acc:
+                aux = 0
+#            if offset == 0 and acc:
+#                aux += 1
+            if rlm:
+                cpp.write("   ccdl::SolidHarm_Rlm_%s(crd,r2,T+%i);\n"%(LA,o))
+            alm = CptAlmVec(lmax)
+            for l in range(lmax+1):
+                for m in range(2*l+1):
+                    i = l*l+m
+                    p = HobPref(l,0,0)
+                    if i == 0:
+                        cpp.write("   X[0] = T[%i];\n"%(0+aux))
+                    else:
+                        cpp.write("   X[%i] = %.15e*T[%i]*T[%i];\n"%(i,p*alm[i],l+aux,o+i))
+    else:
+        if rlm: 
+            cpp.write("   ccdl::ClmTranslation_%s%s(crd,r2,T+%i);\n"%(LA,LB,o))
+        if offset > 0 and (rlm or acc):
+            cpp.write("   ExpHobMat_%s%s(T+%i,T+1,X);\n"%(LA,LB,o))
+        else:
+            cpp.write("   ExpHobMat_%s%s(T+%i,T,X);\n"%(LA,LB,o))
+
+
+
+
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+
+
+
+def PrintExpOverlapIntegrals(cpp,hpp,ipp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void PrimGauExpInt_Overlap_%s%s( double const zab, double const * crd, double const r2, double * X );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax + jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+
+    crd = "crd"
+    if lmax < 1: crd = "/* crd */"
+
+    fh.write("void ccdl::PrimGauExpInt_Overlap_%s%s( double const zab, double const *__restrict__ %s, double const r2, double *__restrict__ X )\n{\n"%(LA,LB,crd))
+
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1;
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(na*nb+o))
+        sym = "T"
+    elif lmax == 1:
+        fh.write("   double T[%i];\n"%(o))
+        sym = "T"
+    else:
+        sym = "X"
+    if lmax == 0:
+        fh.write("   %s[0] = std::pow(zab/%s,1.5)*std::exp(-zab*r2);\n"%(sym,PI))
+    else:
+        fh.write("   double mzab = -zab;\n")
+        fh.write("   %s[0] = std::pow(-mzab/%s,1.5)*std::exp(mzab*r2);\n"%(sym,PI))
+    for u in range(1,lmax+jmax+1):
+        fh.write("   T[%i] = mzab*T[%i];\n"%(u,u-1))
+    if lmax > 0:
+        PrintExpIntegralsCommon(fh,lmax,jmax)
+    fh.write("}\n\n")
+
+
+
+def PrintExpOverlapGradientMat(cpp,hpp,ipp,lmax,jmax):
+#    W = StoreRlmW(lmax,jmax)
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void PrimGauExpGrd_Overlap_%s%s( double const zab, double const * crd, double const r2, double * X, double * G );\n"%(LA,LB))
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+
+    fh.write("void ccdl::PrimGauExpGrd_Overlap_%s%s( double const zab, double const *__restrict__ crd, double const r2, double *__restrict__ X, double *__restrict__ G )\n{\n"%(LA,LB))
+
+    offset=1
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1+offset;
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(na*nb+o))
+        sym = "T"
+    elif lmax == 1:
+        fh.write("   double T[%i];\n"%(o))
+        sym = "T"
+    else:
+        sym = "X"
+
+    if lmax == 0:
+        fh.write("""
+   X[0] = std::pow(zab/%s,1.5)*std::exp(-zab*r2);
+   double X1 =  -2.*zab*X[0];
+   G[0] = X1 * crd[0];
+   G[1] = X1 * crd[1];
+   G[2] = X1 * crd[2];
+"""%(PI))
+    else:
+        fh.write("   double mzab = -zab;\n")
+        fh.write("   %s[0] = std::pow(-mzab/%s,1.5)*std::exp(mzab*r2);\n"%(sym,PI))
+        for u in range(1,o):
+            fh.write("   T[%i] = mzab*T[%i];\n"%(u,u-1))
+        PrintExpIntegralsCommon(fh,lmax,jmax,offset)
+        fh.write("   double tcrd[] = { 2.*crd[0], 2.*crd[1], 2.*crd[2] };\n")
+        for j in range(jmax+1):
+            for l in range(lmax+1):
+                if j > l: continue
+                fh.write("   ExpHobGrdBlk_%s%s<%i>(tcrd,X,G);\n"%(GetLetter(l),GetLetter(j),na))
+        PrintExpIntegralsCommon(fh,lmax,jmax,offset,False)
+    fh.write("}\n\n")
+
+
+
+def PrintExpOverlapPot(cpp,hpp,ipp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void PrimGauExpPot_Overlap_%s%s( double const zab, double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+    crd = "crd"
+    if lmax < 1: crd = "/* crd */"
+
+    fh.write("void ccdl::PrimGauExpPot_Overlap_%s%s( double const zab, double const *__restrict__ %s, double const r2, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb )\n{\n"%(LA,LB,crd))
+
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1
+    x = o+na*nb
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(2*na*nb+o))
+        sym = "T"
+    elif lmax == 1:
+        x = o
+        fh.write("   double T[%i];\n"%(o+na*nb))
+        sym = "T"
+    if lmax == 0:
+        fh.write("   double X = std::pow(zab/%s,1.5)*std::exp(-zab*r2);\n"%(PI))
+        fh.write("   *pa += *qb*X;\n   *pb += *qa*X;\n")
+    else:
+        fh.write("   double mzab = -zab;\n")
+        fh.write("   double *__restrict__ X = T+%i;\n"%(x))
+        fh.write("   %s[0] = std::pow(-mzab/%s,1.5)*std::exp(mzab*r2);\n"%(sym,PI))
+        for u in range(1,lmax+jmax+1):
+            fh.write("   T[%i] = mzab*T[%i];\n"%(u,u-1))
+        PrintExpIntegralsCommon(fh,lmax,jmax)
+        fh.write("   for ( int j=0; j<%i; ++j )\n      for ( int i=0; i<%i; ++i )\n      {\n"%(nb,na))
+        fh.write("         pa[i] += qb[j]*X[i+j*%i];\n"%(na))
+        fh.write("         pb[j] += qa[i]*X[i+j*%i];\n"%(na))
+        fh.write("      };\n")
+    fh.write("}\n\n")
+
+def PrintExpOverlapPotB(cpp,hpp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void ExpPotB_S_%s%s( double const zab, double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=hpp
+        fh.write("inline ")
+
+    fh.write("void ExpPotB_S_%s%s( double const zab, double const *__restrict__ crd, double const r2, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb )\n{\n"%(LA,LB))
+
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1
+    x = o+na*nb
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(2*na*nb+o))
+        sym = "T"
+    elif lmax == 1:
+        x = o
+        fh.write("   double T[%i];\n"%(o))
+        sym = "T"
+    if lmax == 0:
+        fh.write("   double X = std::pow(zab/%s,1.5)*std::exp(-zab*r2);\n"%(PI))
+        fh.write("   *pa += *qb*X;\n   *pb += *qa*X;\n")
+    else:
+        fh.write("   double mzab = -zab;\n")
+        fh.write("   %s[0] = std::pow(-mzab/%s,1.5)*std::exp(mzab*r2);\n"%(sym,PI))
+        for u in range(1,lmax+jmax+1):
+            fh.write("   T[%i] = mzab*T[%i];\n"%(u,u-1))
+        if jmax > 0:
+            fh.write("   double *__restrict__ X = T+%i;\n"%(x))
+            PrintExpIntegralsCommon(fh,lmax,jmax)
+            fh.write("   for ( int j=0; j<%i; ++j )\n      for ( int i=0; i<%i; ++i )\n      {\n"%(nb,na))
+            fh.write("         pa[i] += qb[j]*X[i+j*%i];\n"%(na))
+            fh.write("         pb[j] += qa[i]*X[i+j*%i];\n"%(na))
+            fh.write("      };\n")
+        else:
+            fh.write("   double X;\n")
+            if lmax == 1:
+                fh.write("""   T[1] *= 2.;
+   *pa   += *qb**T;
+   *pb   += *qa**T;
+   X = T[1]*crd[2];
+   *(++pa) += *qb*X;
+   *pb   += *(++qa)*X;
+   X = T[1]*crd[0];
+   *(++pa) += *qb*X;
+   *pb   += *(++qa)*X;
+   X = T[1]*crd[1];
+   *(++pa) += *qb*X;
+   *pb   += *(++qa)*X;
+""")
+            else:
+                aux = 0
+                fh.write("   ccdl::SolidHarm_Rlm_%s(crd,r2,T+%i);\n"%(LA,o))
+                alm = CptAlmVec(lmax)
+                for l in range(lmax+1):
+                    for m in range(2*l+1):
+                        i = l*l+m
+                        p = HobPref(l,0,0)
+                        if i == 0:
+                            #fh.write("   X = T[%i];\n"%(0+aux))
+                            fh.write("   *pa    += *qb**T;\n")
+                            fh.write("   *pb    += *qa**T;\n")
+                        else:
+                            fh.write("   X = %.15e*T[%i]*T[%i];\n"%(p*alm[i],l+aux,o+i))
+                            fh.write("   *(++pa)+= *qb*X;\n")
+                            fh.write("   *pb    += *(++qa)*X;\n")
+
+    fh.write("}\n\n")
+
+
+
+def PrintExpOverlapGradientAcc(cpp,hpp,ipp,lmax,jmax):
+#    W = StoreRlmW(lmax,jmax)
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void PrimGauExpPotGrd_Overlap_%s%s( double const zab, double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb, double * G );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+
+    fh.write("void ccdl::PrimGauExpPotGrd_Overlap_%s%s( double const zab, double const *__restrict__ crd, double const r2, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb, double *__restrict__ G )\n{\n"%(LA,LB))
+
+    offset=1
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1+offset;
+    x = o + na*nb;
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(2*na*nb+o))
+        fh.write("   double *__restrict__ X = T+%i;\n"%(x))
+        sym = "T[0]"
+    elif lmax == 1:
+        fh.write("   double T[%i];\n"%(na*nb+o))
+        fh.write("   double *__restrict__ X = T+%i;\n"%(o))
+        sym = "T[0]"
+    else:
+        sym = "double X"
+
+    if lmax == 0:
+        fh.write("""   double X = std::pow(zab/%s,1.5)*std::exp(-zab*r2);
+   *pa += *qb*X;
+   *pb += *qa*X;
+   X *=  -*qa**qb*2.*zab;
+   G[0] = X * crd[0];
+   G[1] = X * crd[1];
+   G[2] = X * crd[2];
+"""%(PI))
+    else:
+        fh.write("   double mzab = -zab;\n")
+        fh.write("   %s = std::pow(-mzab/%s,1.5)*std::exp(mzab*r2);\n"%(sym,PI))
+        for u in range(1,o):
+            fh.write("   T[%i] = mzab*T[%i];\n"%(u,u-1))
+        PrintExpIntegralsCommon(fh,lmax,jmax,0,True,True)
+        fh.write("   for ( int j=0; j<%i; ++j )\n      for ( int i=0; i<%i; ++i )\n      {\n"%(nb,na))
+        fh.write("         pa[i] += qb[j]*X[i+j*%i];\n"%(na))
+        fh.write("         pb[j] += qa[i]*X[i+j*%i];\n"%(na))
+        fh.write("      };\n")
+
+        fh.write("   double tcrd[] = { 2.*crd[0], 2.*crd[1], 2.*crd[2] };\n")
+        fh.write("   G[0] = 0.; G[1] = 0.; G[2] = 0.;\n")
+        #fh.write("offset=%i\n"%(offset))
+        PrintExpIntegralsCommon(fh,lmax,jmax,offset,False,True)
+        for j in range(jmax+1):
+            for l in range(lmax+1):
+                if j > l: continue
+                fh.write("   ExpHobGrdAcc_%s%s<%i,%i>(tcrd,qa,qb,X,G);\n"%(GetLetter(l),GetLetter(j),na,jmax))
+    fh.write("}\n\n")
+
+
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+
+
+def PrintExpEwaldIntegrals(cpp,hpp,ipp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void PrimGauExpInt_Ewald_%s%s( double const sqrt_za, double const * crd, double const r2, double * X );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+    crd = "crd"
+    if lmax < 1: crd = "/* crd */"
+
+    fh.write("void ccdl::PrimGauExpInt_Ewald_%s%s( double const sqrt_za, double const *__restrict__ %s, double const r2, double *__restrict__ X )\n{\n"%(LA,LB,crd))
+
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1;
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(na*nb+o))
+    elif lmax == 1:
+        fh.write("   double T[%i];\n"%(o))
+
+    if lmax == 0:
+        fh.write("""
+  *X=0.;
+  
+  double const DELTAS[] = { 0.0625, 0.125, 0.25 };
+  int const IOFFS[] = { 0, 80, 160 };
+
+  double dT = sqrt_za*sqrt_za*r2;
+  if ( dT < 30. )
+    {
+      int const nr = static_cast<int>(dT/10.);
+      double const del = DELTAS[nr];
+      int const ipt = static_cast<int>( dT/del + 0.5 );
+      dT -= ipt*del;
+      dT = -dT;
+      double const dT2 = dT*dT;
+      double const *__restrict__ f = GlobalGieseBoysFcnData + (ipt+IOFFS[nr]) * 18;
+      double pO=*f;
+      pO += *(++f) * dT;
+      pO += *(++f) * dT2 / 2.;
+      pO += *(++f) * dT2*dT / 6.;
+      pO += *(++f) * dT2*dT2 / 24.;
+      pO += *(++f) * dT2*dT2*dT / 120.;
+      pO *= GieseMultipole_TWO_OVER_SQRT_PI * sqrt_za;
+      *X = 1./sqrt(r2) - pO;
+    };
+
+""")
+    else:
+        fh.write("""
+   double oor = 1./std::sqrt(r2);
+   double za = sqrt_za*sqrt_za;
+   double t = za*r2;
+   GieseBoysFcnTemplate<%i>(t,T);
+   t = GieseMultipole_TWO_OVER_SQRT_PI * sqrt_za;
+   double z  = 0.5 / r2;
+   *T = oor - *T*t;\n"""%(o-1))
+        for k in range(1,o):
+            if k > 1:
+                fh.write("   oor *= %.1f*z;\n"%(1-2*k))
+            else:
+                fh.write("   oor *= -z;\n")
+            fh.write("   t *= -za;\n")
+            fh.write("   T[%i] = oor-T[%i]*t;\n"%(k,k))
+        PrintExpIntegralsCommon(fh,lmax,jmax)
+    fh.write("}\n\n")
+
+
+def PrintExpEwaldGradientMat(cpp,hpp,ipp,lmax,jmax):
+#    W = StoreRlmW(lmax,jmax)
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void PrimGauExpGrd_Ewald_%s%s( double const sqrt_za,  double const * crd, double const r2, double * X, double * G );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+
+    fh.write("void ccdl::PrimGauExpGrd_Ewald_%s%s( double const sqrt_za, double const *__restrict__ crd, double const r2, double *__restrict__ X, double *__restrict__ G )\n{\n"%(LA,LB))
+
+    offset=1
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1+offset;
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(na*nb+o))
+    elif lmax == 1:
+        fh.write("   double T[%i];\n"%(o))
+
+
+
+
+############################################
+    if lmax == 0:
+        fh.write("""
+   double T[2];
+   double const oor = 1./std::sqrt(r2);
+   double const za = sqrt_za*sqrt_za;
+   double t = za*r2;
+   GieseBoysFcnTemplate<1>(t,T);
+   t = GieseMultipole_TWO_OVER_SQRT_PI * sqrt_za;
+   *X = oor - *T*t;
+   T[1] = -oor/r2+2.*za*T[1]*t;
+   G[0] = T[1] * crd[0];
+   G[1] = T[1] * crd[1];
+   G[2] = T[1] * crd[2];
+""")
+    else:
+
+        fh.write("""
+   double oor = 1./std::sqrt(r2);
+   double za = sqrt_za*sqrt_za;
+   double t = za*r2;
+   GieseBoysFcnTemplate<%i>(t,T);
+   t = GieseMultipole_TWO_OVER_SQRT_PI * sqrt_za;
+   double z  = 0.5 / r2;
+   *T = oor - *T*t;\n"""%(o-1))
+        for k in range(1,o):
+            if k > 1:
+                fh.write("   oor *= %.1f*z;\n"%(1-2*k))
+            else:
+                fh.write("   oor *= -z;\n")
+            fh.write("   t *= -za;\n")
+            fh.write("   T[%i] = oor-T[%i]*t;\n"%(k,k))
+############################################
+
+        PrintExpIntegralsCommon(fh,lmax,jmax,offset)
+        fh.write("   double tcrd[] = { 2.*crd[0], 2.*crd[1], 2.*crd[2] };\n")
+        for j in range(jmax+1):
+            for l in range(lmax+1):
+                if j > l: continue
+                fh.write("   ExpHobGrdBlk_%s%s<%i>(tcrd,X,G);\n"%(GetLetter(l),GetLetter(j),na))
+        PrintExpIntegralsCommon(fh,lmax,jmax,offset,False)
+    fh.write("}\n\n")
+
+
+
+def PrintExpEwaldPot(cpp,hpp,ipp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void PrimGauExpPot_Ewald_%s%s( double const sqrt_za,  double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+    crd = "crd"
+    if lmax < 1: crd = "/* crd */"
+
+    fh.write("void ccdl::PrimGauExpPot_Ewald_%s%s( double const sqrt_za,  double const *__restrict__ %s, double const r2, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb )\n{\n"%(LA,LB,crd))
+
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1
+    x = o+na*nb
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(2*na*nb+o))
+    elif lmax == 1:
+        x = o
+        fh.write("   double T[%i];\n"%(o+na*nb))
+
+
+
+
+    if lmax == 0:
+
+        fh.write("""  
+  double const DELTAS[] = { 0.0625, 0.125, 0.25 };
+  int const IOFFS[] = { 0, 80, 160 };
+
+  double dT = sqrt_za*sqrt_za*r2;
+  if ( dT < 30. )
+    {
+      int const nr = static_cast<int>(dT/10.);
+      double const del = DELTAS[nr];
+      int const ipt = static_cast<int>( dT/del + 0.5 );
+      dT -= ipt*del;
+      dT = -dT;
+      double const dT2 = dT*dT;
+      double const *__restrict__ f = GlobalGieseBoysFcnData + (ipt+IOFFS[nr]) * 18;
+      double pO=*f;
+      pO += *(++f) * dT;
+      pO += *(++f) * dT2 / 2.;
+      pO += *(++f) * dT2*dT / 6.;
+      pO += *(++f) * dT2*dT2 / 24.;
+      pO += *(++f) * dT2*dT2*dT / 120.;
+      pO *= GieseMultipole_TWO_OVER_SQRT_PI * sqrt_za;
+      pO = 1./sqrt(r2) - pO;
+      *pa += *qb*pO;
+      *pb += *qa*pO;
+    };
+""")
+    else:
+        fh.write("   double *__restrict__ X = T+%i;\n"%(x))
+        fh.write("""
+   double oor = 1./std::sqrt(r2);
+   double za = sqrt_za*sqrt_za;
+   double t = za*r2;
+   GieseBoysFcnTemplate<%i>(t,T);
+   t = GieseMultipole_TWO_OVER_SQRT_PI * sqrt_za;
+   double z  = 0.5 / r2;
+   *T = oor - *T*t;\n"""%(o-1))
+        for k in range(1,o):
+            if k > 1:
+                fh.write("   oor *= %.1f*z;\n"%(1-2*k))
+            else:
+                fh.write("   oor *= -z;\n")
+            fh.write("   t *= -za;\n")
+            fh.write("   T[%i] = oor-T[%i]*t;\n"%(k,k))
+############################################
+
+        PrintExpIntegralsCommon(fh,lmax,jmax)
+        fh.write("   for ( int j=0; j<%i; ++j )\n      for ( int i=0; i<%i; ++i )\n      {\n"%(nb,na))
+        fh.write("         pa[i] += qb[j]*X[i+j*%i];\n"%(na))
+        fh.write("         pb[j] += qa[i]*X[i+j*%i];\n"%(na))
+        fh.write("      };\n")
+    fh.write("}\n\n")
+
+
+def PrintExpEwaldGradientAcc(cpp,hpp,ipp,lmax,jmax):
+#    W = StoreRlmW(lmax,jmax)
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void PrimGauExpPotGrd_Ewald_%s%s( double const sqrt_za, double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb, double * G );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+
+    fh.write("void ccdl::PrimGauExpPotGrd_Ewald_%s%s( double const sqrt_za, double const *__restrict__ crd, double const r2, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb, double *__restrict__ G )\n{\n"%(LA,LB))
+
+    offset=1
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1+offset;
+    x = o + na*nb;
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(2*na*nb+o))
+        fh.write("   double *__restrict__ X = T+%i;\n"%(x))
+    elif lmax == 1:
+        fh.write("   double T[%i];\n"%(na*nb+o))
+        fh.write("   double *__restrict__ X = T+%i;\n"%(o))
+ 
+############################################
+    if lmax == 0:
+
+        fh.write("""
+   double T[2];
+   double const oor = 1./std::sqrt(r2);
+   double const za = sqrt_za*sqrt_za;
+   double t = za*r2;
+   GieseBoysFcnTemplate<1>(t,T);
+   t = GieseMultipole_TWO_OVER_SQRT_PI * sqrt_za;
+   *T = oor - *T*t;
+   *pa += *qb**T;
+   *pb += *qa**T;
+   T[1] = (-oor/r2+2.*za*T[1]*t)**qa**qb;
+   G[0] = T[1] * crd[0];
+   G[1] = T[1] * crd[1];
+   G[2] = T[1] * crd[2];
+""")
+
+    else:
+
+
+        fh.write("""
+   double oor = 1./std::sqrt(r2);
+   double za = sqrt_za*sqrt_za;
+   double t = za*r2;
+   GieseBoysFcnTemplate<%i>(t,T);
+   t = GieseMultipole_TWO_OVER_SQRT_PI * sqrt_za;
+   double z  = 0.5 / r2;
+   *T = oor - *T*t;\n"""%(o-1))
+        for k in range(1,o):
+            if k > 1:
+                fh.write("   oor *= %.1f*z;\n"%(1-2*k))
+            else:
+                fh.write("   oor *= -z;\n")
+            fh.write("   t *= -za;\n")
+            fh.write("   T[%i] = oor-T[%i]*t;\n"%(k,k))
+############################################
+
+        PrintExpIntegralsCommon(fh,lmax,jmax,0,True,True)
+        fh.write("   for ( int j=0; j<%i; ++j )\n      for ( int i=0; i<%i; ++i )\n      {\n"%(nb,na))
+        fh.write("         pa[i] += qb[j]*X[i+j*%i];\n"%(na))
+        fh.write("         pb[j] += qa[i]*X[i+j*%i];\n"%(na))
+        fh.write("      };\n")
+
+        fh.write("   double tcrd[] = { 2.*crd[0], 2.*crd[1], 2.*crd[2] };\n")
+        fh.write("   G[0] = 0.; G[1] = 0.; G[2] = 0.;\n")
+        #fh.write("offset=%i\n"%(offset))
+        PrintExpIntegralsCommon(fh,lmax,jmax,offset,False,True)
+        for j in range(jmax+1):
+            for l in range(lmax+1):
+                if j > l: continue
+                fh.write("   ExpHobGrdAcc_%s%s<%i,%i>(tcrd,qa,qb,X,G);\n"%(GetLetter(l),GetLetter(j),na,jmax))
+    fh.write("}\n\n")
+
+
+
+
+
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+
+
+def PrintExpCoulombIntegrals(cpp,hpp,ipp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void PrimGauExpInt_Coulomb_%s%s( double const zab, double const * crd, double const r2, double * X );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+    crd = "crd"
+    if lmax < 1: crd = "/* crd */"
+
+    fh.write("void ccdl::PrimGauExpInt_Coulomb_%s%s( double const zab, double const *__restrict__ %s, double const r2, double *__restrict__ X )\n{\n"%(LA,LB,crd))
+
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1;
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(na*nb+o))
+    elif lmax == 1:
+        fh.write("   double T[%i];\n"%(o))
+
+    if lmax == 0:
+        fh.write("""
+  
+  double const DELTAS[] = { 0.0625, 0.125, 0.25 };
+  int const IOFFS[] = { 0, 80, 160 };
+  //double zab = za*zb/(za+zb);
+  double dT = zab*r2;
+  if ( dT < 30. )
+    {
+      int const nr = static_cast<int>(dT/10.);
+      double const del = DELTAS[nr];
+      int const ipt = static_cast<int>( dT/del + 0.5 );
+      dT -= ipt*del;
+      dT = -dT;
+      double const dT2 = dT*dT;
+      double const *__restrict__ f = GlobalGieseBoysFcnData + (ipt+IOFFS[nr]) * 18;
+      *X =  *f;
+      *X += *(++f) * dT;
+      *X += *(++f) * dT2 / 2.;
+      *X += *(++f) * dT2*dT / 6.;
+      *X += *(++f) * dT2*dT2 / 24.;
+      *X += *(++f) * dT2*dT2*dT / 120.;
+      *X *= GieseMultipole_TWO_OVER_SQRT_PI * std::sqrt(zab);
+    }
+  else
+    {
+      *X= 1./std::sqrt(r2);
+    };
+""")
+    else:
+        fh.write("""
+   //double zab = za*zb/(za+zb);
+   double t = zab*r2;
+   GieseBoysFcnTemplate<%i>(t,T);
+   t = GieseMultipole_TWO_OVER_SQRT_PI * std::sqrt(zab);
+   *T *= t;\n"""%(o-1))
+        for k in range(1,o):
+            fh.write("   t *= -zab;\n")
+            fh.write("   T[%i] *= t;\n"%(k))
+        PrintExpIntegralsCommon(fh,lmax,jmax)
+    fh.write("}\n")
+
+
+def PrintExpCoulombGradientMat(cpp,hpp,ipp,lmax,jmax):
+#    W = StoreRlmW(lmax,jmax)
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void PrimGauExpGrd_Coulomb_%s%s( double const zab,  double const * crd, double const r2, double * X, double * G );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+
+    fh.write("void ccdl::PrimGauExpGrd_Coulomb_%s%s( double const zab, double const *__restrict__ crd, double const r2, double *__restrict__ X, double *__restrict__ G )\n{\n"%(LA,LB))
+
+    offset=1
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1+offset;
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(na*nb+o))
+    elif lmax == 1:
+        fh.write("   double T[%i];\n"%(o))
+
+
+
+
+############################################
+    if lmax == 0:
+        fh.write("""
+   double T[2];
+   //double const zab = za*zb/(za+zb);
+   double t = zab*r2;
+   GieseBoysFcnTemplate<1>(t,T);
+   t = GieseMultipole_TWO_OVER_SQRT_PI * std::sqrt(zab);
+   *X = *T*t;
+   T[1] = -2.*zab*T[1]*t;
+   G[0] = T[1] * crd[0];
+   G[1] = T[1] * crd[1];
+   G[2] = T[1] * crd[2];
+""")
+    else:
+
+        fh.write("""
+   //double zab = za*zb/(za+zb);
+   double t = zab*r2;
+   GieseBoysFcnTemplate<%i>(t,T);
+   t = GieseMultipole_TWO_OVER_SQRT_PI * std::sqrt(zab);
+   *T *= t;\n"""%(o-1))
+        for k in range(1,o):
+            fh.write("   t *= -zab;\n")
+            fh.write("   T[%i] *= t;\n"%(k))
+############################################
+
+        PrintExpIntegralsCommon(fh,lmax,jmax,offset)
+        fh.write("   double tcrd[] = { 2.*crd[0], 2.*crd[1], 2.*crd[2] };\n")
+        for j in range(jmax+1):
+            for l in range(lmax+1):
+                if j > l: continue
+                fh.write("   ExpHobGrdBlk_%s%s<%i>(tcrd,X,G);\n"%(GetLetter(l),GetLetter(j),na))
+        PrintExpIntegralsCommon(fh,lmax,jmax,offset,False)
+    fh.write("}\n\n")
+
+
+
+def PrintExpCoulombPot(cpp,hpp,ipp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void PrimGauExpPot_Coulomb_%s%s( double const zab,  double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+    crd = "crd"
+    if lmax < 1: crd = "/* crd */"
+
+    fh.write("void ccdl::PrimGauExpPot_Coulomb_%s%s( double const zab,  double const *__restrict__ %s, double const r2, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb )\n{\n"%(LA,LB,crd))
+
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1
+    x = o+na*nb
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(2*na*nb+o))
+    elif lmax == 1:
+        x = o
+        fh.write("   double T[%i];\n"%(o+na*nb))
+
+
+
+
+    if lmax == 0:
+
+        fh.write("""  
+  double const DELTAS[] = { 0.0625, 0.125, 0.25 };
+  int const IOFFS[] = { 0, 80, 160 };
+  //double const zab = za*zb/(za+zb);
+  double dT = zab*r2;
+  if ( dT < 30. )
+    {
+      int const nr = static_cast<int>(dT/10.);
+      double const del = DELTAS[nr];
+      int const ipt = static_cast<int>( dT/del + 0.5 );
+      dT -= ipt*del;
+      dT = -dT;
+      double const dT2 = dT*dT;
+      double const *__restrict__ f = GlobalGieseBoysFcnData + (ipt+IOFFS[nr]) * 18;
+      double pO=*f;
+      pO += *(++f) * dT;
+      pO += *(++f) * dT2 / 2.;
+      pO += *(++f) * dT2*dT / 6.;
+      pO += *(++f) * dT2*dT2 / 24.;
+      pO += *(++f) * dT2*dT2*dT / 120.;
+      pO *= GieseMultipole_TWO_OVER_SQRT_PI * std::sqrt(zab);
+      *pa += *qb*pO;
+      *pb += *qa*pO;
+    };
+""")
+    else:
+        fh.write("   double *__restrict__ X = T+%i;\n"%(x))
+        fh.write("""
+   //double zab = za*zb/(za+zb);
+   double t = zab*r2;
+   GieseBoysFcnTemplate<%i>(t,T);
+   t = GieseMultipole_TWO_OVER_SQRT_PI * std::sqrt(zab);
+   *T *= t;\n"""%(o-1))
+        for k in range(1,o):
+            fh.write("   t *= -zab;\n")
+            fh.write("   T[%i] *= t;\n"%(k))
+############################################
+
+        PrintExpIntegralsCommon(fh,lmax,jmax)
+        fh.write("   for ( int j=0; j<%i; ++j )\n      for ( int i=0; i<%i; ++i )\n      {\n"%(nb,na))
+        fh.write("         pa[i] += qb[j]*X[i+j*%i];\n"%(na))
+        fh.write("         pb[j] += qa[i]*X[i+j*%i];\n"%(na))
+        fh.write("      };\n")
+    fh.write("}\n\n")
+
+
+def PrintExpCoulombGradientAcc(cpp,hpp,ipp,lmax,jmax):
+#    W = StoreRlmW(lmax,jmax)
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void PrimGauExpPotGrd_Coulomb_%s%s( double const zab, double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb, double * G );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+
+    fh.write("void ccdl::PrimGauExpPotGrd_Coulomb_%s%s( double const zab, double const *__restrict__ crd, double const r2, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb, double *__restrict__ G )\n{\n"%(LA,LB))
+
+    offset=1
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1+offset;
+    x = o + na*nb;
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(2*na*nb+o))
+        fh.write("   double *__restrict__ X = T+%i;\n"%(x))
+    elif lmax == 1:
+        fh.write("   double T[%i];\n"%(na*nb+o))
+        fh.write("   double *__restrict__ X = T+%i;\n"%(o))
+ 
+############################################
+    if lmax == 0:
+
+        fh.write("""
+   double T[2];
+   //double const zab = za*zb/(za+zb);
+   double t = zab*r2;
+   GieseBoysFcnTemplate<1>(t,T);
+   t = GieseMultipole_TWO_OVER_SQRT_PI * std::sqrt(zab);
+   *T *= t;
+   *pa += *qb**T;
+   *pb += *qa**T;
+   T[1] = (-2.*zab*T[1]*t)**qa**qb;
+   G[0] = T[1] * crd[0];
+   G[1] = T[1] * crd[1];
+   G[2] = T[1] * crd[2];
+""")
+
+    else:
+
+
+        fh.write("""
+   //double zab = za*zb/(za+zb);
+   double t = zab*r2;
+   GieseBoysFcnTemplate<%i>(t,T);
+   t = GieseMultipole_TWO_OVER_SQRT_PI * std::sqrt(zab);
+   *T *= t;\n"""%(o-1))
+        for k in range(1,o):
+            fh.write("   t *= -zab;\n")
+            fh.write("   T[%i] *= t;\n"%(k))
+############################################
+
+        PrintExpIntegralsCommon(fh,lmax,jmax,0,True,True)
+        fh.write("   for ( int j=0; j<%i; ++j )\n      for ( int i=0; i<%i; ++i )\n      {\n"%(nb,na))
+        fh.write("         pa[i] += qb[j]*X[i+j*%i];\n"%(na))
+        fh.write("         pb[j] += qa[i]*X[i+j*%i];\n"%(na))
+        fh.write("      };\n")
+
+        fh.write("   double tcrd[] = { 2.*crd[0], 2.*crd[1], 2.*crd[2] };\n")
+        fh.write("   G[0] = 0.; G[1] = 0.; G[2] = 0.;\n")
+        #fh.write("offset=%i\n"%(offset))
+        PrintExpIntegralsCommon(fh,lmax,jmax,offset,False,True)
+        for j in range(jmax+1):
+            for l in range(lmax+1):
+                if j > l: continue
+                fh.write("   ExpHobGrdAcc_%s%s<%i,%i>(tcrd,qa,qb,X,G);\n"%(GetLetter(l),GetLetter(j),na,jmax))
+    fh.write("}\n\n")
+
+
+
+
+
+def STGOFactor(L,m,cs, nx,ny,nz, t,u,s):
+    a = 0.
+    nlm = sqrt(2.*Factorial(L+m)*Factorial(L-m))/Factorial(L)
+    if m == 0: nlm = 1
+
+    if m+2*(t-u-s)-cs == nx:
+        if 2*(u+s)+cs == ny:
+            if L-m-2*t == nz:
+                a = pow(-1,t+s)*pow(0.5,m+2*t)*nlm* \
+                    Binomial(L-t,m+t)*Binomial(L,t)*Binomial(t,u)*Binomial(m,2*s+cs)
+    return a
+
+
+
+
+
+
+
+
+
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+#####################################################################################################
+
+
+
+def PrintExpUserAuxIntegrals(cpp,hpp,ipp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void ExpInt_UserAux_%s%s( double const * O, double const * crd, double const r2, double * X );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax + jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+
+    crd = "crd"
+    r2 = "r2"
+    if lmax < 1: 
+        crd = "/* crd */"
+    if lmax < 1  or (lmax == 1 and jmax == 0):
+        r2  = "/* r2 */"
+
+    fh.write("void ccdl::ExpInt_UserAux_%s%s( double const *__restrict__ O, double const *__restrict__ %s, double const %s, double *__restrict__ X )\n{\n"%(LA,LB,crd,r2))
+
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1;
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(na*nb+o))
+        sym = "T"
+    elif lmax == 1:
+        fh.write("   double T[%i];\n"%(o))
+        sym = "T"
+    else:
+        sym = "X"
+    if lmax == 0:
+        fh.write("   %s[0] = O[0];\n"%(sym))
+    else:
+        fh.write("   %s[0] = O[0];\n"%(sym))
+    for u in range(1,lmax+jmax+1):
+        fh.write("   T[%i] = O[%i];\n"%(u,u))
+    if lmax > 0:
+        PrintExpIntegralsCommon(fh,lmax,jmax)
+    fh.write("}\n\n")
+
+
+
+def PrintExpUserAuxGradientMat(cpp,hpp,ipp,lmax,jmax):
+#    W = StoreRlmW(lmax,jmax)
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void ExpGrd_UserAux_%s%s( double const * O, double const * crd, double const r2, double * X, double * G );\n"%(LA,LB))
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+
+    r2 = "r2"
+    if lmax < 1  or (lmax == 1 and jmax == 0): r2 = "/* r2 */"
+
+    fh.write("void ccdl::ExpGrd_UserAux_%s%s( double const *__restrict__ O, double const *__restrict__ crd, double const %s, double *__restrict__ X, double *__restrict__ G )\n{\n"%(LA,LB,r2))
+
+    offset=1
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1+offset;
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(na*nb+o))
+        sym = "T"
+    elif lmax == 1:
+        fh.write("   double T[%i];\n"%(o))
+        sym = "T"
+    else:
+        sym = "X"
+
+    if lmax == 0:
+        fh.write("""
+   X[0] = O[0];
+   double X1 =  2. * O[1]; // ?
+   G[0] = X1 * crd[0];
+   G[1] = X1 * crd[1];
+   G[2] = X1 * crd[2];
+""")
+    else:
+        fh.write("   %s[0] = O[0];\n"%(sym))
+        for u in range(1,o):
+            fh.write("   T[%i] = O[%i];\n"%(u,u))
+        PrintExpIntegralsCommon(fh,lmax,jmax,offset)
+        fh.write("   double tcrd[] = { 2.*crd[0], 2.*crd[1], 2.*crd[2] };\n")
+        for j in range(jmax+1):
+            for l in range(lmax+1):
+                if j > l: continue
+                fh.write("   ExpHobGrdBlk_%s%s<%i>(tcrd,X,G);\n"%(GetLetter(l),GetLetter(j),na))
+        PrintExpIntegralsCommon(fh,lmax,jmax,offset,False)
+    fh.write("}\n\n")
+
+
+def PrintExpUserAuxPot(cpp,hpp,ipp,lmax,jmax):
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void ExpPot_UserAux_%s%s( double const * O, double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+    crd = "crd"
+    r2 = "r2"
+    if lmax < 1: 
+        crd = "/* crd */"
+    if lmax < 1  or (lmax == 1 and jmax == 0):
+        r2 = "/* r2 */"
+
+    fh.write("void ccdl::ExpPot_UserAux_%s%s( double const *__restrict__ O, double const *__restrict__ %s, double const %s, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb )\n{\n"%(LA,LB,crd,r2))
+
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1
+    x = o+na*nb
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(2*na*nb+o))
+        sym = "T"
+    elif lmax == 1:
+        x = o
+        fh.write("   double T[%i];\n"%(o+na*nb))
+        sym = "T"
+    if lmax == 0:
+        fh.write("   *pa += *qb**O;\n   *pb += *qa**O;\n")
+    else:
+        fh.write("   double *__restrict__ X = T+%i;\n"%(x))
+        fh.write("   %s[0] = O[0];\n"%(sym))
+        for u in range(1,lmax+jmax+1):
+            fh.write("   T[%i] = O[%i];\n"%(u,u))
+        PrintExpIntegralsCommon(fh,lmax,jmax)
+        fh.write("   for ( int j=0; j<%i; ++j )\n      for ( int i=0; i<%i; ++i )\n      {\n"%(nb,na))
+        fh.write("         pa[i] += qb[j]*X[i+j*%i];\n"%(na))
+        fh.write("         pb[j] += qa[i]*X[i+j*%i];\n"%(na))
+        fh.write("      };\n")
+    fh.write("}\n\n")
+
+
+def PrintExpUserAuxGradientAcc(cpp,hpp,ipp,lmax,jmax):
+#    W = StoreRlmW(lmax,jmax)
+    LA=GetLetter(lmax)
+    LB=GetLetter(jmax)
+
+    hpp.write("void ExpPotGrd_UserAux_%s%s( double const * O, double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb, double * G );\n"%(LA,LB))
+
+    fh=cpp
+    if lmax+jmax < 1:
+        fh=ipp
+        fh.write("inline ")
+
+    r2 = "r2"
+    if lmax < 1 or (lmax == 1 and jmax == 0): r2 = "/* r2 */"
+
+    fh.write("void ccdl::ExpPotGrd_UserAux_%s%s( double const *__restrict__ O, double const *__restrict__ crd, double const %s, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb, double *__restrict__ G )\n{\n"%(LA,LB,r2))
+
+    offset=1
+    na = (lmax+1)*(lmax+1)
+    nb = (jmax+1)*(jmax+1)
+    o = lmax+jmax+1+offset;
+    x = o + na*nb;
+    if lmax > 1 or jmax > 0:
+        fh.write("   double T[%i];\n"%(2*na*nb+o))
+        fh.write("   double *__restrict__ X = T+%i;\n"%(x))
+        sym = "T[0]"
+    elif lmax == 1:
+        fh.write("   double T[%i];\n"%(na*nb+o))
+        fh.write("   double *__restrict__ X = T+%i;\n"%(o))
+        sym = "T[0]"
+    else:
+        sym = "double X"
+
+    if lmax == 0:
+        fh.write("""   double X = O[0];
+   *pa += *qb*X;
+   *pb += *qa*X;
+   X =  *qa**qb*2.*O[1];
+   G[0] = X * crd[0];
+   G[1] = X * crd[1];
+   G[2] = X * crd[2];
+""")
+    else:
+        fh.write("   %s = O[0];\n"%(sym))
+        for u in range(1,o):
+            fh.write("   T[%i] = O[%i];\n"%(u,u))
+        PrintExpIntegralsCommon(fh,lmax,jmax,0,True,True)
+        fh.write("   for ( int j=0; j<%i; ++j )\n      for ( int i=0; i<%i; ++i )\n      {\n"%(nb,na))
+        fh.write("         pa[i] += qb[j]*X[i+j*%i];\n"%(na))
+        fh.write("         pb[j] += qa[i]*X[i+j*%i];\n"%(na))
+        fh.write("      };\n")
+
+        fh.write("   double tcrd[] = { 2.*crd[0], 2.*crd[1], 2.*crd[2] };\n")
+        fh.write("   G[0] = 0.; G[1] = 0.; G[2] = 0.;\n")
+        #fh.write("offset=%i\n"%(offset))
+        PrintExpIntegralsCommon(fh,lmax,jmax,offset,False,True)
+        for j in range(jmax+1):
+            for l in range(lmax+1):
+                if j > l: continue
+                fh.write("   ExpHobGrdAcc_%s%s<%i,%i>(tcrd,qa,qb,X,G);\n"%(GetLetter(l),GetLetter(j),na,jmax))
+    fh.write("}\n\n")
+
+########################
+## STOP
+########################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def FillSTGOTransform(lmax):
+#    data[ilm][i][j][k]
+    data = ddict( lambda: ddict( lambda: ddict( lambda: ddict( float ) ) ) )
+    ilm = -1
+    for L in range(lmax+1):
+        for m in range(L+1):
+
+            nlm = sqrt(2.*Factorial(L+m)*Factorial(L-m))/Factorial(L)
+            if m == 0: nlm = 1.
+
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                ilm += 1
+
+                for i in range(L+1):
+                    nx=L-i
+                    for nz in range(i+1):
+                        ny=i-nz
+
+                        a = 0.
+                        for t in range(int( ceil((L-m)/2.) )+1):
+                            for u in range(t+1):
+                                for s in range(int( ceil((m-cs)/2.) )+1):
+                                    a += STGOFactor(L,m,cs, nx,ny,nz, t,u,s)
+
+                        data[ilm][nz][ny][nx] = a
+
+    return data
+
+
+def FillSTGOGaussianTransform(lmax):
+    data = FillSTGOTransform(lmax)
+    ilm = -1
+    for L in range(lmax+1):
+        dblf = DblFactorial(2*L-1)
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                ilm += 1
+                for nz in data[ilm]:
+                    for ny in data[ilm][nz]:
+                        for nx in data[ilm][nz][ny]:
+                            data[ilm][nz][ny][nx] = data[ilm][nz][ny][nx]  / dblf
+
+    return data
+
+
+
+def PrintCartesianClm(cpp,hpp,lmax):
+    hpp.write("void CartesianClm_%s( double const * crd, double * Y);\n"%(GetLetter(lmax)))
+    cpp.write("void CartesianClm_%s( double const *__restrict__ crd, double *__restrict__ Y )\n{\n"%(GetLetter(lmax)))
+    data = FillSTGOTransform(lmax)
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = []
+                for z in data[i]:
+                    zf = "*std::pow(crd[2],%i)"%(z)
+                    if z == 0: zf = ""
+                    if z == 1: zf = "*crd[2]"
+                    for y in data[i][z]:
+                        yf = "*std::pow(crd[1],%i)"%(y)
+                        if y == 0: yf = ""
+                        if y == 1: yf = "*crd[1]"
+                        for x in data[i][z][y]:
+                            xf = "*std::pow(crd[0],%i)"%(x)
+                            if x == 0: xf = ""
+                            if x == 1: xf = "*crd[0]"
+                            d = data[i][z][y][x]
+                            if d == 1.:
+                                terms.append( "(%s)"%((xf+yf+zf)[1:]) )
+                            elif abs(d) > 1.e-8:
+                                terms.append( "(%.15e%s%s%s)"%(d,xf,yf,zf) )
+                if i == 0:
+                    cpp.write("Y[0] = 1.;\n")
+                else:
+                    cpp.write("Y[%i] = %s;\n"%(i,"+".join(terms)))
+    cpp.write("}\n\n")
+
+
+
+def PrintCartesianSTGO(cpp,hpp,lmax):
+    hpp.write("void CartesianSTGO_%s( double const * dx, double const * dy, double const * dz, double * Y);\n"%(GetLetter(lmax)))
+    cpp.write("void CartesianSTGO_%s( double const *__restrict__ dx, double const *__restrict__ dy, double const *__restrict__ dz, double *__restrict__ Y )\n{\n"%(GetLetter(lmax)))
+    data = FillSTGOTransform(lmax)
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = []
+                for z in data[i]:
+                    zf = "*dz[%i]"%(z)
+                    for y in data[i][z]:
+                        yf = "*dy[%i]"%(y)
+                        for x in data[i][z][y]:
+                            xf = "*dx[%i]"%(x)
+                            d = data[i][z][y][x]
+                            if d == 1.:
+                                terms.append( "(%s)"%((xf+yf+zf)[1:] ))
+                            elif abs(d) > 1.e-8:
+                                terms.append( "(%.15e%s%s%s)"%(d,xf,yf,zf) )
+                if i == 0:
+                    cpp.write("Y[0] = dx[0]*dy[0]*dz[0]\n")
+                else:
+                    cpp.write("Y[%i] = %s;\n"%(i,"+".join(terms)))
+    cpp.write("}\n\n")
+
+
+
+def PrintCartesianSTGO2(cpp,hpp,lmax):
+    hpp.write("void CartesianSTGO_%s( double const * dx, double const * dy, double const * dz, double * Y);\n"%(GetLetter(lmax)))
+    cpp.write("void CartesianSTGO_%s( double const *__restrict__ dx, double const *__restrict__ dy, double const *__restrict__ dz, double *__restrict__ Y )\n{\n"%(GetLetter(lmax)))
+    data = FillSTGOTransform(lmax)
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = ddict( list )
+                for z in data[i]:
+                    zf = "*dz[%i]"%(z)
+                    for y in data[i][z]:
+                        yf = "*dy[%i]"%(y)
+                        for x in data[i][z][y]:
+                            xf = "*dx[%i]"%(x)
+                            d = data[i][z][y][x]
+                            if d == 1.:
+                                terms[zf].append( "(%s)"%((xf+yf)[1:] ))
+                            elif abs(d) > 1.e-8:
+                                terms[zf].append( "(%.15e%s%s)"%(d,xf,yf) )
+                if i == 0:
+                    cpp.write("Y[0] = dx[0]*dy[0]*dz[0]\n")
+                else:
+                    cpp.write("Y[%i] = "%(i))
+                    t = []
+                    for zf in sorted(terms):
+                        t.append("(" + "+".join(terms[zf]) + ")" + zf)
+                    cpp.write("+".join(t))
+                    cpp.write(";\n")
+
+    cpp.write("}\n\n")
+
+
+
+def PrintCartesianSTGO3(cpp,hpp,lmax):
+    hpp.write("void CartesianSTGO_%s( double const * dx, double const * dy, double const * dz, double * Y);\n"%(GetLetter(lmax)))
+    cpp.write("void CartesianSTGO_%s( double const *__restrict__ dx, double const *__restrict__ dy, double const *__restrict__ dz, double *__restrict__ Y )\n{\n"%(GetLetter(lmax)))
+
+    n = lmax+1
+
+    data = FillSTGOTransform(lmax)
+    stor = []
+
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = ddict( list )
+                for z in data[i]:
+                    for y in data[i][z]:
+                        for x in data[i][z][y]:
+                            e = "dx[%i]*dy[%i]"%(x,y)
+                            if not (e in stor):
+                                stor.append(e)
+    cpp.write("double D[%i];\n"%(len(stor)))
+    for i,e in enumerate(stor):
+        cpp.write("D[%i] = %s;\n"%(i,e))
+              
+
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = ddict( list )
+                for z in data[i]:
+                    zf = "*dz[%i]"%(z)
+                    for y in data[i][z]:
+                        for x in data[i][z][y]:
+                            d = data[i][z][y][x]
+                            e = "dx[%i]*dy[%i]"%(x,y)
+                            ii = stor.index(e)
+                            if d == 1.:
+                                terms[zf].append( "D[%i]"%(ii) )
+                            elif abs(d) > 1.e-8:
+                                terms[zf].append( "(%.15e*D[%i])"%(d,ii) )
+                if i == 0:
+                    e = "dx[%i]*dy[%i]"%(0,0)
+                    ii = stor.index(e)
+                    cpp.write("Y[0] = D[%i]*dz[0]\n"%(ii))
+                else:
+                    cpp.write("Y[%i] = "%(i))
+                    t = []
+                    for zf in sorted(terms):
+                        t.append("(" + "+".join(terms[zf]) + ")" + zf)
+                    cpp.write("+".join(t))
+                    cpp.write(";\n")
+
+    cpp.write("}\n\n")
+
+
+
+
+
+
+
+def PrintMakeQ(cpp,hpp,lmax):
+    hpp.write("void PmeMakeQ_%s( double const * dx, double const * dy, double const * qlm, double * Q );\n"%(GetLetter(lmax)))
+
+    if lmax < 2:
+        cpp=hpp
+        cpp.write("inline ")
+
+    cpp.write("void PmeMakeQ_%s( double const *__restrict__ dx, double const *__restrict__ dy, double const *__restrict__ qlm, double *__restrict__ Q )\n{\n"%(GetLetter(lmax)))
+
+    n = lmax+1
+
+    data = FillSTGOGaussianTransform(lmax)
+    stor = []
+
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = ddict( list )
+                for z in data[i]:
+                    for y in data[i][z]:
+                        for x in data[i][z][y]:
+                            e = "dx[%i]*dy[%i]"%(x,y)
+                            if not (e in stor):
+                                stor.append(e)
+    cpp.write("double D[%i];\n"%(len(stor)))
+    for i,e in enumerate(stor):
+        cpp.write("D[%i] = %s;\n"%(i,e))
+              
+
+    for z in range(lmax+1):
+        zf = "*dz[%i]"%(z)
+        zterms = []
+        i=-1
+        for L in range(lmax+1):
+            for m in range(L+1):
+                for cs in range(2):
+                    if cs == 1 and m == 0: continue
+                    i += 1
+
+                    terms = ddict( list )
+                    if z in data[i]:
+                        for y in data[i][z]:
+                            for x in data[i][z][y]:
+                                d = data[i][z][y][x]
+                                e = "dx[%i]*dy[%i]"%(x,y)
+                                ii = stor.index(e)
+                                if d == 1.:
+                                    terms[zf].append( "D[%i]"%(ii) )
+                                elif abs(d) > 1.e-8:
+                                    terms[zf].append( "(%.15e*D[%i])"%(d,ii) )
+
+                    if len(terms[zf]) > 0:
+                        zterms.append("(" + "+".join(terms[zf]) + ")" + "*qlm[%i]"%(i))
+
+        cpp.write("Q[%i] = "%(z) + " + ".join(zterms) + ";\n")
+
+
+    cpp.write("}\n\n")
+
+
+
+
+def PrintPmePotentialPrep(cpp,hpp,lmax):
+    hpp.write("void PmePotentialPrep_%s( double const * dx, double const * dy,  double * T );\n"%(GetLetter(lmax)))
+
+    if lmax < 2:
+        cpp=hpp
+        cpp.write("inline ")
+
+    cpp.write("void PmePotentialPrep_%s( double const *__restrict__ dx, double const *__restrict__ dy, double *__restrict__ T )\n{\n"%(GetLetter(lmax)))
+
+    n = lmax+1
+
+    data = FillSTGOGaussianTransform(lmax)
+    stor = []
+
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = ddict( list )
+                for z in data[i]:
+                    for y in data[i][z]:
+                        for x in data[i][z][y]:
+                            e = "dx[%i]*dy[%i]"%(x,y)
+                            if not (e in stor):
+                                stor.append(e)
+    cpp.write("double D[%i];\n"%(len(stor)))
+    for i,e in enumerate(stor):
+        cpp.write("D[%i] = %s;\n"%(i,e))
+              
+    kk=0
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = ddict( list )
+                for z in data[i]:
+                    zf = "*dz[%i]"%(z)
+                    for y in data[i][z]:
+                        for x in data[i][z][y]:
+                            d = data[i][z][y][x]
+                            e = "dx[%i]*dy[%i]"%(x,y)
+                            ii = stor.index(e)
+                            if d == 1.:
+                                terms[zf].append( "D[%i]"%(ii) )
+                            elif abs(d) > 1.e-8:
+                                terms[zf].append( "(%.15e*D[%i])"%(d,ii) )
+                # if i == 0:
+                #     e = "dx[%i]*dy[%i]"%(0,0)
+                #     ii = stor.index(e)
+                #     cpp.write("T[0] = D[%i]\n"%(ii))
+                #     kk += 1
+                # else:
+                for zf in sorted(terms):
+                    cpp.write("T[%i] = %s;\n"%(kk,"+".join(terms[zf])))
+                    kk += 1
+ 
+    cpp.write("}\n\n")
+
+
+
+
+
+
+def PrintPmeGradientPrep(cpp,hpp,lmax):
+    hpp.write("void PmeGradientPrep_%s( double const * dx, double const * dy,  double const * qlm, double * T );\n"%(GetLetter(lmax)))
+
+    if lmax < 1:
+        cpp=hpp
+        cpp.write("inline ")
+
+    cpp.write("void PmeGradientPrep_%s( double const *__restrict__ dx, double const *__restrict__ dy, double const *__restrict__ qlm, double *__restrict__ T )\n{\n"%(GetLetter(lmax)))
+
+    n = lmax+1
+
+    data = FillSTGOGaussianTransform(lmax)
+    stor = []
+
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = ddict( list )
+                for z in data[i]:
+                    for y in data[i][z]:
+                        for x in data[i][z][y]:
+                            e = "dx[%i]*dy[%i]"%(x,y)
+                            if not (e in stor): stor.append(e)
+                            e = "dx[%i]*dy[%i]"%(x+1,y)
+                            if not (e in stor): stor.append(e)
+                            e = "dx[%i]*dy[%i]"%(x,y+1)
+                            if not (e in stor): stor.append(e)
+
+    cpp.write("double D[%i];\n"%(len(stor)))
+    for i,e in enumerate(stor):
+        cpp.write("D[%i] = %s;\n"%(i,e))
+              
+    sterms = ddict( lambda: ddict( str ) )
+    kk=0
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = ddict( list )
+                for z in data[i]:
+                    zf = "*dz[%i]"%(z)
+                    for y in data[i][z]:
+                        for x in data[i][z][y]:
+                            d = data[i][z][y][x]
+                            e = "dx[%i]*dy[%i]"%(x,y)
+                            ii = stor.index(e)
+                            if d == 1.:
+                                terms[zf].append( "D[%i]"%(ii) )
+                            elif abs(d) > 1.e-8:
+                                terms[zf].append( "(%.15e*D[%i])"%(d,ii) )
+                # if i == 0:
+                #     e = "dx[%i]*dy[%i]"%(0,0)
+                #     ii = stor.index(e)
+                #     cpp.write("T[0] = D[%i]\n"%(ii))
+                #     kk += 1
+                # else:
+                for zf in sorted(terms):
+                    cpp.write("T[%i] = %s;\n"%(kk,"+".join(terms[zf])))
+                    sterms[i][zf] = kk
+                    kk += 1
+ 
+# DX
+    for z in range(lmax+1):
+        zf = "*dz[%i]"%(z)
+        zterms = []
+        i=-1
+        for L in range(lmax+1):
+            for m in range(L+1):
+                for cs in range(2):
+                    if cs == 1 and m == 0: continue
+                    i += 1
+
+                    terms = ddict( list )
+                    if z in data[i]:
+                        for y in data[i][z]:
+                            for x in data[i][z][y]:
+                                d = data[i][z][y][x]
+                                e = "dx[%i]*dy[%i]"%(x+1,y)
+                                ii = stor.index(e)
+                                if d == 1.:
+                                    terms[zf].append( "D[%i]"%(ii) )
+                                elif abs(d) > 1.e-8:
+                                    terms[zf].append( "(%.15e*D[%i])"%(d,ii) )
+
+                    if len(terms[zf]) > 0:
+                        zterms.append("(" + "+".join(terms[zf]) + ")" + "*qlm[%i]"%(i))
+
+        cpp.write("T[%i] = "%(kk) + " + ".join(zterms) + ";\n")
+        kk += 1
+
+# DY
+    for z in range(lmax+1):
+        zf = "*dz[%i]"%(z)
+        zterms = []
+        i=-1
+        for L in range(lmax+1):
+            for m in range(L+1):
+                for cs in range(2):
+                    if cs == 1 and m == 0: continue
+                    i += 1
+
+                    terms = ddict( list )
+                    if z in data[i]:
+                        for y in data[i][z]:
+                            for x in data[i][z][y]:
+                                d = data[i][z][y][x]
+                                e = "dx[%i]*dy[%i]"%(x,y+1)
+                                ii = stor.index(e)
+                                if d == 1.:
+                                    terms[zf].append( "D[%i]"%(ii) )
+                                elif abs(d) > 1.e-8:
+                                    terms[zf].append( "(%.15e*D[%i])"%(d,ii) )
+
+                    if len(terms[zf]) > 0:
+                        zterms.append("(" + "+".join(terms[zf]) + ")" + "*qlm[%i]"%(i))
+
+        cpp.write("T[%i] = "%(kk) + " + ".join(zterms) + ";\n")
+        kk += 1
+# DZ
+    for z in range(lmax+1):
+        zf = "*dz[%i]"%(z)
+        zterms = []
+        qterms = []
+        i=-1
+        for L in range(lmax+1):
+            for m in range(L+1):
+                for cs in range(2):
+                    if cs == 1 and m == 0: continue
+                    i += 1
+
+                    terms = ddict( list )
+                    if z in data[i]:
+                        for y in data[i][z]:
+                            for x in data[i][z][y]:
+                                d = data[i][z][y][x]
+                                e = "dx[%i]*dy[%i]"%(x,y)
+                                ii = stor.index(e)
+                                if d == 1.:
+                                    terms[zf].append( "D[%i]"%(ii) )
+                                elif abs(d) > 1.e-8:
+                                    terms[zf].append( "(%.15e*D[%i])"%(d,ii) )
+
+                    if len(terms[zf]) > 0:
+                        zterms.append("(" + "+".join(terms[zf]) + ")" + "*qlm[%i]"%(i))
+                        qterms.append("T[%i]*qlm[%i]"%( sterms[i][zf], i ))
+
+        #cpp.write("T[%i] = "%(kk) + " + ".join(zterms) + ";\n")
+        cpp.write("T[%i] = "%(kk) + " + ".join(qterms) + ";\n")
+        kk += 1
+
+    cpp.write("}\n\n")
+
+
+
+
+
+def PrintPmePotentialAcc(cpp,hpp,lmax):
+    hpp.write("void PmePotentialAcc_%s( double const * dz, double const * T,  double * plm );\n"%(GetLetter(lmax)))
+
+    if lmax < 2:
+        cpp=hpp
+        cpp.write("inline ")
+
+
+    cpp.write("void PmePotentialAcc_%s( double const *__restrict__ dz, double const *__restrict__ T, double *__restrict__ plm )\n{\n"%(GetLetter(lmax)))
+
+    n = lmax+1
+
+    data = FillSTGOGaussianTransform(lmax)
+    stor = []
+
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = ddict( list )
+                for z in data[i]:
+                    for y in data[i][z]:
+                        for x in data[i][z][y]:
+                            e = "dx[%i]*dy[%i]"%(x,y)
+                            if not (e in stor):
+                                stor.append(e)
+#    cpp.write("double D[%i];\n"%(len(stor)))
+#    for i,e in enumerate(stor):
+#        cpp.write("D[%i] = %s;\n"%(i,e))
+              
+    kk=0
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = ddict( list )
+                for z in data[i]:
+                    zf = "*dz[%i]"%(z)
+                    for y in data[i][z]:
+                        for x in data[i][z][y]:
+                            d = data[i][z][y][x]
+                            e = "dx[%i]*dy[%i]"%(x,y)
+                            ii = stor.index(e)
+                            if d == 1.:
+                                terms[zf].append( "D[%i]"%(ii) )
+                            elif abs(d) > 1.e-8:
+                                terms[zf].append( "(%.15e*D[%i])"%(d,ii) )
+                # if i == 0:
+                #     e = "dx[%i]*dy[%i]"%(0,0)
+                #     ii = stor.index(e)
+                #     cpp.write("T[0] = D[%i]\n"%(ii))
+                #     kk += 1
+                # else:
+                cterms = []
+                for zf in sorted(terms):
+                    #cpp.write("T[%i] = %s;\n"%(kk,"+".join(terms[zf])))
+                    cterms.append( "T[%i]%s"%(kk,zf) )
+                    kk += 1
+                cpp.write("plm[%i] += %s;\n"%(i," + ".join(cterms)))
+ 
+    cpp.write("}\n\n")
+
+
+
+def PrintPmeGradientAcc(cpp,hpp,lmax):
+    hpp.write("void PmeGradientAcc_%s( double const * dz, double const * T,  double * plm,  double * g );\n"%(GetLetter(lmax)))
+
+    if lmax < 2:
+        cpp=hpp
+        cpp.write("inline ")
+
+    cpp.write("void PmeGradientAcc_%s( double const *__restrict__ dz, double const *__restrict__ T, double *__restrict__ plm, double *__restrict__ g )\n{\n"%(GetLetter(lmax)))
+
+    n = lmax+1
+
+    data = FillSTGOGaussianTransform(lmax)
+    stor = []
+
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = ddict( list )
+                for z in data[i]:
+                    for y in data[i][z]:
+                        for x in data[i][z][y]:
+                            e = "dx[%i]*dy[%i]"%(x,y)
+                            if not (e in stor):
+                                stor.append(e)
+#    cpp.write("double D[%i];\n"%(len(stor)))
+#    for i,e in enumerate(stor):
+#        cpp.write("D[%i] = %s;\n"%(i,e))
+              
+    kk=0
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = ddict( list )
+                for z in data[i]:
+                    zf = "*dz[%i]"%(z)
+                    for y in data[i][z]:
+                        for x in data[i][z][y]:
+                            d = data[i][z][y][x]
+                            e = "dx[%i]*dy[%i]"%(x,y)
+                            ii = stor.index(e)
+                            if d == 1.:
+                                terms[zf].append( "D[%i]"%(ii) )
+                            elif abs(d) > 1.e-8:
+                                terms[zf].append( "(%.15e*D[%i])"%(d,ii) )
+                # if i == 0:
+                #     e = "dx[%i]*dy[%i]"%(0,0)
+                #     ii = stor.index(e)
+                #     cpp.write("T[0] = D[%i]\n"%(ii))
+                #     kk += 1
+                # else:
+                cterms = []
+                for zf in sorted(terms):
+                    #cpp.write("T[%i] = %s;\n"%(kk,"+".join(terms[zf])))
+                    cterms.append( "T[%i]%s"%(kk,zf) )
+                    kk += 1
+                cpp.write("plm[%i] += %s;\n"%(i," + ".join(cterms)))
+ 
+
+# DX
+    gterms = []
+    for z in range(lmax+1):
+        zf = "*dz[%i]"%(z)
+        zterms = []
+        i=-1
+        for L in range(lmax+1):
+            for m in range(L+1):
+                for cs in range(2):
+                    if cs == 1 and m == 0: continue
+                    i += 1
+
+                    terms = ddict( list )
+                    if z in data[i]:
+                        for y in data[i][z]:
+                            for x in data[i][z][y]:
+                                d = data[i][z][y][x]
+                                e = "dx[%i]*dy[%i]"%(x,y)
+                                ii = stor.index(e)
+                                if d == 1.:
+                                    terms[zf].append( "D[%i]"%(ii) )
+                                elif abs(d) > 1.e-8:
+                                    terms[zf].append( "(%.15e*D[%i])"%(d,ii) )
+
+                    if len(terms[zf]) > 0:
+                        zterms.append("T[%i]"%(kk) + zf)
+        if len(zterms) > 0:
+            gterms.append("T[%i]*dz[%i]"%(kk,z))
+            kk += 1
+    cpp.write("g[0] += "+" + ".join(gterms) + ";\n" )
+# DY
+    gterms = []
+    for z in range(lmax+1):
+        zf = "*dz[%i]"%(z)
+        zterms = []
+        i=-1
+        for L in range(lmax+1):
+            for m in range(L+1):
+                for cs in range(2):
+                    if cs == 1 and m == 0: continue
+                    i += 1
+
+                    terms = ddict( list )
+                    if z in data[i]:
+                        for y in data[i][z]:
+                            for x in data[i][z][y]:
+                                d = data[i][z][y][x]
+                                e = "dx[%i]*dy[%i]"%(x,y)
+                                ii = stor.index(e)
+                                if d == 1.:
+                                    terms[zf].append( "D[%i]"%(ii) )
+                                elif abs(d) > 1.e-8:
+                                    terms[zf].append( "(%.15e*D[%i])"%(d,ii) )
+
+                    if len(terms[zf]) > 0:
+                        zterms.append("T[%i]"%(kk) + zf)
+        if len(zterms) > 0:
+            gterms.append("T[%i]*dz[%i]"%(kk,z))
+            kk += 1
+    cpp.write("g[1] += "+" + ".join(gterms) + ";\n" )
+# DZ
+    gterms = []
+    for z in range(lmax+1):
+        zf = "*dz[%i]"%(z)
+        zterms = []
+        i=-1
+        for L in range(lmax+1):
+            for m in range(L+1):
+                for cs in range(2):
+                    if cs == 1 and m == 0: continue
+                    i += 1
+
+                    terms = ddict( list )
+                    if z in data[i]:
+                        for y in data[i][z]:
+                            for x in data[i][z][y]:
+                                d = data[i][z][y][x]
+                                e = "dx[%i]*dy[%i]"%(x,y)
+                                ii = stor.index(e)
+                                if d == 1.:
+                                    terms[zf].append( "D[%i]"%(ii) )
+                                elif abs(d) > 1.e-8:
+                                    terms[zf].append( "(%.15e*D[%i])"%(d,ii) )
+
+                    if len(terms[zf]) > 0:
+                        zterms.append("T[%i]"%(kk) + zf)
+        if len(zterms) > 0:
+            gterms.append("T[%i]*dz[%i]"%(kk,z+1))
+            kk += 1
+    cpp.write("g[2] += "+" + ".join(gterms) + ";\n" )
+
+
+    cpp.write("}\n\n")
+
+
+
+
+
+def PrintFFPMakeQ(cpp,hpp,lmax):
+    hpp.write("void FfpMakeQ_%s( double const * xn, double const y, double const gxy, double const * qlm, double * Q );\n"%(GetLetter(lmax)))
+
+    if lmax < 2:
+        cpp=hpp
+        cpp.write("inline ")
+
+    cpp.write("void FfpMakeQ_%s( double const *__restrict__ xn, double const y, double const gxy, double const *__restrict__ qlm, double *__restrict__ Q )\n{\n"%(GetLetter(lmax)))
+
+    n = lmax+1
+
+    #data = FillSTGOGaussianTransform(lmax)
+    data = FillSTGOTransform(lmax)
+    stor = []
+    sstr = {}
+
+
+    e = "xn[%i]*yn[%i]"%(0,0)
+    sstr[e] = "1"
+    e = "xn[%i]*yn[%i]"%(0,1)
+    sstr[e] = "y"
+    for xn in range(1,n):
+        e = "xn[%i]*yn[%i]"%(xn,0)
+        sstr[e] = "xn[%i]"%(xn)
+
+    for yn in range(2,n):
+        if yn == 2:
+            e = "y*y"
+            stor.append(e)
+            e = "xn[%i]*yn[%i]"%(0,2)
+            sstr[e] = "D[%i]"%(len(stor)-1)
+        else:
+            e = "y*D[%i]"%(yn-3)
+            stor.append(e)
+            e = "xn[%i]*yn[%i]"%(0,yn)
+            sstr[e] = "D[%i]"%(len(stor)-1)
+
+
+    i=-1
+    for L in range(lmax+1):
+        for m in range(L+1):
+            for cs in range(2):
+                if cs == 1 and m == 0: continue
+                i += 1
+
+                terms = ddict( list )
+                for z in data[i]:
+                    for y in data[i][z]:
+                        for x in data[i][z][y]:
+                            yn = sstr[ "xn[0]*yn[%i]"%(y) ]
+                            e = "xn[%i]*%s"%(x,yn)
+                            if not (e in stor) and (x > 0 and y > 0):
+                                stor.append(e)
+                                e = "xn[%i]*yn[%i]"%(x,y)
+                                sstr[e] = "D[%i]"%(len(stor)-1)
+
+    if len(stor) > 0:
+        cpp.write("double D[%i];\n"%(len(stor)))
+        for i,e in enumerate(stor):
+            cpp.write("D[%i] = %s;\n"%(i,e))
+              
+
+    for z in range(lmax+1):
+        zf = "*dz[%i]"%(z)
+        zterms = []
+        i=-1
+        for L in range(lmax+1):
+            for m in range(L+1):
+                for cs in range(2):
+                    if cs == 1 and m == 0: continue
+                    i += 1
+
+                    terms = ddict( list )
+                    if z in data[i]:
+                        for y in data[i][z]:
+                            for x in data[i][z][y]:
+                                d = data[i][z][y][x]
+                                e = "xn[%i]*yn[%i]"%(x,y)
+                                s = sstr[e]
+                                #ii = stor.index(e)
+                                if d == 1.:
+                                    terms[zf].append( s ) 
+                                elif abs(d) > 1.e-8:
+                                    if s != "1":
+                                        terms[zf].append( "(%.15e*%s)"%(d,s) ) 
+                                    else:
+                                        terms[zf].append( "(%.15e)"%(d) ) 
+
+                    if len(terms[zf]) > 0:
+                        if len(terms[zf]) == 1 and terms[zf][0] == "1":
+                            zterms.append("qlm[%i]"%(i))
+                        else:
+                            zterms.append("(" + "+".join(terms[zf]) + ")" + "*qlm[%i]"%(i))
+
+        cpp.write("Q[%i] = gxy * ( "%(z) + " + ".join(zterms) + " );\n")
+
+
+    cpp.write("}\n\n")
+
+
+def IntSelector(lmax,hpp,ipp,name):
+    hpp.write("void %s_Switch( int const la, int const lb, double const zab, double const * crd, double const r2, double * X );\n"%(name))
+    ipp.write("void ccdl::%s_Switch( int const la, int const lb, double const zab, double const *__restrict__ crd, double const r2, double *__restrict__ X )\n{\n"%(name))
+    ipp.write("   if ( la == 0 and lb == 0 ) {")
+    ipp.write(" ccdl::%s_%s%s(zab,crd,r2,X);"%(name,GetLetter(0),GetLetter(0)))
+    for la in range(1,lmax+1):
+        ipp.write(" }\n")
+        ipp.write("   else if ( la == %i ) {\n"%(la))
+        ipp.write("      if      ( lb == 0 ) {")
+        ipp.write(" ccdl::%s_%s%s(zab,crd,r2,X); }\n"%(name,GetLetter(la),GetLetter(0)))
+        for lb in range(1,la+1):
+            ipp.write("      else if ( lb == %i ) {"%(lb))
+            ipp.write(" ccdl::%s_%s%s(zab,crd,r2,X); }\n"%(name,GetLetter(la),GetLetter(lb)))
+        ipp.write("      else {")
+        ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("   } else { ")
+    ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("}\n\n")
+
+def GrdSelector(lmax,hpp,ipp,name):
+    hpp.write("void %s_Switch( int const la, int const lb, double const zab, double const * crd, double const r2, double * X, double * G );\n"%(name))
+    ipp.write("void ccdl::%s_Switch( int const la, int const lb, double const zab, double const *__restrict__ crd, double const r2, double *__restrict__ X, double * G )\n{\n"%(name))
+    ipp.write("   if ( la == 0 and lb == 0 ) {")
+    ipp.write(" ccdl::%s_%s%s(zab,crd,r2,X,G);"%(name,GetLetter(0),GetLetter(0)))
+    for la in range(1,lmax+1):
+        ipp.write(" }\n")
+        ipp.write("   else if ( la == %i ) {\n"%(la))
+        ipp.write("      if      ( lb == 0 ) {")
+        ipp.write(" ccdl::%s_%s%s(zab,crd,r2,X,G); }\n"%(name,GetLetter(la),GetLetter(0)))
+        for lb in range(1,la+1):
+            ipp.write("      else if ( lb == %i ) {"%(lb))
+            ipp.write(" ccdl::%s_%s%s(zab,crd,r2,X,G); }\n"%(name,GetLetter(la),GetLetter(lb)))
+        ipp.write("      else {")
+        ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("   } else { ")
+    ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("}\n\n")
+
+
+def PotSelector(lmax,hpp,ipp,name):
+    hpp.write("void %s_Switch( int const la, int const lb, double const zab, double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb  );\n"%(name))
+    ipp.write("void ccdl::%s_Switch( int const la, int const lb, double const zab, double const *__restrict__ crd, double const r2, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb )\n{\n"%(name))
+    ipp.write("   if ( la == 0 and lb == 0 ) {")
+    ipp.write(" ccdl::%s_%s%s(zab,crd,r2,qa,qb,pa,pb);"%(name,GetLetter(0),GetLetter(0)))
+    for la in range(1,lmax+1):
+        ipp.write(" }\n")
+        ipp.write("   else if ( la == %i ) {\n"%(la))
+        ipp.write("      if      ( lb == 0 ) {")
+        ipp.write(" ccdl::%s_%s%s(zab,crd,r2,qa,qb,pa,pb); }\n"%(name,GetLetter(la),GetLetter(0)))
+        for lb in range(1,la+1):
+            ipp.write("      else if ( lb == %i ) {"%(lb))
+            ipp.write(" ccdl::%s_%s%s(zab,crd,r2,qa,qb,pa,pb); }\n"%(name,GetLetter(la),GetLetter(lb)))
+        ipp.write("      else {")
+        ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("   } else { ")
+    ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("}\n\n")
+
+
+
+
+def PotGrdSelector(lmax,hpp,ipp,name):
+    hpp.write("void %s_Switch( int const la, int const lb, double const zab, double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb, double * grd  );\n"%(name))
+    ipp.write("void ccdl::%s_Switch( int const la, int const lb, double const zab, double const *__restrict__ crd, double const r2, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb, double *__restrict__ grd )\n{\n"%(name))
+    ipp.write("   if ( la == 0 and lb == 0 ) {")
+    ipp.write(" ccdl::%s_%s%s(zab,crd,r2,qa,qb,pa,pb,grd);"%(name,GetLetter(0),GetLetter(0)))
+    for la in range(1,lmax+1):
+        ipp.write(" }\n")
+        ipp.write("   else if ( la == %i ) {\n"%(la))
+        ipp.write("      if      ( lb == 0 ) {")
+        ipp.write(" ccdl::%s_%s%s(zab,crd,r2,qa,qb,pa,pb,grd); }\n"%(name,GetLetter(la),GetLetter(0)))
+        for lb in range(1,la+1):
+            ipp.write("      else if ( lb == %i ) {"%(lb))
+            ipp.write(" ccdl::%s_%s%s(zab,crd,r2,qa,qb,pa,pb,grd); }\n"%(name,GetLetter(la),GetLetter(lb)))
+        ipp.write("      else {")
+        ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("   } else { ")
+    ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("}\n\n")
+
+
+
+
+def IlmIntSelector(lmax,hpp,ipp,name):
+    hpp.write("void %s_Switch( int const la, int const lb, double const * crd, double const r2, double * X );\n"%(name))
+    ipp.write("void ccdl::%s_Switch( int const la, int const lb, double const *__restrict__ crd, double const r2, double *__restrict__ X )\n{\n"%(name))
+    ipp.write("   if ( la == 0 and lb == 0 ) {")
+    ipp.write(" ccdl::%s_%s%s(crd,r2,X);"%(name,GetLetter(0),GetLetter(0)))
+    for la in range(1,lmax+1):
+        ipp.write(" }\n")
+        ipp.write("   else if ( la == %i ) {\n"%(la))
+        ipp.write("      if      ( lb == 0 ) {")
+        ipp.write(" ccdl::%s_%s%s(crd,r2,X); }\n"%(name,GetLetter(la),GetLetter(0)))
+        for lb in range(1,la+1):
+            ipp.write("      else if ( lb == %i ) {"%(lb))
+            ipp.write(" ccdl::%s_%s%s(crd,r2,X); }\n"%(name,GetLetter(la),GetLetter(lb)))
+        ipp.write("      else {")
+        ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("   } else { ")
+    ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("}\n\n")
+
+
+
+def ClmIntSelector(lmax,hpp,ipp,name):
+    hpp.write("void %s_Switch( int const la, int const lb, double const * crd, double const r2, double * X );\n"%(name))
+    ipp.write("void ccdl::%s_Switch( int const la, int const lb, double const *__restrict__ crd, double const r2, double *__restrict__ X )\n{\n"%(name))
+    ipp.write(" int n = (la+1)*(la+1)*(lb+1)*(lb+1); for ( int i=0; i<n; ++i ) X[i] = 0.;\n")
+    ipp.write("   if ( la == 0 and lb == 0 ) {")
+    ipp.write(" ccdl::%s_%s%s(crd,r2,X);"%(name,GetLetter(0),GetLetter(0)))
+    for la in range(1,lmax+1):
+        ipp.write(" }\n")
+        ipp.write("   else if ( la == %i ) {\n"%(la))
+        ipp.write("      if      ( lb == 0 ) {")
+        ipp.write(" ccdl::%s_%s%s(crd,r2,X); }\n"%(name,GetLetter(la),GetLetter(0)))
+        for lb in range(1,la+1):
+            ipp.write("      else if ( lb == %i ) {"%(lb))
+            ipp.write(" ccdl::%s_%s%s(crd,r2,X); }\n"%(name,GetLetter(la),GetLetter(lb)))
+        ipp.write("      else {")
+        ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("   } else { ")
+    ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("}\n\n")
+
+
+
+
+def IlmGrdSelector(lmax,hpp,ipp,name):
+    hpp.write("void %s_Switch( int const la, int const lb, double const * crd, double const r2, double * X, double * dX );\n"%(name))
+    ipp.write("void ccdl::%s_Switch( int const la, int const lb, double const *__restrict__ crd, double const r2, double *__restrict__ X, double *__restrict__ dX )\n{\n"%(name))
+    ipp.write("   if ( la == 0 and lb == 0 ) {")
+    ipp.write(" ccdl::%s_%s%s(crd,r2,X,dX);"%(name,GetLetter(0),GetLetter(0)))
+    for la in range(1,lmax+1):
+        ipp.write(" }\n")
+        ipp.write("   else if ( la == %i ) {\n"%(la))
+        ipp.write("      if      ( lb == 0 ) {")
+        ipp.write(" ccdl::%s_%s%s(crd,r2,X,dX); }\n"%(name,GetLetter(la),GetLetter(0)))
+        for lb in range(1,la+1):
+            ipp.write("      else if ( lb == %i ) {"%(lb))
+            ipp.write(" ccdl::%s_%s%s(crd,r2,X,dX); }\n"%(name,GetLetter(la),GetLetter(lb)))
+        ipp.write("      else {")
+        ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("   } else { ")
+    ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("}\n\n")
+
+
+
+
+def HarmSelector(lmax,hpp,ipp,name):
+    hpp.write("void %s_Switch( int const lmax, double const * crd, double const r2, double * X );\n"%(name))
+    ipp.write("void ccdl::%s_Switch( int const lmax, double const *__restrict__ crd, double const r2, double *__restrict__ X )\n{\n"%(name))
+    ipp.write("   switch(lmax) {\n")
+    for la in range(0,lmax+1):
+        ipp.write("      case (%i): "%(la))
+        ipp.write("ccdl::%s_%s(crd,r2,X); break;\n"%(name,GetLetter(la)))
+    ipp.write("      default: std::cerr << \"ccdl::%s_Switch : Invalid lmax \" << lmax << std::endl;\n")
+    ipp.write("   }\n")
+    ipp.write("}\n\n")
+
+
+
+def HarmGrdSelector(lmax,hpp,ipp,name):
+    hpp.write("void %s_Switch( int const lmax, double const * Y, double * dY );\n"%(name))
+    ipp.write("void ccdl::%s_Switch( int const lmax, double const *__restrict__ Y, double *__restrict__ dY )\n{\n"%(name))
+    ipp.write("   switch(lmax) {\n")
+    for la in range(0,lmax+1):
+        ipp.write("      case (%i): "%(la))
+        ipp.write("ccdl::%s_%s(Y,dY); break;\n"%(name,GetLetter(la)))
+    ipp.write("      default: std::cerr << \"ccdl::%s_Switch : Invalid lmax \" << lmax << std::endl;\n")
+    ipp.write("   }\n")
+    ipp.write("}\n\n")
+
+
+
+def IlmPotSelector(lmax,hpp,ipp,name):
+    hpp.write("void %s_Switch( int const la, int const lb, double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb  );\n"%(name))
+    ipp.write("void ccdl::%s_Switch( int const la, int const lb, double const *__restrict__ crd, double const r2, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb )\n{\n"%(name))
+    ipp.write("   if ( la == 0 and lb == 0 ) {")
+    ipp.write(" ccdl::%s_%s%s(crd,r2,qa,qb,pa,pb);"%(name,GetLetter(0),GetLetter(0)))
+    for la in range(1,lmax+1):
+        ipp.write(" }\n")
+        ipp.write("   else if ( la == %i ) {\n"%(la))
+        ipp.write("      if      ( lb == 0 ) {")
+        ipp.write(" ccdl::%s_%s%s(crd,r2,qa,qb,pa,pb); }\n"%(name,GetLetter(la),GetLetter(0)))
+        for lb in range(1,la+1):
+            ipp.write("      else if ( lb == %i ) {"%(lb))
+            ipp.write(" ccdl::%s_%s%s(crd,r2,qa,qb,pa,pb); }\n"%(name,GetLetter(la),GetLetter(lb)))
+        ipp.write("      else {")
+        ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("   } else { ")
+    ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("}\n\n")
+
+
+def IlmPotGrdSelector(lmax,hpp,ipp,name):
+    hpp.write("void %s_Switch( int const la, int const lb,  double const * crd, double const r2, double const * qa, double const * qb, double * pa, double * pb, double * grd  );\n"%(name))
+    ipp.write("void ccdl::%s_Switch( int const la, int const lb, double const *__restrict__ crd, double const r2, double const *__restrict__ qa, double const *__restrict__ qb, double *__restrict__ pa, double *__restrict__ pb, double *__restrict__ grd )\n{\n"%(name))
+    ipp.write("   if ( la == 0 and lb == 0 ) {")
+    ipp.write(" ccdl::%s_%s%s(crd,r2,qa,qb,pa,pb,grd);"%(name,GetLetter(0),GetLetter(0)))
+    for la in range(1,lmax+1):
+        ipp.write(" }\n")
+        ipp.write("   else if ( la == %i ) {\n"%(la))
+        ipp.write("      if      ( lb == 0 ) {")
+        ipp.write(" ccdl::%s_%s%s(crd,r2,qa,qb,pa,pb,grd); }\n"%(name,GetLetter(la),GetLetter(0)))
+        for lb in range(1,la+1):
+            ipp.write("      else if ( lb == %i ) {"%(lb))
+            ipp.write(" ccdl::%s_%s%s(crd,r2,qa,qb,pa,pb,grd); }\n"%(name,GetLetter(la),GetLetter(lb)))
+        ipp.write("      else {")
+        ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("   } else { ")
+    ipp.write("  std::cerr << \"ccdl::%s_Switch : Invalid la,lb \" << la << \" \" << lb << std::endl; };\n"%(name))
+    ipp.write("}\n\n")
+
+
+LMAX=5
+
+cpp = file("GieseMultipole.cpp","w")
+hpp = file("GieseMultipole.hpp","w")
+ipp = file("GieseMultipoleInline.hpp","w")
+
+cppp = file("GiesePointMultipole.cpp","w")
+hppp = file("GiesePointMultipole.hpp","w")
+ippp = file("GiesePointMultipoleInline.hpp","w")
+
+
+hpp.write("#ifndef _GieseMultipole_H_\n#define _GieseMultipole_H_\n\n")
+ipp.write("#ifndef _GieseMultipoleInline_H_\n#define _GieseMultipoleInline_H_\n\n")
+ipp.write("#include \"GieseBoysFcn.hpp\"\n\n")
+ipp.write("#define GieseMultipole_PI 3.14159265358979323846264338328\n")
+ipp.write("#define GieseMultipole_TWO_OVER_SQRT_PI 1.12837916709551257389615890312\n\n")
+hpp.write("extern const double GlobalAlmC[];\n\n")
+hpp.write("namespace ccdl\n{\n")
+cpp.write("#include \"GieseMultipole.hpp\"\n")
+cpp.write("#include <cmath>\n")
+cpp.write("#include <iostream>\n")
+
+
+hppp.write("#ifndef _GiesePointMultipole_H_\n#define _GiesePointMultipole_H_\n\n")
+ippp.write("#ifndef _GiesePointMultipoleInline_H_\n#define _GiesePointMultipoleInline_H_\n\n")
+hppp.write("#include \"GieseMultipole.hpp\"\n\n")
+hppp.write("namespace ccdl\n{\n")
+cppp.write("#include \"GiesePointMultipole.hpp\"\n")
+cppp.write("#include <cmath>\n")
+cppp.write("#include <iostream>\n\n")
+
+
+
+#pmecpp = file("GiesePmeStgo.cpp","w")
+#pmehpp = file("GiesePmeStgo.hpp","w")
+#pmehpp.write("#ifndef _GiesePmeStgo_H_\n")
+#pmehpp.write("#define _GiesePmeStgo_H_\n\n")
+#pmecpp.write("#include \"GiesePmeStgo.hpp\"\n\n")
+
+
+
+PrintAlmCoef(cpp,10);
+
+for l in range(11):
+    PrintRlm(cpp,hpp,ipp,l)
+#    PrintMakeQ(pmecpp,pmehpp,l)
+#    PrintPmePotentialPrep(pmecpp,pmehpp,l)
+#    PrintPmePotentialAcc(pmecpp,pmehpp,l)
+#    PrintPmeGradientPrep(pmecpp,pmehpp,l)
+#    PrintPmeGradientAcc(pmecpp,pmehpp,l)
+#    PrintFFPMakeQ(pmecpp,pmehpp,l)
+
+hpp.write("\n")
+for l in range(12):
+    PrintIlm(cppp,hppp,ippp,l)
+for l in range(11):
+    PrintIlmGrd(cppp,hppp,ippp,l)
+
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintClmWBlock(cpp,hpp,l,j)
+
+hpp.write("\n")
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintClmFromCrdBlock(cpp,hpp,l,j)
+
+
+hpp.write("\n")
+
+cppp.write("\n\n\nnamespace ccdl {\n\n")
+for l in range(LMAX+2):
+    for j in range(l+1):
+        if j > LMAX: continue
+        PrintIlmIntFromIlm(cppp,hppp,ippp,l,j)
+cppp.write("\n\n\n} // namespace ccdl\n\n\n")
+
+
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintIlmInteraction(cppp,hppp,ippp,l,j)
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintZlmInteraction(cppp,hppp,ippp,l,j)
+
+
+cppp.write("\n\n\nnamespace ccdl {\n\n")
+for l in range(LMAX+1):
+    PrintTlmGrd(cppp,hppp,ippp,l)
+    PrintTlmGrdAcc(cppp,hppp,ippp,l)
+cppp.write("\n\n\n} // namespace ccdl\n\n\n")
+
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintZlmGrd(cppp,hppp,ippp,l,j)
+
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintZlmPot(cppp,hppp,ippp,l,j)
+
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintZlmPotGrd(cppp,hppp,ippp,l,j)
+
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpHobMatBlk(cpp,l,j)
+
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpHobMatIntegrals(cpp,hpp,l,j)
+
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintHobGradBlock(cpp,hpp,l,j)
+
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintHobGradAcc(cpp,hpp,l,j)
+
+hpp.write("\n")
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpOverlapIntegrals(cpp,hpp,ipp,l,j)
+hpp.write("\n")
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpEwaldIntegrals(cpp,hpp,ipp,l,j)
+hpp.write("\n")
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpCoulombIntegrals(cpp,hpp,ipp,l,j)
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpUserAuxIntegrals(cpp,hpp,ipp,l,j)
+
+hpp.write("\n")
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpOverlapPot(cpp,hpp,ipp,l,j)
+hpp.write("\n")
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpEwaldPot(cpp,hpp,ipp,l,j)
+hpp.write("\n")
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpCoulombPot(cpp,hpp,ipp,l,j)
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpUserAuxPot(cpp,hpp,ipp,l,j)
+
+hpp.write("\n")
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpOverlapGradientMat(cpp,hpp,ipp,l,j)
+hpp.write("\n")
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpEwaldGradientMat(cpp,hpp,ipp,l,j)
+hpp.write("\n")
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpCoulombGradientMat(cpp,hpp,ipp,l,j)
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpUserAuxGradientMat(cpp,hpp,ipp,l,j)
+
+
+hpp.write("\n")
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpOverlapGradientAcc(cpp,hpp,ipp,l,j)
+hpp.write("\n")
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpEwaldGradientAcc(cpp,hpp,ipp,l,j)
+hpp.write("\n")
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpCoulombGradientAcc(cpp,hpp,ipp,l,j)
+hpp.write("\n")
+for l in range(LMAX+1):
+    for j in range(l+1):
+        PrintExpUserAuxGradientAcc(cpp,hpp,ipp,l,j)
+
+
+
+hpp.write("\n\n")
+HarmSelector(10,hpp,cpp,"SolidHarm_Rlm")
+HarmSelector(11,hppp,cppp,"SolidHarm_Ilm")
+HarmGrdSelector(10,hppp,cppp,"SolidHarm_dIlm")
+ClmIntSelector(LMAX,hpp,cpp,"ClmTranslation")
+IlmIntSelector(LMAX,hppp,cppp,"IlmInteraction")
+IlmIntSelector(LMAX,hppp,cppp,"PtExpInt")
+IlmGrdSelector(LMAX,hppp,cppp,"PtExpGrd")
+IlmPotSelector(LMAX,hppp,cppp,"PtExpPot")
+IlmPotGrdSelector(LMAX,hppp,cppp,"PtExpPotGrd")
+
+
+hpp.write("\n\n")
+IntSelector(LMAX,hpp,cpp,"PrimGauExpInt_Overlap")
+IntSelector(LMAX,hpp,cpp,"PrimGauExpInt_Ewald")
+IntSelector(LMAX,hpp,cpp,"PrimGauExpInt_Coulomb")
+
+hpp.write("\n\n")
+GrdSelector(LMAX,hpp,cpp,"PrimGauExpGrd_Overlap")
+GrdSelector(LMAX,hpp,cpp,"PrimGauExpGrd_Ewald")
+GrdSelector(LMAX,hpp,cpp,"PrimGauExpGrd_Coulomb")
+
+hpp.write("\n\n")
+PotSelector(LMAX,hpp,cpp,"PrimGauExpPot_Overlap")
+PotSelector(LMAX,hpp,cpp,"PrimGauExpPot_Ewald")
+PotSelector(LMAX,hpp,cpp,"PrimGauExpPot_Coulomb")
+
+hpp.write("\n\n")
+PotGrdSelector(LMAX,hpp,cpp,"PrimGauExpPotGrd_Overlap")
+PotGrdSelector(LMAX,hpp,cpp,"PrimGauExpPotGrd_Ewald")
+PotGrdSelector(LMAX,hpp,cpp,"PrimGauExpPotGrd_Coulomb")
+
+
+hpp.write("\n}\n\n")
+hpp.write("\n#include \"GieseMultipoleInline.hpp\"\n")
+hpp.write("\n#endif\n\n")
+ipp.write("\n#endif\n\n")
+
+
+hppp.write("\n}\n\n")
+hppp.write("\n#include \"GiesePointMultipoleInline.hpp\"\n")
+hppp.write("\n#endif\n\n")
+ippp.write("\n#endif\n\n")
+
+
+
+#pmehpp.write("\n#endif\n\n")
+
+

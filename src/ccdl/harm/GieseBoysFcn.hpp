@@ -1,6 +1,8 @@
 #ifndef _CCDL_GieseBoysFcn_H_
 #define _CCDL_GieseBoysFcn_H_
 
+#include <cmath>
+
 extern const double GlobalGieseBoysFcnData[];
 
 namespace ccdl
@@ -8,7 +10,7 @@ namespace ccdl
   void GieseBoysFcn( int const Lin, double const T, double *__restrict__ Fm );
 
   template <int Lin>
-  void GieseBoysFcnTemplate( double const T, double *__restrict__ Fm )
+  void GieseBoysFcnTemplate( double const T, double *__restrict__ Fm );
 }
 
 

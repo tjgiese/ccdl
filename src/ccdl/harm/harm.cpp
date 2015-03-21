@@ -1,10 +1,49 @@
 #include "harm.hpp"
+#include "../constants.hpp"
 #include <algorithm>
 #include <cmath>
 
 #ifndef alloca
 #define alloca __builtin_alloca
 #endif
+
+
+
+void ccdl::CptAlm( int const lmax, double *__restrict__ Alm )
+{
+  // (-1)^m sqrt( (2-delta_m0) (l+m)! (l-m)! )
+  int fmax = lmax+lmax+1;
+#ifdef __GNUG__
+  double *__restrict__ fact = (double *__restrict__) alloca ( sizeof(double)*(fmax) );
+#else
+  double *__restrict__ fact = (double *__restrict__) malloc( sizeof(double)*(fmax) );
+#endif
+  fact[0] = 1.;
+  for ( int n=1; n<fmax; ++n )
+    fact[n] = n * fact[n-1];
+  for ( int n=0; n<fmax; ++n )
+    fact[n] = std::sqrt(fact[n]);
+  
+  --Alm;
+  for ( int l=0; l<=lmax; ++l )
+    {
+      // m = 0
+      *(++Alm) = fact[l]*fact[l];
+      double s = -ccdl::SQRT2;
+      for ( int m=1; m<l+1; ++m )
+	{
+	  double d = s * fact[l+m] * fact[l-m];
+	  *(++Alm) = d;
+	  *(++Alm) = d;
+	  s *= -1;
+	};
+    };
+
+#ifndef __GNUG__
+  free(fact);
+#endif
+}
+
 
 
 void ccdl::SolidHarm_Rlm
@@ -613,9 +652,35 @@ void ccdl::RlmTranslationGrd
 
 
 
-
-
-
+void ccdl::ClmTranslation
+( int const LtoMax, 
+  int const LfromMax,
+  double const *__restrict__ Rft,
+  double *__restrict__ W )
+{
+  int const nt = ( LtoMax  +1 ) * ( LtoMax + 1 );
+  int const nf = ( LfromMax+1 ) * ( LfromMax+1 );
+  //int const Lmin = std::min( LtoMax, LfromMax );
+  //int nmin = (Lmin+1)*(Lmin+1);
+  ccdl::RlmTranslation(LtoMax,LfromMax,Rft,W);
+  
+#ifdef __GNUG__
+  double *__restrict__ Alm = (double *__restrict__) alloca ( sizeof(double)*(nt) );
+#else
+  double *__restrict__ Alm = (double *__restrict__) malloc ( sizeof(double)*(nt) );
+#endif
+  ccdl::CptAlm( LtoMax, Alm );
+  //  for ( int j=0; j<nmin; ++j )
+  //    for ( int i=j; i<nt; ++i )
+  int nmin = std::min( nt, nf );
+  for ( int j=0; j<nmin; ++j )
+  //for ( int j=0; j<nf; ++j )
+    for ( int i=0; i<nt; ++i )
+      W[i+j*nt] *= Alm[i]/Alm[j];
+#ifndef __GNUG__
+      free(Alm);
+#endif
+}
 
 
 
