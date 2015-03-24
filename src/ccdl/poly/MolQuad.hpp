@@ -3,10 +3,8 @@
 
 #include <tr1/array>
 #include <tr1/memory>
-#include <cstddef>
 #include <vector>
 #include <algorithm>
-#include <cassert>
 
 namespace ccdl
 {
@@ -36,8 +34,10 @@ namespace ccdl
 
     void Prune( int const irad, int const numAngPts );
 
-    int GetRadialShellOffset( int const irad ) const { return mShellOffsets[irad]; }
+    int GetRadialShellBegin( int const irad ) const { return mShellOffsets[irad]; }
+    int GetRadialShellEnd( int const irad ) const { return mShellOffsets[irad+1]; }
 
+    //int GetAngRuleType( int irad ) const { return mAngRuleType[irad]; };
 
   private:
     
@@ -47,6 +47,7 @@ namespace ccdl
   private:
 
     std::vector<int> mNumAngPts;
+    //std::vector<int> mAngRuleType;
     double mAtomRadius;
     std::vector<double> mRadialPts;
     std::vector<double> mRadialWts;
@@ -61,92 +62,48 @@ namespace ccdl
   {
   public:
 
-    typedef std::vector< std::tr1::array<double,3> >::iterator iterator;
-    typedef std::vector< std::tr1::array<double,3> >::const_iterator const_iterator;
-
+    template <class T>
     MolQuad( std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > const & atomParam, 
-	     std::vector< std::tr1::array<double,3> > const & atomCrd );
+	     T const & atomCrd );
    
-//    MolQuad( std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > const & atomParam, 
-//	     std::vector< std::tr1::array<double,3> > const & atomCrd,
-//	     double const bufferRadius );
-    
-
-    double GetQuadWt( int const ipt ) const { return mTotalWt[ipt]; }
-
-    double const * GetQuadCrdPtr( int const ipt ) const { return mQuadCrd[ipt].data(); }
-
-    double GetQuadCrd( int const ipt, int const k ) const { return mQuadCrd[ipt][k]; }
-
-    const_iterator GetElementBegin() const { return mQuadCrd.begin(); }
-    const_iterator GetElementEnd() const { return mQuadCrd.end(); }
-
-    iterator GetElementBegin() { return mQuadCrd.begin(); }
-    iterator GetElementEnd() { return mQuadCrd.end(); }
-
-
-    double GetSingleCenterWt( int const ipt ) const { return mSingleCenterWt[ipt]; }
-
-    double GetPartitionWt( int const ipt ) const { return mPartitionWt[ipt]; }
-
-    void SetPartitionWt( int const ipt, double const w ) { mPartitionWt[ipt] = w; mTotalWt[ipt] = mSingleCenterWt[ipt] * w; }
-
-    void ClearPartitionWts() { for ( int i=0,n=GetNumPts(); i<n; ++i ) SetPartitionWt(i,1.); }
-
-    void EvaluateBeckeWeights_WithRadiiBruteForce();
-
-    void EvaluateBeckeWeights_WithoutRadiiBruteForce();
-
-    //void EvaluateBeckeWeights_WithoutRadiiNearestN( int const maxN );
-
     int GetNumAtoms() const { return mNumAtoms; }
+    int GetNumPts() const { return mNumPts; }
+    int GetNumAtomPts( int const iat ) const { return GetAtomParam(iat).GetNumPts(); }
+    int GetNumRadialShells( int const iat ) const { return GetAtomParam(iat).GetNumRadialShells(); }
+    int GetNumAngPts( int const iat, int const irad ) const { return GetAtomParam(iat).GetNumAngPts(irad); }
 
-    double const * GetAtomCrdPtr( int const iat ) const { return mAtomCrd[iat].data(); }
+    int GetAtomBegin( int const iat ) const { return mAtomOffsets[iat]; }
+    int GetAtomEnd( int const iat ) const { return mAtomOffsets[iat+1]; }
 
-    double GetAtomCrd( int const iat, int const k ) const { return mAtomCrd[iat][k]; }
+    int GetRadialShellBegin( int const iat, int const irad ) const { return mAtomOffsets[iat] + GetAtomParam(iat).GetRadialShellBegin(irad); }
+    int GetRadialShellEnd( int const iat, int const irad ) const { return mAtomOffsets[iat] + GetAtomParam(iat).GetRadialShellEnd(irad); }
 
+
+    double const * GetQuadCrdPtr( int const ipt ) const { return mQuadCrd.data() + ipt*3; }
+    double const * GetAtomCrdPtr( int const iat ) const { return mAtomCrd.data() + iat*3; }
     void SetAtomCrd( int const iat, double const * crd );
 
-    double GetAtomRadius( int const iat ) const { return GetAtomParam(iat).GetAtomRadius(); }
+    double GetQuadWt( int const ipt ) const { return mTotalWt[ipt]; }
+    double GetSingleCenterWt( int const ipt ) const { return mSingleCenterWt[ipt]; }
+    double GetPartitionWt( int const ipt ) const { return mPartitionWt[ipt]; }
+    void SetPartitionWt( int const ipt, double const w ) { mPartitionWt[ipt] = w; mTotalWt[ipt] = mSingleCenterWt[ipt] * w; }
+    void ClearPartitionWts() { for ( int i=0,n=GetNumPts(); i<n; ++i ) SetPartitionWt(i,1.); }
+    void EvaluateBeckeWeights_WithRadiiBruteForce();
+    void EvaluateBeckeWeights_WithoutRadiiBruteForce();
 
+    double GetAtomRadius( int const iat ) const { return GetAtomParam(iat).GetAtomRadius(); }
     double GetQuadratureRadius( int const iat ) const { return GetAtomParam(iat).GetQuadratureRadius(); }
 
-    int GetAtomOffset( int const iat ) const { return mAtomOffset[iat]; }
-
-    int GetNumRadialShells( int const iat ) const { return GetAtomParam(iat).GetNumRadialShells(); }
-
-    int GetRadialShellOffset( int const iat, int const irad ) const { return mAtomOffset[iat] + GetAtomParam(iat).GetRadialShellOffset(irad); }
-
-    int GetNumPts() const { return mNumPts; }
-
-    int GetNumPts( int const iat ) const { return GetAtomParam(iat).GetNumPts(); }
-
-    int GetNumPts( int const iat, int const irad ) const { return GetAtomParam(iat).GetNumAngPts(irad); }
-
-    int GetAtomIdx( int const ipt ) const { return std::distance( mAtomOffset.begin()+1, std::upper_bound( mAtomOffset.begin()+1, mAtomOffset.end(), ipt ) ); }
+    int GetAtomIdx( int const ipt ) const { return std::distance( mAtomOffsets.begin()+1, std::upper_bound( mAtomOffsets.begin()+1, mAtomOffsets.end(), ipt ) ); }
     
-    void GetDifferenceCrd( int const iat, int const ipt, double * crd ) 
-    { crd[0] = GetQuadCrd(ipt,0)-GetAtomCrd(iat,0); 
-      crd[1] = GetQuadCrd(ipt,1)-GetAtomCrd(iat,1); 
-      crd[2] = GetQuadCrd(ipt,2)-GetAtomCrd(iat,2); }
-
-
-    // bool HasNeighborList() const { return ( mNeighborList.size() > 0 ); }
-    
-    // int GetNumNeighbors( int const iat ) const { return mNeighborList[iat].size(); }
-
-    // std::vector<int> const & GetNeighbors( int const iat ) const { return mNeighborList[iat]; }
-
-    // void GetCommonNeighbors( int const iat, int const jat, std::vector<int> & atoms ) const;
-
-
   private:
 
 
     std::vector<double> mSingleCenterWt;
     std::vector<double> mPartitionWt;
     std::vector<double> mTotalWt;
-    std::vector< std::tr1::array<double,3> > mQuadCrd;
+    std::vector<double> mQuadCrd;
+    //std::vector< std::tr1::array<double,3> > mQuadCrd;
     int mNumPts;
 
     void BuildGrid();
@@ -157,19 +114,11 @@ namespace ccdl
     ccdl::AtomQuadParam const & GetAtomParam( int const iat ) const { return *(mAtomParam[iat]); }
 
     std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > mAtomParam;
-    std::vector< std::tr1::array<double,3> > mAtomCrd;
-    std::vector<int> mAtomOffset;
+    std::vector<double> mAtomCrd;
+    //std::vector< std::tr1::array<double,3> > mAtomCrd;
+    std::vector<int> mAtomOffsets;
     int mNumAtoms;
 
-
-  // private:
-
-  //   void BuildNeighborList();
-
-  //   double GetBufferedRadius( int const iat ) const { return GetQuadratureRadius(iat)+mBufferRadius; }
-
-  //   double mBufferRadius;
-  //   std::vector< std::vector<int> > mNeighborList;
 
   };
 
@@ -189,6 +138,25 @@ namespace ccdl
 // }
 
 
+
+template <class T>
+ccdl::MolQuad::MolQuad
+( std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > const & atomParam, 
+  T const & atomCrd )
+  : mAtomParam( atomParam ),
+    mAtomCrd( 3*atomCrd.size() ),
+    mAtomOffsets( atomCrd.size()+1, 0 ),
+    mNumAtoms( atomCrd.size() )
+{
+  int nat = atomCrd.size();
+  for ( int a=0; a<nat; ++a )
+    {
+      mAtomCrd[0+a*3] = atomCrd[a][0];
+      mAtomCrd[1+a*3] = atomCrd[a][1];
+      mAtomCrd[2+a*3] = atomCrd[a][2];
+    };
+  BuildGrid();
+}
 
 
 #endif

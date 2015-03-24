@@ -1,7 +1,7 @@
 #include "MolQuad.hpp"
 #include "Quadrature.hpp"
 #include <cassert>
-
+#include <cstddef>
 
 ccdl::AtomQuadParam::AtomQuadParam
 ( int const numShells, 
@@ -29,10 +29,11 @@ ccdl::AtomQuadParam::AtomQuadParam
 
 void ccdl::AtomQuadParam::Prune( int const irad, int const numAngPts )
 {
-  for ( int i=irad; i<GetNumRadialShells(); ++i )
+  int const nrad = GetNumRadialShells();
+  for ( int i=irad; i < nrad; ++i )
     mNumAngPts[i] = numAngPts;
   mNumPts = 0;
-  for ( int i=0; i<GetNumRadialShells(); ++i )
+  for ( int i=0; i < nrad; ++i )
     mNumPts += mNumAngPts[i];
   BuildShellOffsets();
 }
@@ -40,42 +41,15 @@ void ccdl::AtomQuadParam::Prune( int const irad, int const numAngPts )
 
 void ccdl::AtomQuadParam::BuildShellOffsets()
 {
+  int const nrad = GetNumRadialShells();
   mShellOffsets[0] = 0;
-  for ( int irad=0; irad<GetNumRadialShells(); ++irad )
+  for ( int irad=0; irad < nrad; ++irad )
     mShellOffsets[irad+1] = mShellOffsets[irad] + GetNumAngPts(irad);
 }
 
 
 
 
-
-
-ccdl::MolQuad::MolQuad
-( std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > const & atomParam, 
-  std::vector< std::tr1::array<double,3> > const & atomCrd )
-  : mAtomParam( atomParam ),
-    mAtomCrd( atomCrd ),
-    mAtomOffset( atomCrd.size()+1, 0 ),
-    mNumAtoms( atomCrd.size() )
-{
-  BuildGrid();
-}
-
-
-
-// ccdl::MolQuad::MolQuad
-// ( std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > const & atomParam, 
-//   std::vector< std::tr1::array<double,3> > const & atomCrd,
-//   double const bufferRadius )
-//   : mAtomParam( atomParam ),
-//     mAtomCrd( atomCrd ),
-//     mAtomOffset( atomCrd.size()+1, 0 ),
-//     mNumAtoms( atomCrd.size() ),
-//     mBufferRadius( bufferRadius )
-// {
-//   BuildGrid();
-//   BuildNeighborList();
-// }
 
 
 
@@ -86,30 +60,32 @@ ccdl::MolQuad::MolQuad
 void ccdl::MolQuad::BuildGrid()
 {
   assert( mNumAtoms == (int)mAtomParam.size() );
-  assert( mNumAtoms+1 == (int)mAtomOffset.size() );
+  assert( mNumAtoms+1 == (int)mAtomOffsets.size() );
 
-  mAtomOffset[0] = 0;
-  for ( int iat=0; iat<GetNumAtoms(); ++iat )
-    mAtomOffset[iat+1] = mAtomOffset[iat] + GetNumPts(iat);
+  int nat = GetNumAtoms();
+  mAtomOffsets[0] = 0;
+  for ( int iat=0; iat < nat; ++iat )
+    mAtomOffsets[iat+1] = mAtomOffsets[iat] + GetNumAtomPts(iat);
   
-  mNumPts = mAtomOffset.back();
+  mNumPts = mAtomOffsets.back();
   mSingleCenterWt.resize( GetNumPts() );
   mPartitionWt.resize( GetNumPts() );
   mTotalWt.resize( GetNumPts() );
-  mQuadCrd.resize( GetNumPts() );
+  mQuadCrd.resize( 3*GetNumPts() );
 
   for ( int i=0; i<GetNumPts(); ++i )
     mPartitionWt[i] = 1.;
   
-  int nang = GetNumPts(0,0);
+  int nang = GetNumAngPts(0,0);
   std::vector< std::tr1::array<double,3> > angPts(nang);
   std::vector<double> angWts(nang);
   ccdl::LebedevRule( nang, angPts.data(), angWts.data() );
-  for ( int iat=0; iat < GetNumAtoms(); ++iat )
+  for ( int iat=0; iat < nat; ++iat )
     {
-      for ( int irad=0, nrad=GetNumRadialShells(iat); irad<nrad; ++irad )
+      int const nrad = GetNumRadialShells(iat);
+      for ( int irad=0; irad<nrad; ++irad )
 	{
-	  nang = GetNumPts(iat,irad);
+	  nang = GetNumAngPts(iat,irad);
 
 	  if ( nang != (int)angWts.size() )
 	    {
@@ -117,15 +93,15 @@ void ccdl::MolQuad::BuildGrid()
 	      angWts.resize(nang);
 	      ccdl::LebedevRule( nang, angPts.data(), angWts.data() );
 	    };
-	  int const o = GetRadialShellOffset(iat,irad);
+	  int o = GetRadialShellBegin(iat,irad);
 	  double const radius = GetAtomParam(iat).GetRadialPt(irad);
 	  double const radWt  = GetAtomParam(iat).GetRadialWt(irad);
-	  for ( int iang=0; iang < nang; ++iang )
+	  for ( int iang=0; iang < nang; ++iang, ++o )
 	    {
-	      mSingleCenterWt[iang+o] = radWt * angWts[iang];
-	      mQuadCrd[iang+o][0] = mAtomCrd[iat][0] + radius * angPts[iang][0];
-	      mQuadCrd[iang+o][1] = mAtomCrd[iat][1] + radius * angPts[iang][1];
-	      mQuadCrd[iang+o][2] = mAtomCrd[iat][2] + radius * angPts[iang][2];
+	      mSingleCenterWt[o] = radWt * angWts[iang];
+	      mQuadCrd[0+o*3] = mAtomCrd[0+iat*3] + radius * angPts[iang][0];
+	      mQuadCrd[1+o*3] = mAtomCrd[1+iat*3] + radius * angPts[iang][1];
+	      mQuadCrd[2+o*3] = mAtomCrd[2+iat*3] + radius * angPts[iang][2];
 	    };
 	};
     };
@@ -159,131 +135,25 @@ namespace ccdl
 }
 
 
-// void ccdl::MolQuad::BuildNeighborList()
-// {
-//   int const nat = GetNumAtoms();
-//   mNeighborList.resize( nat );
-
-//   int const MAXNUM = 10;
-
-//   std::vector< std::vector<ccdl::backend::pair> > pairs(nat);
-
-//   for ( int iat=0; iat<nat; ++iat )
-//     {
-//       mNeighborList[iat].resize(0);
-//       mNeighborList[iat].reserve(MAXNUM);
-//       pairs[iat].resize(nat);
-//     };
-// #ifdef _OPENMP
-// #pragma omp parallel for schedule(dynamic)
-// #endif
-//   for ( int jat=1; jat<nat; ++jat )
-//     {
-//       for ( int iat=0; iat<jat; ++iat )
-// 	{
-// 	  double const d[3] = { GetAtomCrd(iat,0)-GetAtomCrd(jat,0),
-// 				GetAtomCrd(iat,1)-GetAtomCrd(jat,1),
-// 				GetAtomCrd(iat,2)-GetAtomCrd(jat,2) };
-// 	  double const rij2 = d[0]*d[0] + d[1]*d[1] + d[2]*d[2];
-// 	  pairs[iat][jat].atom = jat;
-// 	  pairs[iat][jat].rij  = rij2;
-// 	  pairs[jat][iat].atom = iat;
-// 	  pairs[jat][iat].rij  = rij2;
-// 	};
-//     };
-// #ifdef _OPENMP
-// #pragma omp parallel for schedule(dynamic)
-// #endif
-//   for ( int iat=0; iat<nat; ++iat )
-//     {
-//       pairs[iat].erase( pairs[iat].begin()+iat );
-//       std::sort( pairs[iat].begin(), pairs[iat].end() );
-//       int const n = std::min( pairs[iat].size(), MAXNUM );
-//       for ( int i=0; i<n; ++i )
-// 	mNeighborList[iat].push_back( pairs[iat][i].atom );
-//       std::sort( mNeighborList[iat].begin(), mNeighborList[iat].end() );
-//     };
-// }
-
-
-
 
 void ccdl::MolQuad::SetAtomCrd
 ( int const iat, double const * c )
 {
-  double const d[3] = { c[0]-mAtomCrd[iat][0], c[1]-mAtomCrd[iat][1], c[2]-mAtomCrd[iat][2] };
-  mAtomCrd[iat][0] = c[0];
-  mAtomCrd[iat][1] = c[1];
-  mAtomCrd[iat][2] = c[2];
-
-  for ( int ipt=GetAtomOffset(iat), last=GetAtomOffset(iat+1); ipt<last; ++ipt )
+  double const d[3] = { c[0]-mAtomCrd[0+iat*3], 
+			c[1]-mAtomCrd[1+iat*3], 
+			c[2]-mAtomCrd[2+iat*3] };
+  mAtomCrd[0+iat*3] = c[0];
+  mAtomCrd[1+iat*3] = c[1];
+  mAtomCrd[2+iat*3] = c[2];
+  int const begin = GetAtomBegin(iat);
+  int const end   = GetAtomEnd(iat);
+  for ( int ipt=begin; ipt<end; ++ipt )
     {
-      mQuadCrd[ipt][0] += d[0];
-      mQuadCrd[ipt][1] += d[1];
-      mQuadCrd[ipt][2] += d[2];
+      mQuadCrd[0+ipt*3] += d[0];
+      mQuadCrd[1+ipt*3] += d[1];
+      mQuadCrd[2+ipt*3] += d[2];
     };
-  // if ( HasNeighborList() )
-  //   BuildNeighborList();
 }
-
-
-
-
-// void ccdl::MolQuad::EvaluateBeckeWeights_WithoutRadiiBruteForce()
-// {
-//   int const nat = GetNumAtoms();
-
-  
-//   std::vector<double> w( nat, 0. );
-//   for ( int gat=0; gat<nat; ++gat )
-//     {
-//       for ( int ipt=GetAtomOffset(gat); ipt<GetAtomOffset(gat+1); ++ipt )
-//   	{
-
-//   // int const npt = GetNumPts();
-//   // std::vector<double> w( nat, 0. );
-//   // for ( int ipt=0; ipt<npt; ++ipt )
-//   //   {
-//   //     int const gat = GetAtomIdx(ipt);
-
-
-//       for ( int iat=0; iat<nat; ++iat )
-// 	w[iat] = 1.;
-      
-//       for ( int iat=0; iat<nat; ++iat )
-// 	for ( int jat=0; jat<iat; ++jat )
-// 	  {
-// 	    double t[3] = { GetAtomCrd(iat,0)-GetAtomCrd(jat,0),
-// 			    GetAtomCrd(iat,1)-GetAtomCrd(jat,1),
-// 			    GetAtomCrd(iat,2)-GetAtomCrd(jat,2) };
-// 	    double const rij = std::sqrt( t[0]*t[0] + t[1]*t[1] + t[2]*t[2] );
-// 	    t[0] = GetQuadCrd(ipt,0)-GetAtomCrd(iat,0);
-// 	    t[1] = GetQuadCrd(ipt,1)-GetAtomCrd(iat,1);
-// 	    t[2] = GetQuadCrd(ipt,2)-GetAtomCrd(iat,2);
-// 	    double const rpi = std::sqrt( t[0]*t[0] + t[1]*t[1] + t[2]*t[2] );
-// 	    t[0] = GetQuadCrd(ipt,0)-GetAtomCrd(jat,0);
-// 	    t[1] = GetQuadCrd(ipt,1)-GetAtomCrd(jat,1);
-// 	    t[2] = GetQuadCrd(ipt,2)-GetAtomCrd(jat,2);
-// 	    double const rpj = std::sqrt( t[0]*t[0] + t[1]*t[1] + t[2]*t[2] );
-// 	    double const mu = ( rpi - rpj ) / rij;
-// 	    double p = ( 1.5 - 0.5 * mu*mu ) * mu;
-// 	    p *= ( 1.5 - 0.5 * p*p );
-// 	    p *= ( 1.5 - 0.5 * p*p );
-// 	    w[iat] *= ( 0.5 - 0.5*p );
-// 	    w[jat] *= ( 0.5 + 0.5*p );
-// 	  };
-      
-//       double wt = 0.;
-//       for ( int iat=0; iat<nat; ++iat )
-// 	wt += w[iat];
-//       wt = w[gat]/wt;
-      
-//       SetPartitionWt(ipt,wt);
-      
-//     };
-
-//     };
-// }
 
 
 
@@ -300,27 +170,29 @@ void ccdl::MolQuad::EvaluateBeckeWeights_WithRadiiBruteForce()
 #pragma omp parallel for schedule(dynamic)
 #endif
   for ( int jat=1; jat<nat; ++jat )
-    for ( int iat=0; iat<jat; ++iat )
-      {
-	double t[3] = { GetAtomCrd(iat,0)-GetAtomCrd(jat,0),
-			GetAtomCrd(iat,1)-GetAtomCrd(jat,1),
-			GetAtomCrd(iat,2)-GetAtomCrd(jat,2) };
-	double const rij = std::sqrt( t[0]*t[0] + t[1]*t[1] + t[2]*t[2] );
-	double x = GetAtomRadius(iat)/GetAtomRadius(jat);
-	double u = (x-1.)/(x+1.);
-	double a = u/(u*u-1.);
-	if ( a > 0.5 )
-	  {
-	    a = 0.5;
-	  }
-	else if ( a < -0.5 )
-	  {
-	    a = -0.5;
-	  };
-	int const k = 2*iat+jat*(jat-1);
-	RIJM[0+k] = rij;
-	RIJM[1+k] = a;
-      };
+    {
+      double const * rb = GetAtomCrdPtr(jat);
+      for ( int iat=0; iat<jat; ++iat )
+	{
+	  double const * ra = GetAtomCrdPtr(iat);
+	  double t[3] = { ra[0]-rb[0], ra[1]-rb[1], ra[2]-rb[2] };
+	  double const rij = std::sqrt( t[0]*t[0] + t[1]*t[1] + t[2]*t[2] );
+	  double x = GetAtomRadius(iat)/GetAtomRadius(jat);
+	  double u = (x-1.)/(x+1.);
+	  double a = u/(u*u-1.);
+	  if ( a > 0.5 )
+	    {
+	      a = 0.5;
+	    }
+	  else if ( a < -0.5 )
+	    {
+	      a = -0.5;
+	    };
+	  int const k = 2*iat+jat*(jat-1);
+	  RIJM[0+k] = rij;
+	  RIJM[1+k] = a;
+	};
+    };
 
 #ifdef _OPENMP
 #pragma omp parallel
@@ -341,19 +213,22 @@ void ccdl::MolQuad::EvaluateBeckeWeights_WithRadiiBruteForce()
 
   for ( int gat=0; gat<nat; ++gat )
     {
-      for ( int ipt=GetAtomOffset(gat); ipt<GetAtomOffset(gat+1); ++ipt )
+      int const begin = GetAtomBegin(gat);
+      int const end   = GetAtomEnd(gat);
+      for ( int ipt=begin; ipt<end; ++ipt )
   	{
 
 #endif
-
-	  for ( int iat=0; iat<nat; ++iat )
-	    w[iat] = 1.;
+	  w.assign(nat,1.);
       
+	  double const * rq = GetQuadCrdPtr(ipt);
+	  
 	  for ( int iat=0; iat<nat; ++iat )
 	    {
-	      double const t[3] = { GetQuadCrd(ipt,0)-GetAtomCrd(iat,0), 
-				    GetQuadCrd(ipt,1)-GetAtomCrd(iat,1),
-				    GetQuadCrd(ipt,2)-GetAtomCrd(iat,2) };
+	      double const * ra = GetAtomCrdPtr(iat);
+	      double const t[3] = { rq[0]-ra[0],
+				    rq[1]-ra[1],
+				    rq[2]-ra[2] };
 	      d[iat] = std::sqrt( t[0]*t[0] + t[1]*t[1] + t[2]*t[2] );
 	    };
 	  
@@ -363,7 +238,7 @@ void ccdl::MolQuad::EvaluateBeckeWeights_WithRadiiBruteForce()
 		int const k = 2*iat+jat*(jat-1);
 		double const rij = RIJM[0+k];
 		double const a   = RIJM[1+k];
-		double mu = ( d[iat] - d[jat] ) / rij;
+		double mu = rij > 1.e-8 ? ( d[iat] - d[jat] ) / rij : 1.;
 		mu += a - a * mu * mu;
 		double p = ( 1.5 - 0.5 * mu*mu ) * mu;
 		p *= ( 1.5 - 0.5 * p*p );
@@ -401,13 +276,15 @@ void ccdl::MolQuad::EvaluateBeckeWeights_WithoutRadiiBruteForce()
 #pragma omp parallel for schedule(dynamic)
 #endif
   for ( int jat=1; jat<nat; ++jat )
-    for ( int iat=0; iat<jat; ++iat )
-      {
-	double t[3] = { GetAtomCrd(iat,0)-GetAtomCrd(jat,0),
-			GetAtomCrd(iat,1)-GetAtomCrd(jat,1),
-			GetAtomCrd(iat,2)-GetAtomCrd(jat,2) };
-	RIJM[ iat+jat*(jat-1)/2 ] = std::sqrt( t[0]*t[0] + t[1]*t[1] + t[2]*t[2] );
-      };
+    {
+      double const * rb = GetAtomCrdPtr(jat);
+      for ( int iat=0; iat<jat; ++iat )
+	{
+	  double const * ra = GetAtomCrdPtr(iat);
+	  double t[3] = { ra[0]-rb[0], ra[1]-rb[1], ra[2]-rb[2] };
+	  RIJM[ iat+jat*(jat-1)/2 ] = std::sqrt( t[0]*t[0] + t[1]*t[1] + t[2]*t[2] );
+	};
+    };
 
 #ifdef _OPENMP
 #pragma omp parallel
@@ -428,19 +305,19 @@ void ccdl::MolQuad::EvaluateBeckeWeights_WithoutRadiiBruteForce()
 
   for ( int gat=0; gat<nat; ++gat )
     {
-      for ( int ipt=GetAtomOffset(gat); ipt<GetAtomOffset(gat+1); ++ipt )
+      int const begin = GetAtomBegin(gat);
+      int const end   = GetAtomEnd(gat);
+      for ( int ipt=begin; ipt<end; ++ipt )
   	{
 
 #endif
-
-	  for ( int iat=0; iat<nat; ++iat )
-	    w[iat] = 1.;
-      
+	  
+	  w.assign(nat,1.);
+	  double const * rq = GetQuadCrdPtr(ipt);
 	  for ( int iat=0; iat<nat; ++iat )
 	    {
-	      double const t[3] = { GetQuadCrd(ipt,0)-GetAtomCrd(iat,0), 
-				    GetQuadCrd(ipt,1)-GetAtomCrd(iat,1),
-				    GetQuadCrd(ipt,2)-GetAtomCrd(iat,2) };
+	      double const * ra = GetAtomCrdPtr(iat);
+	      double const t[3] = { rq[0]-ra[0], rq[1]-ra[1], rq[2]-ra[2] };
 	      d[iat] = std::sqrt( t[0]*t[0] + t[1]*t[1] + t[2]*t[2] );
 	    };
 	  
@@ -448,7 +325,7 @@ void ccdl::MolQuad::EvaluateBeckeWeights_WithoutRadiiBruteForce()
 	    for ( int iat=0; iat<jat; ++iat )
 	      {
 		double const rij = RIJM[ iat+jat*(jat-1)/2 ];
-		double const mu = ( d[iat] - d[jat] ) / rij;
+		double mu = rij > 1.e-8 ? ( d[iat] - d[jat] ) / rij : 1.;
 		double p = ( 1.5 - 0.5 * mu*mu ) * mu;
 		p *= ( 1.5 - 0.5 * p*p );
 		p *= ( 1.5 - 0.5 * p*p );
@@ -469,97 +346,4 @@ void ccdl::MolQuad::EvaluateBeckeWeights_WithoutRadiiBruteForce()
 }
 
  
-
-
-
-// void ccdl::MolQuad::EvaluateBeckeWeights_WithoutRadiiNearestN( int const maxN )
-// {
-//   int const nat = GetNumAtoms();
-
-//   if ( nat < 1 ) { return; }
-
-//   int const MAXN = std::min( nat, maxN );
-
-//   std::vector<double> RIJM(nat*(nat-1)/2,0.);
-
-// #ifdef _OPENMP
-// #pragma omp parallel for schedule(dynamic)
-// #endif
-//   for ( int jat=1; jat<nat; ++jat )
-//     for ( int iat=0; iat<jat; ++iat )
-//       {
-// 	double t[3] = { GetAtomCrd(iat,0)-GetAtomCrd(jat,0),
-// 			GetAtomCrd(iat,1)-GetAtomCrd(jat,1),
-// 			GetAtomCrd(iat,2)-GetAtomCrd(jat,2) };
-// 	RIJM[ iat+jat*(jat-1)/2 ] = std::sqrt( t[0]*t[0] + t[1]*t[1] + t[2]*t[2] );
-//       };
-
-// #ifdef _OPENMP
-// #pragma omp parallel
-//   {
-// #endif
-//   std::vector<double> w( nat, 0. );
-//   std::vector< ccdl::backend::pair > d( nat );
-
-// #ifdef _OPENMP
-
-//   int const npt = GetNumPts();
-// #pragma omp for schedule(dynamic)
-//   for ( int ipt=0; ipt<npt; ++ipt )
-//     {
-//       int const gat = GetAtomIdx(ipt);
-
-// #else
-
-//   for ( int gat=0; gat<nat; ++gat )
-//     {
-//       for ( int ipt=GetAtomOffset(gat); ipt<GetAtomOffset(gat+1); ++ipt )
-//   	{
-
-// #endif
-
-// 	  for ( int iat=0; iat<nat; ++iat )
-// 	    w[iat] = 1.;
-      
-// 	  for ( int iat=0; iat<nat; ++iat )
-// 	    {
-// 	      double const t[3] = { GetQuadCrd(ipt,0)-GetAtomCrd(iat,0), 
-// 				    GetQuadCrd(ipt,1)-GetAtomCrd(iat,1),
-// 				    GetQuadCrd(ipt,2)-GetAtomCrd(iat,2) };
-// 	      d[iat].atom = iat;
-// 	      d[iat].rij = std::sqrt( t[0]*t[0] + t[1]*t[1] + t[2]*t[2] );
-// 	    };
-	  
-// 	  std::sort( d.begin(), d.end() );
-// 	  std::sort( d.begin(), d.begin()+MAXN, ccdl::backend::pair::AtomLessThan );
-
-
-// 	  for ( int j=1; j<MAXN; ++j )
-// 	    {
-// 	      int const jat = d[j].atom;
-// 	      int const o = jat*(jat-1)/2;
-// 	      for ( int i=0; i<j; ++i )
-// 		{
-// 		  int const iat = d[i].atom;
-// 		  double const rij = RIJM[ iat+o ];
-// 		  double const mu = ( d[i].rij - d[j].rij ) / rij;
-// 		  double p = ( 1.5 - 0.5 * mu*mu ) * mu;
-// 		  p *= ( 1.5 - 0.5 * p*p );
-// 		  p *= ( 1.5 - 0.5 * p*p );
-// 		  w[iat] *= ( 0.5 - 0.5*p );
-// 		  w[jat] *= ( 0.5 + 0.5*p );
-// 		};
-// 	    };
-	  
-// 	  double wt = 0.;
-// 	  for ( int iat=0; iat<nat; ++iat )
-// 	    wt += w[iat];
-// 	  wt = w[gat]/wt;
-	  
-// 	  SetPartitionWt(ipt,wt);
-	  
-// 	};
-      
-//     };
-// }
 
