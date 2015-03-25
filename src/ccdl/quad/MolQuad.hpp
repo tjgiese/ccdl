@@ -4,7 +4,9 @@
 #include <tr1/array>
 #include <tr1/memory>
 #include <vector>
+#include <map>
 #include <algorithm>
+#include <iostream>
 
 namespace ccdl
 {
@@ -58,6 +60,33 @@ namespace ccdl
 
 
 
+  class AtomQuadParams
+  {
+  public:
+
+    AtomQuadParams( int const nrad = 100, int const nang = 350, 
+                    double const radius = 25., double const atomRadius = 1. ) 
+       { insert(0,nrad,nang,radius,atomRadius); }
+
+
+    void insert( int const key, 
+		 int const numShells = 100, int const numAngPts = 350, 
+		 double const quadRadius = 25., double const atomRadius = 1. );
+
+
+    std::tr1::shared_ptr< ccdl::AtomQuadParam > operator[] ( int key ) const ;
+
+
+  private:
+    typedef std::tr1::shared_ptr< ccdl::AtomQuadParam > value_type;
+    typedef std::pair< int , value_type > insertion_type;
+    typedef std::map< int , value_type > map_type;
+    map_type mData;
+  };
+
+
+
+
   class MolQuad
   {
   public:
@@ -65,6 +94,18 @@ namespace ccdl
     template <class T>
     MolQuad( std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > const & atomParam, 
 	     T const & atomCrd );
+
+    template <class T>
+    MolQuad( ccdl::AtomQuadParams atomParams, 
+	     int const * atomParamIdx, 
+	     T const & atomCrd );
+
+    MolQuad( ccdl::AtomQuadParams atomParams );
+
+    MolQuad( std::tr1::shared_ptr< ccdl::AtomQuadParam > atomParams );
+
+    MolQuad();
+
    
     int GetNumAtoms() const { return mNumAtoms; }
     int GetNumPts() const { return mNumPts; }
@@ -139,6 +180,27 @@ namespace ccdl
 
 
 
+inline void ccdl::AtomQuadParams::insert
+( int key, int numShells, int numAngPts, double quadRadius, double atomRadius )
+{
+  std::tr1::shared_ptr< ccdl::AtomQuadParam > val
+    ( new ccdl::AtomQuadParam( numShells, numAngPts, quadRadius, atomRadius ) );
+  mData[key] = val;
+}
+
+
+inline std::tr1::shared_ptr< ccdl::AtomQuadParam > ccdl::AtomQuadParams::operator[] ( int key ) const 
+{
+  map_type::const_iterator p = mData.find( key );
+  if ( p == mData.end() )
+    {
+      std::cerr << "ccdl::AtomQuadParams invalid key '" << key << "'; using default grid\n";
+      p = mData.find( 0 );
+    };
+  return p->second;
+}
+
+
 template <class T>
 ccdl::MolQuad::MolQuad
 ( std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > const & atomParam, 
@@ -151,6 +213,27 @@ ccdl::MolQuad::MolQuad
   int nat = atomCrd.size();
   for ( int a=0; a<nat; ++a )
     {
+      mAtomCrd[0+a*3] = atomCrd[a][0];
+      mAtomCrd[1+a*3] = atomCrd[a][1];
+      mAtomCrd[2+a*3] = atomCrd[a][2];
+    };
+  BuildGrid();
+}
+
+template <class T>
+ccdl::MolQuad::MolQuad
+( ccdl::AtomQuadParams atomParams, 
+  int const * atomParamIdx, 
+  T const & atomCrd )
+  : mAtomParam( atomCrd.size() ),
+    mAtomCrd( 3*atomCrd.size() ),
+    mAtomOffsets( atomCrd.size()+1, 0 ),
+    mNumAtoms( atomCrd.size() )
+{
+  int nat = atomCrd.size();
+  for ( int a=0; a<nat; ++a )
+    {
+      mAtomParam[a] = atomParams[ atomParamIdx[a] ];
       mAtomCrd[0+a*3] = atomCrd[a][0];
       mAtomCrd[1+a*3] = atomCrd[a][1];
       mAtomCrd[2+a*3] = atomCrd[a][2];

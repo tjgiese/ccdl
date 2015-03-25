@@ -52,7 +52,48 @@ void ccdl::AtomQuadParam::BuildShellOffsets()
 
 
 
+ccdl::MolQuad::MolQuad
+( ccdl::AtomQuadParams atomParam )
+  : mAtomParam( 1, atomParam[0] ),
+    mAtomCrd( 3*1 ),
+    mAtomOffsets( 1+1, 0 ),
+    mNumAtoms( 1 )
+{
+  mAtomCrd[0] = 0.;
+  mAtomCrd[1] = 0.;
+  mAtomCrd[2] = 0.;
+  BuildGrid();
+}
 
+
+ccdl::MolQuad::MolQuad
+( std::tr1::shared_ptr< ccdl::AtomQuadParam > atomParam )
+  : mAtomParam( 1, atomParam ),
+    mAtomCrd( 3*1 ),
+    mAtomOffsets( 1+1, 0 ),
+    mNumAtoms( 1 )
+{
+  mAtomCrd[0] = 0.;
+  mAtomCrd[1] = 0.;
+  mAtomCrd[2] = 0.;
+  BuildGrid();
+}
+
+
+ccdl::MolQuad::MolQuad
+()
+  : mAtomParam( 1 ),
+    mAtomCrd( 3*1 ),
+    mAtomOffsets( 1+1, 0 ),
+    mNumAtoms( 1 )
+{
+  ccdl::AtomQuadParams mqp;
+  mAtomParam[0] = mqp[0];
+  mAtomCrd[0] = 0.;
+  mAtomCrd[1] = 0.;
+  mAtomCrd[2] = 0.;
+  BuildGrid();
+}
 
 
 
