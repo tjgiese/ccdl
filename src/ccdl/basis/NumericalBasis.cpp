@@ -1,7 +1,7 @@
 #include <cmath>
 #include <vector>
 #include "NumericalBasis.hpp"
-#include "OrthogonalPolynomials.hpp"
+#include "../quad/OrthogonalPolynomials.hpp"
 #include "../constants.hpp"
 
 
