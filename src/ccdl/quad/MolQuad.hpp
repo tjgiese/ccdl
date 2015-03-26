@@ -7,10 +7,11 @@
 #include <map>
 #include <algorithm>
 #include <iostream>
+#include "Quadrature.hpp"
 
 namespace ccdl
 {
-
+  class MolQuad;
 
   class AtomQuadParam
   {
@@ -39,8 +40,6 @@ namespace ccdl
     int GetRadialShellBegin( int const irad ) const { return mShellOffsets[irad]; }
     int GetRadialShellEnd( int const irad ) const { return mShellOffsets[irad+1]; }
 
-    //int GetAngRuleType( int irad ) const { return mAngRuleType[irad]; };
-
   private:
     
     void BuildShellOffsets();
@@ -49,7 +48,6 @@ namespace ccdl
   private:
 
     std::vector<int> mNumAngPts;
-    //std::vector<int> mAngRuleType;
     double mAtomRadius;
     std::vector<double> mRadialPts;
     std::vector<double> mRadialWts;
@@ -91,18 +89,18 @@ namespace ccdl
   {
   public:
 
-    template <class T>
-    MolQuad( std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > const & atomParam, 
-	     T const & atomCrd );
+    // template <class T>
+    // MolQuad( std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > const & atomParam, 
+    // 	     T const & atomCrd );
+    // MolQuad( std::tr1::shared_ptr< ccdl::AtomQuadParam > atomParams );
+
 
     template <class T>
-    MolQuad( ccdl::AtomQuadParams atomParams, 
+    MolQuad( ccdl::AtomQuadParams atomParams,
 	     int const * atomParamIdx, 
 	     T const & atomCrd );
 
     MolQuad( ccdl::AtomQuadParams atomParams );
-
-    MolQuad( std::tr1::shared_ptr< ccdl::AtomQuadParam > atomParams );
 
     MolQuad();
 
@@ -137,6 +135,11 @@ namespace ccdl
 
     int GetAtomIdx( int const ipt ) const { return std::distance( mAtomOffsets.begin()+1, std::upper_bound( mAtomOffsets.begin()+1, mAtomOffsets.end(), ipt ) ); }
     
+    ccdl::AtomQuadParam const * GetAtomQuadParam( int a ) const { return mAtomParam[a].get(); }
+
+    double const * GetAngWts( int a, int irad ) const { return mAngQuadDB.GetWts( GetNumAngPts( a, irad ) )->data(); }
+
+
   private:
 
 
@@ -144,8 +147,8 @@ namespace ccdl
     std::vector<double> mPartitionWt;
     std::vector<double> mTotalWt;
     std::vector<double> mQuadCrd;
-    //std::vector< std::tr1::array<double,3> > mQuadCrd;
     int mNumPts;
+    ccdl::AngularQuadDatabase mAngQuadDB;
 
     void BuildGrid();
 
@@ -156,7 +159,6 @@ namespace ccdl
 
     std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > mAtomParam;
     std::vector<double> mAtomCrd;
-    //std::vector< std::tr1::array<double,3> > mAtomCrd;
     std::vector<int> mAtomOffsets;
     int mNumAtoms;
 
@@ -201,24 +203,24 @@ inline std::tr1::shared_ptr< ccdl::AtomQuadParam > ccdl::AtomQuadParams::operato
 }
 
 
-template <class T>
-ccdl::MolQuad::MolQuad
-( std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > const & atomParam, 
-  T const & atomCrd )
-  : mAtomParam( atomParam ),
-    mAtomCrd( 3*atomCrd.size() ),
-    mAtomOffsets( atomCrd.size()+1, 0 ),
-    mNumAtoms( atomCrd.size() )
-{
-  int nat = atomCrd.size();
-  for ( int a=0; a<nat; ++a )
-    {
-      mAtomCrd[0+a*3] = atomCrd[a][0];
-      mAtomCrd[1+a*3] = atomCrd[a][1];
-      mAtomCrd[2+a*3] = atomCrd[a][2];
-    };
-  BuildGrid();
-}
+// template <class T>
+// ccdl::MolQuad::MolQuad
+// ( std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > const & atomParam, 
+//   T const & atomCrd )
+//   : mAtomParam( atomParam ),
+//     mAtomCrd( 3*atomCrd.size() ),
+//     mAtomOffsets( atomCrd.size()+1, 0 ),
+//     mNumAtoms( atomCrd.size() )
+// {
+//   int nat = atomCrd.size();
+//   for ( int a=0; a<nat; ++a )
+//     {
+//       mAtomCrd[0+a*3] = atomCrd[a][0];
+//       mAtomCrd[1+a*3] = atomCrd[a][1];
+//       mAtomCrd[2+a*3] = atomCrd[a][2];
+//     };
+//   BuildGrid();
+// }
 
 template <class T>
 ccdl::MolQuad::MolQuad

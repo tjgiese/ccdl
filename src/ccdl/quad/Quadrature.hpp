@@ -1,6 +1,11 @@
 #ifndef _CCDL_GAUSSIANQUADRATUREMOD_HPP_
 #define _CCDL_GAUSSIANQUADRATUREMOD_HPP_
 
+#include <map>
+#include <vector>
+#include <tr1/array>
+#include <tr1/memory>
+
 namespace ccdl
 {
   
@@ -218,6 +223,38 @@ namespace ccdl
 
 
   double LebedevCosmoGaussianZetaScaleFactor( int const iRule );
+
+
+  class AngularQuadDatabase
+  {
+  public:
+    AngularQuadDatabase() {};
+
+    std::tr1::shared_ptr< std::vector< double > >
+    GetWts( int rule );
+
+    std::tr1::shared_ptr< std::vector< std::tr1::array<double,3> > >
+    GetPts( int rule );
+
+
+    std::tr1::shared_ptr< std::vector< double > >
+    GetWts( int rule ) const
+    { return mDB.at(rule).first; }
+
+    std::tr1::shared_ptr< std::vector< std::tr1::array<double,3> > >
+    GetPts( int rule ) const
+    { return mDB.at(rule).second; }
+
+  private:
+
+    typedef std::vector<double> WtType;
+    typedef std::vector< std::tr1::array<double,3> > CrdType;
+    typedef std::tr1::shared_ptr< WtType > SharedWt;
+    typedef std::tr1::shared_ptr< CrdType > SharedCrd;
+    typedef std::pair< SharedWt, SharedCrd > ValueType;
+    typedef std::map<int,ValueType>::iterator iterator;
+    std::map<int,ValueType> mDB;
+  };
 
 }
 

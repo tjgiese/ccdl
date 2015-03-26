@@ -483,3 +483,49 @@ void ccdl::GaussJacobiRule
 			 ) * temp*std::pow(2.0,alfbet)/(pp[i]*p2[i]);
 }
 
+
+
+
+std::tr1::shared_ptr< std::vector< double > >
+ccdl::AngularQuadDatabase::GetWts( int rule )
+{
+  SharedWt w; 
+  iterator it = mDB.find( rule );
+  if ( it == mDB.end() )
+    {
+      SharedWt wts( new WtType( rule, 0. ) );
+      SharedCrd crd( new CrdType( rule ) );
+      ccdl::LebedevRule( rule, crd->data(), wts->data() );
+      mDB.insert( std::make_pair( rule, std::make_pair( wts, crd ) ) );
+      w = wts;
+    }
+  else
+    {
+      w = it->second.first;
+    };
+  return w;
+}
+
+std::tr1::shared_ptr< std::vector< std::tr1::array< double,3 > > >
+ccdl::AngularQuadDatabase::GetPts( int rule )
+{
+  SharedCrd c;
+  iterator it = mDB.find( rule );
+  if ( it == mDB.end() )
+    {
+      SharedWt wts( new WtType( rule, 0. ) );
+      SharedCrd crd( new CrdType( rule ) );
+      ccdl::LebedevRule( rule, crd->data(), wts->data() );
+      mDB.insert( std::make_pair( rule, std::make_pair( wts, crd ) ) );
+      c = crd;
+    }
+  else
+    {
+      c = it->second.second;
+    };
+  return c;
+}
+
+
+
+

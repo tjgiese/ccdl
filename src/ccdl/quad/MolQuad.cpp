@@ -66,18 +66,18 @@ ccdl::MolQuad::MolQuad
 }
 
 
-ccdl::MolQuad::MolQuad
-( std::tr1::shared_ptr< ccdl::AtomQuadParam > atomParam )
-  : mAtomParam( 1, atomParam ),
-    mAtomCrd( 3*1 ),
-    mAtomOffsets( 1+1, 0 ),
-    mNumAtoms( 1 )
-{
-  mAtomCrd[0] = 0.;
-  mAtomCrd[1] = 0.;
-  mAtomCrd[2] = 0.;
-  BuildGrid();
-}
+// ccdl::MolQuad::MolQuad
+// ( std::tr1::shared_ptr< ccdl::AtomQuadParam > atomParam )
+//   : mAtomParam( 1, atomParam ),
+//     mAtomCrd( 3*1 ),
+//     mAtomOffsets( 1+1, 0 ),
+//     mNumAtoms( 1 )
+// {
+//   mAtomCrd[0] = 0.;
+//   mAtomCrd[1] = 0.;
+//   mAtomCrd[2] = 0.;
+//   BuildGrid();
+// }
 
 
 ccdl::MolQuad::MolQuad
@@ -117,26 +117,18 @@ void ccdl::MolQuad::BuildGrid()
   for ( int i=0; i<GetNumPts(); ++i )
     mPartitionWt[i] = 1.;
   
-  int nang = GetNumAngPts(0,0);
-  std::vector< std::tr1::array<double,3> > angPts(nang);
-  std::vector<double> angWts(nang);
-  ccdl::LebedevRule( nang, angPts.data(), angWts.data() );
   for ( int iat=0; iat < nat; ++iat )
     {
       int const nrad = GetNumRadialShells(iat);
       for ( int irad=0; irad<nrad; ++irad )
 	{
-	  nang = GetNumAngPts(iat,irad);
-
-	  if ( nang != (int)angWts.size() )
-	    {
-	      angPts.resize(nang);
-	      angWts.resize(nang);
-	      ccdl::LebedevRule( nang, angPts.data(), angWts.data() );
-	    };
+	  int nang = GetNumAngPts(iat,irad);
 	  int o = GetRadialShellBegin(iat,irad);
 	  double const radius = GetAtomParam(iat).GetRadialPt(irad);
 	  double const radWt  = GetAtomParam(iat).GetRadialWt(irad);
+	  double * angWts = mAngQuadDB.GetWts(nang)->data();
+	  std::tr1::array<double,3> * angPts = mAngQuadDB.GetPts(nang)->data();
+
 	  for ( int iang=0; iang < nang; ++iang, ++o )
 	    {
 	      mSingleCenterWt[o] = radWt * angWts[iang];
