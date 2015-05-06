@@ -197,6 +197,7 @@ int ccdl::sy::query_dsyev( int const N )
                       &N, &p,
                       &work, &lwork, &info );
   assert( info == 0 );
+  //std::cout << "query_dsyev " << work << "\n";
   return (int)work;
 }
 
@@ -335,12 +336,85 @@ void ccdl::sy::dsyevr( ccdl::di & E, ccdl::ge & U, int const nscr, double * scr 
 }
 
 
+
+
+void ccdl::csy::dsyev( ccdl::di & E, ccdl::ge & U, int const nscr, double * scr ) const
+{
+  int const nf = nfast();
+  for ( int i=0; i<nf*nf; ++i )
+    U[i] = mData[i];
+  int info = 0;
+
+  // std::cout << "ccdl::csy::dsyev " << nf << " " << U.nfast() << " " << U.nslow() << " " << E.nfast() << " " << nscr << " " << std::endl;
+  // for ( int i=0; i<nf*nf; ++i )
+  //   std::cout << "U[" << i << "] = " << U[i] << "\n";
+  // for ( int i=0; i<nf; ++i )
+  //   std::cout << "E[" << i << "] = " << E[i] << "\n";
+  // for ( int i=0; i<nscr; ++i )
+  //   std::cout << "scr["<<i<<"] = " << scr[i] << "\n";
+  //int NSCR=10000;
+  //std::vector<double> SCR(NSCR,0.);
+  FORTRAN_NAME(dsyev)("V","U", &nf, U.data(),
+                      &nf, E.data(),
+		      scr, &nscr, &info );
+  //SCR, &NSCR, &info );
+  assert( info == 0 );
+}
+
+void ccdl::csy::dsyevd( ccdl::di & E, ccdl::ge & U, int const nscr, double * scr ) const
+{
+  int const nf = nfast();
+  for ( int i=0; i<nf*nf; ++i )
+    U[i] = mData[i];
+  int info = 0;
+  int liwork= ccdl::sy::iquery_dsyevd(nf);
+  std::vector<int> iwork(liwork);
+  FORTRAN_NAME(dsyevd)("V","U",
+                       &nf,U.data(),
+                       &nf,E.data(),
+                       scr, &nscr,
+                       iwork.data(), &liwork,
+                       &info );
+  assert( info == 0 );
+}
+
+void ccdl::csy::dsyevr( ccdl::di & E, ccdl::ge & U, int const nscr, double * scr ) const
+{
+  int const nf = nfast();
+  int const N2 = nf*nf;
+  double * T = scr;
+  int const lwork = nscr-N2;
+  double * work = scr + N2;
+  for ( int i=0; i<N2; ++i )
+    T[i] = mData[i];
+  int info,M;
+  int const liwork = ccdl::sy::iquery_dsyevr(nf);
+  std::vector<int> isuppz(liwork);
+  int * iwork = isuppz.data() + 2*nf;
+  const double VL = 0., VU = 0.;
+  const int IL = 1, IU = nf;
+  const double ABSTOL = FORTRAN_NAME(dlamch)("Safe minimum");
+  FORTRAN_NAME(dsyevr)("V","A","U",
+                       &nf,T,&nf,
+                       &VL,&VU,
+                       &IL,&IU,
+                       &ABSTOL,
+                       &M,E.data(),U.data(),&nf,
+                       isuppz.data(),
+                       work,&lwork,
+                       iwork,&liwork,
+                       &info );
+  assert( info == 0 );
+}
+
+
+
 #define EVMAX 70
 #define EVRMAX 440
 
 int ccdl::sy::query_eigen( int const N )
 {
-  int n;
+  int n = 1;
   if ( N < EVMAX )
     { n = ccdl::sy::query_dsyev(N); }
   else if ( N < EVRMAX )
@@ -361,6 +435,28 @@ void ccdl::sy::eigen( ccdl::di & E, ccdl::ge & U, int const nscr, double * scr )
 }
 
 void ccdl::sy::eigen( ccdl::di & E, ccdl::ge & U ) const
+{
+  if ( nfast() < EVMAX )
+    { dsyev(E,U); }
+  else if ( nfast() < EVRMAX )
+    { dsyevr(E,U); }
+  else
+    { dsyevd(E,U); };
+}
+
+
+
+void ccdl::csy::eigen( ccdl::di & E, ccdl::ge & U, int const nscr, double * scr ) const
+{
+  if ( nfast() < EVMAX )
+    { dsyev(E,U,nscr,scr); }
+  else if ( nfast() < EVRMAX )
+    { dsyevr(E,U,nscr,scr); }
+  else
+    { dsyevd(E,U,nscr,scr); };
+}
+
+void ccdl::csy::eigen( ccdl::di & E, ccdl::ge & U ) const
 {
   if ( nfast() < EVMAX )
     { dsyev(E,U); }

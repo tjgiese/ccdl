@@ -233,6 +233,22 @@ namespace ccdl
   }
 
   template<class MA,class MB>
+  ccdl::ge & ge_eq_ge_dot_di( ccdl::ge & a, MA const & A, MB const & B )
+  {
+    assert( a.nfast() == A.nfast() );
+    assert( a.nslow() == A.nslow() );
+    assert( a.nslow() == B.nslow() );
+    assert( A.nslow() == B.nfast() );
+    int const ns = a.nslow();
+    int const nf = a.nfast();
+    int const Bf = B.nfast();
+    for ( int j=0; j<ns; ++j )
+      for ( int i=0; i<nf; ++i )
+	a[i+j*nf] = A[i+j*Bf] * B[j];
+    return a;
+  }
+
+  template<class MA,class MB>
   ccdl::ge & ge_eq_gt_dot_di( ccdl::ge & a, MA const & A, MB const & B )
   {
     assert( a.nfast() == A.nslow() );
@@ -891,6 +907,26 @@ inline ccdl::ge & ccdl::ge::dot( ccdl::cgt const A, ccdl::di const B )
 }
 
 
+
+inline ccdl::ge & ccdl::ge::dot( ccdl::cge const A, ccdl::cdi const B )
+{
+  return ccdl::ge_eq_ge_dot_di(*this,A,B);
+}
+inline ccdl::ge & ccdl::ge::dot( ccdl::cge const A, ccdl::di const B )
+{
+  return ccdl::ge_eq_ge_dot_di(*this,A,B);
+}
+
+inline ccdl::ge & ccdl::ge::dot( ccdl::ge const A, ccdl::cdi const B )
+{
+  return ccdl::ge_eq_ge_dot_di(*this,A,B);
+}
+inline ccdl::ge & ccdl::ge::dot( ccdl::ge const A, ccdl::di const B )
+{
+  return ccdl::ge_eq_ge_dot_di(*this,A,B);
+}
+
+
 inline int ccdl::ge::query_svd_inverse( int const M, int const N )
 {
   return M*M + std::min(M,N) + N*N + ccdl::ge::query_svd(M,N);
@@ -908,6 +944,10 @@ inline ccdl::cge::cge( int m, int n, double const * d )
 inline ccdl::cge::cge( ccdl::ge const & a )
   : ccdl::base::const_matrix(a.nfast(),a.nslow(),a.data())
 {
+}
+inline ccdl::cgt ccdl::cge::t() const
+{
+  return ccdl::cgt( nfast(), nslow(), data() );
 }
 //////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////
@@ -1017,6 +1057,11 @@ inline ccdl::sy & ccdl::sy::svd_inverse( double const tol )
   std::vector<double> scr( ccdl::sy::query_svd_inverse(nfast()) );
   return svd_inverse(tol,scr.size(),scr.data());
 }
+
+
+
+
+
 inline int ccdl::sy::query_svd( int const N )
 {
   return ccdl::ge::query_svd(N,N);
@@ -1064,6 +1109,36 @@ inline ccdl::csy::csy( ccdl::sy const & a )
   : ccdl::base::const_matrix(a.nfast(),a.nslow(),a.data())
 {
 }
+
+
+
+inline void ccdl::csy::svd( ccdl::ge & U, ccdl::di & w, ccdl::ge & VT, int const nscr, double * scr ) const
+{
+  ccdl::svd_driver(*this,U,w,VT,nscr,scr);
+}
+inline void ccdl::csy::svd( ccdl::ge & U, ccdl::di & w, ccdl::ge & VT ) const
+{
+  std::vector<double> scr(ccdl::sy::query_svd(nfast()));
+  ccdl::svd_driver(*this,U,w,VT,scr.size(),scr.data());
+}
+
+inline void ccdl::csy::dsyev( ccdl::di & E, ccdl::ge & U ) const
+{
+  std::vector<double> scr( ccdl::sy::query_dsyev(nfast()) );
+  dsyev(E,U,scr.size(),scr.data());
+}
+inline void ccdl::csy::dsyevd( ccdl::di & E, ccdl::ge & U ) const
+{
+  std::vector<double> scr( ccdl::sy::query_dsyevd(nfast()) );
+  dsyevd(E,U,scr.size(),scr.data());
+}
+inline void ccdl::csy::dsyevr( ccdl::di & E, ccdl::ge & U ) const
+{
+  std::vector<double> scr( ccdl::sy::query_dsyevr(nfast()) );
+  dsyevr(E,U,scr.size(),scr.data());
+}
+
+
 //////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////

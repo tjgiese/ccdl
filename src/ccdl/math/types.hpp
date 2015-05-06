@@ -408,6 +408,13 @@ namespace ccdl
     ccdl::ge & dot( ccdl::cgt const A, ccdl::cdi const B );
     ccdl::ge & dot( ccdl::cgt const A, ccdl::di  const B );
 
+
+    ccdl::ge & dot( ccdl::cge const A, ccdl::cdi const B );
+    ccdl::ge & dot( ccdl::cge const A, ccdl::di  const B );
+    ccdl::ge & dot( ccdl::ge const A, ccdl::cdi const B );
+    ccdl::ge & dot( ccdl::ge const A, ccdl::di  const B );
+
+
     ccdl::ge & dot( ccdl::cge const A, ccdl::cge const B );
     ccdl::ge & dot( ccdl::ge  const A, ccdl::cge const B );
     ccdl::ge & dot( ccdl::cge const A, ccdl::ge  const B );
@@ -494,6 +501,7 @@ namespace ccdl
   public:    
     cge( int m, int n, double const * d );
     cge( ccdl::ge const & a );
+    ccdl::cgt t() const;
   };
 }
 
@@ -603,6 +611,21 @@ namespace ccdl
     csy( int m, int n, std::vector<double> const & d );
     csy( ccdl::sy const & a );
     ccdl::cge ge() const;
+
+
+
+    void svd( ccdl::ge & U, ccdl::di & w, ccdl::ge & VT, int const nscr, double * scr ) const;
+    void svd( ccdl::ge & U, ccdl::di & w, ccdl::ge & VT ) const;
+
+    void dsyev( ccdl::di & E, ccdl::ge & U, int const nscr, double * scr ) const;
+    void dsyevd( ccdl::di & E, ccdl::ge & U, int const nscr, double * scr ) const;
+    void dsyevr( ccdl::di & E, ccdl::ge & U, int const nscr, double * scr ) const;
+    void dsyev( ccdl::di & E, ccdl::ge & U ) const;
+    void dsyevd( ccdl::di & E, ccdl::ge & U ) const;
+    void dsyevr( ccdl::di & E, ccdl::ge & U ) const;
+
+    void eigen( ccdl::di & E, ccdl::ge & U, int const nscr, double * scr ) const;
+    void eigen( ccdl::di & E, ccdl::ge & U ) const;
   };
 }
 
