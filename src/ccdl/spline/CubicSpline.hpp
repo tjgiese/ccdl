@@ -25,6 +25,9 @@ namespace ccdl
       bool const lzero,
       bool const rzero );
     
+
+    double const * data() const;
+
     int GetN() const;
 
     double GetLeftX() const;
@@ -105,6 +108,11 @@ namespace ccdl
 
 }
 
+
+inline double const * ccdl::CubicSpline::data() const
+{
+  return mY.data();
+}
 
 
 inline int ccdl::CubicSpline::GetN() const 
