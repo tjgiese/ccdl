@@ -44,8 +44,13 @@ void cspline_tridag
       bet = b[j]-a[j-1]*work[j];
       spldata[1+j*2]=(r[j]-a[j-1]*spldata[1+(j-1)*2])/bet;
     };
-  for ( int j=n; j-->0; )
-    spldata[1+j*2]-=work[j+1]*spldata[1+(j+1)*2];
+  for ( int j=n-1; j-->0; )
+    {
+      // std::cout << "j = " << j << " / " << n << std::endl;
+      // std::cout << "work[ " << j + 1 << " ] = " << work[j+1] << std::endl;
+      // std::cout << "spldata[ " << 1+(j+1)*2 << " ] " << std::endl;
+      spldata[1+j*2]-=work[j+1]*spldata[1+(j+1)*2];
+    };
 }
 
 
