@@ -107,7 +107,25 @@ void ccdl::MolQuad::BuildGrid()
   mAtomOffsets[0] = 0;
   for ( int iat=0; iat < nat; ++iat )
     mAtomOffsets[iat+1] = mAtomOffsets[iat] + GetNumAtomPts(iat);
-  
+
+
+  mNumRadialShells = 0;
+  for ( int iat=0; iat < nat; ++iat )
+    mNumRadialShells += GetNumRadialShells( iat );
+  mShellOffsets.resize( mNumRadialShells + 1 );
+  mShellOwner.resize( mNumRadialShells );
+  mShellOffsets[0] = 0;
+  int shlidx = 0;
+  for ( int iat=0; iat < nat; ++iat )
+    {
+      int n = GetNumRadialShells( iat );
+      for ( int ishl = 0; ishl < n; ++ishl, ++shlidx )
+	{
+	  mShellOffsets[shlidx+1] = mShellOffsets[shlidx] + GetNumAngPts( iat, ishl );
+	  mShellOwner[shlidx] = iat;
+	};
+    };
+
   mNumPts = mAtomOffsets.back();
   mSingleCenterWt.resize( GetNumPts() );
   mPartitionWt.resize( GetNumPts() );

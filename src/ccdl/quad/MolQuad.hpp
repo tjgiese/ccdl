@@ -107,6 +107,8 @@ namespace ccdl
    
     int GetNumAtoms() const { return mNumAtoms; }
     int GetNumPts() const { return mNumPts; }
+    int GetNumRadialShells() const { return mNumRadialShells; }
+
     int GetNumAtomPts( int const iat ) const { return GetAtomParam(iat).GetNumPts(); }
     int GetNumRadialShells( int const iat ) const { return GetAtomParam(iat).GetNumRadialShells(); }
     int GetNumAngPts( int const iat, int const irad ) const { return GetAtomParam(iat).GetNumAngPts(irad); }
@@ -116,7 +118,9 @@ namespace ccdl
 
     int GetRadialShellBegin( int const iat, int const irad ) const { return mAtomOffsets[iat] + GetAtomParam(iat).GetRadialShellBegin(irad); }
     int GetRadialShellEnd( int const iat, int const irad ) const { return mAtomOffsets[iat] + GetAtomParam(iat).GetRadialShellEnd(irad); }
-
+    int GetRadialShellBegin( int const irad ) const { return mShellOffsets[irad]; }
+    int GetRadialShellEnd( int const irad ) const { return mShellOffsets[irad+1]; }
+    int GetAtomOwningShell( int const irad ) const { return mShellOwner[irad]; }
 
     double const * GetQuadCrdPtr( int const ipt ) const { return mQuadCrd.data() + ipt*3; }
     double const * GetAtomCrdPtr( int const iat ) const { return mAtomCrd.data() + iat*3; }
@@ -147,7 +151,7 @@ namespace ccdl
     std::vector<double> mPartitionWt;
     std::vector<double> mTotalWt;
     std::vector<double> mQuadCrd;
-    int mNumPts;
+
     ccdl::AngularQuadDatabase mAngQuadDB;
 
     void BuildGrid();
@@ -160,8 +164,11 @@ namespace ccdl
     std::vector< std::tr1::shared_ptr< ccdl::AtomQuadParam > > mAtomParam;
     std::vector<double> mAtomCrd;
     std::vector<int> mAtomOffsets;
+    std::vector<int> mShellOffsets;
+    std::vector<int> mShellOwner;
     int mNumAtoms;
-
+    int mNumPts;
+    int mNumRadialShells;
 
   };
 
