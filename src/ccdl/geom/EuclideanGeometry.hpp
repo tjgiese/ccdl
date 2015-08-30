@@ -22,17 +22,19 @@ namespace ccdl
   double CosineAngle( double const * ca, 
 		      double const * cb, 
 		      double const * cc,
-		      double * ga, 
-		      double * gb, 
-		      double * gc );
+		      double * G );
 
   double Bond( double const * ca, 
 	       double const * cb );
 
   double Bond( double const * ca, 
 	       double const * cb, 
-	       double * ga, 
-	       double * gb );
+	       double * G );
+
+  double Bond( double const * ca, 
+	       double const * cb, 
+	       double * G,
+	       double * H );
 
   double Angle( double const * ca, 
 		double const * cb, 
@@ -41,9 +43,13 @@ namespace ccdl
   double Angle( double const * ca, 
 		double const * cb, 
 		double const * cc,
-		double * ga, 
-		double * gb, 
-		double * gc );
+		double * G );
+
+  double Angle( double const * ca, 
+		double const * cb, 
+		double const * cc,
+		double * G,
+		double * H );
 
   double DihedralAngle( double const * ca, 
 			double const * cb, 
@@ -56,10 +62,15 @@ namespace ccdl
 			double const * cc, 
 			double const * cd, 
 			bool & linear,
-			double * ga, 
-			double * gb, 
-			double * gc, 
-			double * gd );
+			double * G );
+
+  double DihedralAngle( double const * ca, 
+			double const * cb, 
+			double const * cc, 
+			double const * cd, 
+			bool & linear,
+			double * G,
+			double * H );
 
 }
 

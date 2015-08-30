@@ -3,5 +3,6 @@
 
 #include "EuclideanGeometry.hpp"
 #include "RotationMatrix.hpp"
+#include "InertiaTensor.hpp"
 
 #endif
