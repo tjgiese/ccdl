@@ -4,5 +4,6 @@
 #include "EuclideanGeometry.hpp"
 #include "RotationMatrix.hpp"
 #include "InertiaTensor.hpp"
-
+#include "AutoBondFrag.hpp"
+#include "RedundantIC.hpp"
 #endif

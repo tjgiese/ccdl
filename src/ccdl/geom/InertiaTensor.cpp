@@ -223,6 +223,7 @@ void ccdl::InertiaMomentsAroundOrientation( int const nat, double const * m, dou
 	};
     };
   double I[9];
+  std::fill(I,I+9,0.);
   for ( int a=0; a<nat; ++a )
     {
       double x = c[0+a*3]-Rcom[0];
@@ -377,6 +378,7 @@ void ccdl::InertiaMomentsAroundOrientation( int const nat, double const * m, dou
 	}
     };
   double I[9];
+  std::fill(I,I+9,0.);
   for ( int a=0; a<nat; ++a )
     {
       double x = c[0+a*3]-Rcom[0];

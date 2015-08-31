@@ -254,17 +254,17 @@ inline double ccdl::SecondIsotopeMass( unsigned int const Z )
 
 inline double ccdl::CovalentRadius( unsigned int const Z )
 {
-  return ccdl::PeriodicTable::CovalentRadiusData[Z%100] * ccdl::ANGSTROM;
+  return ccdl::PeriodicTable::CovalentRadiusData[Z%100] * ccdl::AU_PER_ANGSTROM;
 }
 
 inline double ccdl::vdWRadius( unsigned int const Z )
 {
-  return ccdl::PeriodicTable::vdWRadiusData[Z%100] * ccdl::ANGSTROM;
+  return ccdl::PeriodicTable::vdWRadiusData[Z%100] * ccdl::AU_PER_ANGSTROM;
 }
 
 inline double ccdl::BraggSlaterRadius( unsigned int const Z )
 {
-  return ccdl::PeriodicTable::BraggSlaterRadiusData[Z%100] * ccdl::ANGSTROM;
+  return ccdl::PeriodicTable::BraggSlaterRadiusData[Z%100] * ccdl::AU_PER_ANGSTROM;
 }
 
 inline double ccdl::Electronegativity( unsigned int const Z )
