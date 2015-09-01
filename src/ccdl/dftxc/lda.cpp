@@ -5,8 +5,8 @@
 
 
 void uks_xf_lda_spw92
-( double const * pa, double const * pb,
-  double * F )
+( double const *__restrict__ pa, double const *__restrict__ pb,
+  double *__restrict__ F )
 {
 
   for ( int i=0; i<11; ++i ) F[i] = 0.;
@@ -47,8 +47,8 @@ void uks_xf_lda_spw92
 
 
 void uks_cf_lda_spw92
-( double const * pa, double const * pb,
-  double * F )
+( double const *__restrict__ pa, double const *__restrict__ pb,
+  double *__restrict__ F )
 {
   for ( int i=0; i<11; ++i ) F[i] = 0.;
   double const p = pa[0]+pb[0];
@@ -292,9 +292,10 @@ void uks_xcf_lda_spw92_potential( double const * pa, double const * pb, double *
 
 
 
-void rks_xcf_lda_spw92_potential( double const * pa, double * F )
+void rks_xcf_lda_spw92_potential( double const *__restrict__ pa, double *__restrict__ F )
 {
-  for ( int i=0; i<11; ++i ) F[i] = 0.;
+  //for ( int i=0; i<11; ++i ) F[i] = 0.;
+  std::fill( F, F+11, 0. );
 
   double const mpa = std::max( pa[0], 0. );
   double const p = 2.*mpa;
