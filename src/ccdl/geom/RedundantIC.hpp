@@ -25,7 +25,7 @@ namespace ccdl
     virtual void CptHessian( int const nat, double const * c, double * H ) const =0;
 
     virtual double CptDifference( double const x1, double const x0 ) const =0;
-
+    virtual double MoveValueToValidRange( double x ) const =0;
     virtual std::string Print() const =0;
 
     double CptConstraintDelta( int const nat, double const * c ) const;
@@ -53,6 +53,7 @@ namespace ccdl
     virtual void CptWilson( int const nat, double const * c, double * B ) const;
     virtual void CptHessian( int const nat, double const * c, double * B ) const;
     virtual double CptDifference( double const x1, double const x0 ) const;
+    virtual double MoveValueToValidRange( double x ) const;
     int i,j;
   };
 
@@ -71,6 +72,7 @@ namespace ccdl
     virtual void CptWilson( int const nat, double const * c, double * B ) const;
     virtual void CptHessian( int const nat, double const * c, double * B ) const;
     virtual double CptDifference( double const x1, double const x0 ) const;
+    virtual double MoveValueToValidRange( double x ) const;
     int i,j,k;
   };
 
@@ -89,6 +91,7 @@ namespace ccdl
     virtual void CptWilson( int const nat, double const * c, double * B ) const;
     virtual void CptHessian( int const nat, double const * c, double * B ) const;
     virtual double CptDifference( double const x1, double const x0 ) const;
+    virtual double MoveValueToValidRange( double x ) const;
     int i,j,k,l;
   };
 
@@ -98,11 +101,31 @@ namespace ccdl
   public:
 
     RedundantIC( int const nat, int const * z, double const * crd, bool merge_fragments = true );
+
     void reset( int const nat, int const * z, double const * crd, bool merge_fragments = true );
+
+
     void FreezeBond( int i, int j, double const v );
+    void FreezeAngle( int i, int j, int k, double const v );
+    void FreezeDihedral( int i, int j, int k, int l, double const v );
 
     void PrintReport( std::ostream & cout );
 
+    int  GetNumInternalCrds() const { return qs.size(); }
+
+    void DisplaceByDeltaQ( double * dq, double * crd0, double const TOL=1.e-6 );
+
+
+
+    void CptInternalCrds( double const * crd, double * q );
+
+    void CptTransformData( double const * crd, double * B, double * G, double * Ginv );
+
+    int  GetConstraintMask( double * C );
+
+    void CptProjector( double const * G, double const * Ginv, double * P );
+
+    int nat;
     std::vector< ccdl::pIC > qs;
   };
 
