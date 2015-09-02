@@ -121,6 +121,7 @@ namespace ccdl
     void DisplaceByDeltaQ( double * dq, double * crd0, double const TOL=1.e-6 );
 
 
+    void GrdAndHesTransform( double const * crd, double const * cg, double const * ch, double * qg, double * qh );
 
     void CptInternalCrds( double const * crd, double * q );
 

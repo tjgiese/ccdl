@@ -5,6 +5,7 @@
 #include "../bmath.hpp"
 #include <sstream>
 #include <iomanip>
+#include <cstdio>
 
 void ccdl::InternalCrd::Freeze( double const x ) 
 {  
@@ -690,166 +691,53 @@ void ccdl::RedundantIC::DisplaceByDeltaQ
 
 
 
- /*
-void ccdl::RedundantIC::DisplaceByDeltaQ
-( double * dq, double * crd0, double const TOL )
+
+void ccdl::RedundantIC::GrdAndHesTransform
+( double const *__restrict__ crd, 
+  double const *__restrict__ cg, 
+  double const *__restrict__ ch, 
+  double *__restrict__ qg, 
+  double *__restrict__ qh )
 {
-  int const nat3 = nat*3;
+  int ncg = nat*3;
+  int nch = ncg*ncg;
+  int nq  = qs.size();
+  int nqh = nq*nq;
 
-  std::vector<double> new_crd( nat3, 0. );
-  double *__restrict__ crd1 = new_crd.data();
+  int tsize = std::max( nq*nq, ncg*nq );
+  int hsize = std::max( nch, nq*ncg );
+  std::vector<double> Bmat(ncg*nq,0.),BmatGinv(tsize,0.),Ginvmat(nq*nq,0.);
+  std::vector<double> Hxmat(ch,ch+nch),Htmat(hsize,0.);
+  double *__restrict__ B      = Bmat.data();
+  double *__restrict__ BGinv  = BmatGinv.data();
+  double *__restrict__ Ginv   = Ginvmat.data();
+  double *__restrict__ Hx     = Hxmat.data();
+  double *__restrict__ Ht     = Htmat.data();
+  CptTransformData( crd, B, BGinv, Ginv );
 
-  int const nq = GetNumInternalCrds();
-  std::vector<double> old_q(nq,0.), new_q(nq,0.), tmp_q(nq,0.), del_q(nq,0.);
-  double *__restrict__ q0  = old_q.data();
-  double *__restrict__ q1  = new_q.data();
-  double *__restrict__ qt  = tmp_q.data();
-  double *__restrict__ ddq = del_q.data();
-  
-  std::vector<double> Bmat(nat3*nq,0.), Gmat(nq*nq,0.), Ginvmat(nq*nq,0.);
-  double *__restrict__ B = Bmat.data();
-  double *__restrict__ G = Gmat.data();
-  double *__restrict__ Ginv = Ginvmat.data();
+  std::vector<double> P(nq*nq,0.);
+  //int ncon = GetConstraintMask( C.data() );
+  CptProjector( BGinv, Ginv, P.data() );
 
-  CptInternalCrds( crd0, q0 );
-
-  double dqnorm = 0.;
-  for ( int i=0; i<nq; ++i ) dqnorm += dq[i]*dq[i];
-  if ( dqnorm > 1.e-30 )
+  // Eq (3)
+  ccdl::ge_dot_sy( ncg, nq, B, nq, nq, Ginv, BGinv );
+  ccdl::gt_dot_v( ncg, nq, BGinv, cg, qg );
+  // Eq (6)
+  for ( int q=0; q<nq; ++q )
     {
-      for ( int i=0; i<nq; ++i )
-	{
-	  double final = qs[i]->MoveValueToValidRange( dq[i]+q0[i] );
-	  dq[i] = qs[i]->CptDifference( final, q0[i] );
-	  std::printf("final %20.10f\n",final*180./ccdl::PI);
-	};
-      for ( int iter=0; iter < 30; ++iter )
-	{
-	  std::printf("dq  ");
-	  for ( int i=0; i<nq; ++i )
-	    std::printf("%14.6e",dq[i]*180/ccdl::PI);
-	  std::printf("\n");
-
-	  CptTransformData( crd0, B, G, Ginv );
-	  ccdl::sy_dot_v(nq,nq,Ginv,dq,qt);
-	  ccdl::ge_dot_v(nat3,nq,B,qt,crd1);
-
-	  // std::printf("dcrd");
-	  // for ( int i=0; i<nat3; ++i )
-	  //   std::printf("%14.6e",crd1[i]);
-	  // std::printf("\n");
-
-	  double rms = 0.;
-	  for ( int i=0; i<nat3; ++i ) rms += crd1[i]*crd1[i];
-	  rms = std::sqrt(rms/nat3);
-	  for ( int i=0; i<nat3; ++i ) crd1[i] += crd0[i];
-	  CptInternalCrds( crd1, q1 );
-	  for ( int i=0; i<nq; ++i ) 
-	    {
-	      dq[i] -= qs[i]->CptDifference(q1[i],q0[i]);
-	      double final = qs[i]->MoveValueToValidRange( dq[i]+q1[i] );
-	      dq[i]  = qs[i]->CptDifference( final, q1[i] );
-	    }
-
-	  std::copy( q1, q1+nq, q0 );
-	  std::copy( crd1, crd1+nat3, crd0 );
-	  if ( rms < TOL ) break;
-	};
+      qs[q]->CptHessian( nat, crd, Ht );
+      ccdl::axpy( -qg[q], nch, Ht, Hx );
     };
-  std::vector<double> C(nq,0.);
-  int ncon = GetConstraintMask( C.data() );
-  if ( ncon > 0 )
-    {
-      std::fill(dq,dq+nq,0.);
-      for ( int i=0; i<nq; ++i )
-	{
-	  double final = qs[i]->MoveValueToValidRange( qs[i]->GetConstraintValue() );
-	  ddq[i] = C[i] * qs[i]->CptDifference( final, q0[i] );
-	};
+  ccdl::sy_dot_ge( ncg, ncg, Hx, ncg, nq, BGinv, Ht );
+  ccdl::gt_dot_ge( ncg, nq, BGinv, ncg, nq, Ht, qh ); 
 
-      int cnt = 1;
-      dqnorm = 0.;
-      for ( int i=0; i<nq; ++i ) dqnorm += ddq[i]*ddq[i];
-      while ( dqnorm > 0. )
-	{
-	  for ( int i=0; i<nq; ++i ) dq[i]  += ddq[i];
-	  std::fill(ddq,ddq+nq,0.);
-
-	  double oldrms = 1.e+30;
-	  double oldnrm = 0.;
-	  for ( int i=0; i<nq; ++i ) oldnrm += dq[i]*dq[i];
-	  oldnrm = std::sqrt(oldnrm/nq);
-
-	  for ( int iter=0; iter < 300; ++iter )
-	    {
-
-	      
-	      
-	      CptTransformData( crd0, B, G, Ginv );
-	      
-	      ccdl::sy_dot_v(nq,nq,Ginv,dq,qt);
-	      ccdl::ge_dot_v(nat3,nq,B,qt,crd1);
-	      
-	      
-	      double rms = 0.;
-	      for ( int i=0; i<nat3; ++i ) rms += crd1[i]*crd1[i];
-	      rms = std::sqrt(rms/nat3);
-	      
-	      double nrm = 0.;
-	      for ( int i=0; i<nq; ++i ) nrm += dq[i]*dq[i];
-	      nrm = std::sqrt(nrm/nq);
-
-
-	      double final = qs[nq-1]->MoveValueToValidRange( q0[nq-1]+dq[nq-1] );
-	      std::printf("dq  ");
-	      std::printf("%14.6f %14.6f %14.6f %14.6f %20.10f",
-			  q0[nq-1]*180/ccdl::PI,
-			  final*180/ccdl::PI,
-			  dq[nq-1]*180/ccdl::PI,
-			  ddq[nq-1]*180/ccdl::PI,
-			  nrm);
-	      std::printf("\n");
-
-	      
-	      // if ( nrm > oldnrm  )
-	      // 	{
-	      // 	  for ( int i=0; i<nq; ++i ) 
-	      // 	    {
-	      // 	      dq[i] *= 0.5;
-	      // 	      ddq[i] += dq[i];
-
-	      // 	      // ccdl::sy_dot_v(nq,nq,Ginv,dq,qt);
-	      // 	      // ccdl::ge_dot_v(nat3,nq,B,qt,crd1);
-	      // 	      // rms = 0.;
-	      // 	      // for ( int i=0; i<nat3; ++i ) rms += crd1[i]*crd1[i];
-	      // 	      // rms = std::sqrt(rms/nat3);
-	      // 	    };
-	      // 	  //oldrms=rms;
-	      // 	  continue;
-	      // 	}
-	      // else
-	      // 	{
-	      // 	  //oldrms = rms;
-	      // 	};
-	      // //std::printf("ok\n");
-	      // oldrms = rms;
-	      // oldnrm = nrm;
-
-	      for ( int i=0; i<nat3; ++i ) crd1[i] += crd0[i];
-	      CptInternalCrds( crd1, q1 );
-	      for ( int i=0; i<nq; ++i ) 
-		{
-		  dq[i] -= qs[i]->CptDifference(q1[i],q0[i]);
-		  double final = qs[i]->MoveValueToValidRange( dq[i]+q1[i] );
-		  dq[i]  = qs[i]->CptDifference( final, q1[i] );
-		}
-	      std::copy( q1, q1+nq, q0 );
-	      std::copy( crd1, crd1+nat3, crd0 );
-	      if ( rms < TOL ) break;
-	    };
-	  dqnorm = 0.;
-	  for ( int i=0; i<nq; ++i ) dqnorm += ddq[i]*ddq[i];
-	};
-    };
+  // Eq (9)
+  ccdl::sy_dot_v( nq, nq, P.data(), qg, Ht );
+  std::copy( Ht, Ht+nq, qg );
+  ccdl::sy_dot_ge( nq, nq, qh, nq, nq, P.data(), Ht );
+  ccdl::sy_dot_ge( nq, nq, P.data(), nq, nq, Ht, qh );
+  for ( int i=0; i<nq; ++i )
+    P[i+i*nq] -= 1.;
+  for ( int i=0; i<nqh; ++i )
+    qh[i] -= 1000. * P[i];
 }
-*/

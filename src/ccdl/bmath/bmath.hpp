@@ -7,6 +7,8 @@ namespace ccdl
 
   double v_dot_v( int n, double const * A, double const * B );
 
+  void axpy( double const a, int const n, double * x, double * y );
+
   void ge_dot_v( int nfA, int nsA, double const * A, double const * x,double * Ax,
 		 double alpha = 1., double beta  = 0. );
 

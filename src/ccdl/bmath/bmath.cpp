@@ -15,6 +15,12 @@ double ccdl::v_dot_v( int n, double const * A, double const * B )
 }
 
 
+void ccdl::axpy( double const a, int const n, double * x, double * y )
+{
+  int inc=1;
+  FORTRAN_NAME(daxpy)( &n, &a, x, &inc, y, &inc );
+}
+
 
 void ccdl::ge_dot_v
 ( int nfA, int nsA, double const * A, 
