@@ -15,6 +15,7 @@ double ccdl::Bond
   double const * b, 
   double * G )
 {
+  std::fill( G, G+6, 0. );
   double const rab[] = { a[0]-b[0],a[1]-b[1],a[2]-b[2] };
   double const r = std::sqrt( rab[0]*rab[0] + rab[1]*rab[1] + rab[2]*rab[2] );
   for ( std::size_t k=0; k<3; ++k )
@@ -31,6 +32,8 @@ double ccdl::Bond
   double * G,
   double * H )
 {
+  std::fill( G, G+6, 0. );
+  std::fill( H, H+36, 0. );
   double const rab[] = { a[0]-b[0],a[1]-b[1],a[2]-b[2] };
   double const r2 =  rab[0]*rab[0] + rab[1]*rab[1] + rab[2]*rab[2];
   double const r = std::sqrt( r2 );
@@ -90,6 +93,7 @@ double ccdl::CosineAngle
   double const * K,
   double * G )
 {
+  std::fill( G, G+9, 0. );
   double const JI[] = { J[0]-I[0],J[1]-I[1],J[2]-I[2] };
   double const JK[] = { J[0]-K[0],J[1]-K[1],J[2]-K[2] };
   double const Lji = std::sqrt( JI[0]*JI[0] + JI[1]*JI[1] +  JI[2]*JI[2] );
@@ -122,6 +126,9 @@ double ccdl::Angle
   double const * K,
   double * G )
 {
+
+  std::fill( G, G+9, 0. );
+
   double dca[] = {0.,0.,0., 0.,0.,0., 0.,0.,0.};
   double const ca = ccdl::CosineAngle(I,J,K,dca);
   double a = 0.;
@@ -148,6 +155,10 @@ double ccdl::Angle
   double * G,
   double * H )
 {
+
+  std::fill( G, G+9, 0. );
+  std::fill( H, H+81, 0. );
+
   double u[3] = { I[0]-J[0],I[1]-J[1],I[2]-J[2] };
   double Lu = std::sqrt( u[0]*u[0] + u[1]*u[1] + u[2]*u[2] );
   u[0] /= Lu; u[1] /= Lu; u[2] /= Lu; 
@@ -243,11 +254,11 @@ double ccdl::DihedralAngle( double const * Ra, double const * Rb, double const *
       else
 	d = std::acos( x )-ccdl::PI;
 
-      long double BxA[3];
-      ccdl::CrossProduct(B,A,BxA);
-
+      //long double BxA[3];
+      //ccdl::CrossProduct(B,A,BxA);
       //long double BondProj = Rcb[0]*BxA[0] + Rcb[1]*BxA[1] + Rcb[2]*BxA[2];
-      //if ( BondProj > 0.0 ) d = -d;
+      long double BondProj = B[0]*Rba[0]+B[1]*Rba[1]+B[2]*Rba[2];
+      if ( BondProj > 0.0l ) d = -d;
       //d = ccdl::PI - d;
     }
 
@@ -261,6 +272,8 @@ double ccdl::DihedralAngle( double const * Ra, double const * Rb, double const *
   double * dddb = G+3;
   double * dddc = G+6;
   double * dddd = G+9;
+
+  std::fill(G,G+12,0.);
 
   double d = 0.;
 
@@ -287,12 +300,16 @@ double ccdl::DihedralAngle( double const * Ra, double const * Rb, double const *
       // 	d = 0.;
       // else
       // 	d = std::acos( x );
-      if ( x <= -1. ) 
+      if ( x <= -1.l ) 
 	d = 0.;
-      else if ( x >= 1. )
+      else if ( x >= 1.l )
 	d = -ccdl::PI;
       else
 	d = std::acos( x )-ccdl::PI;
+
+      long double BondProj = B[0]*Rba[0]+B[1]*Rba[1]+B[2]*Rba[2];
+      if ( BondProj > 0.0l ) d = -d;
+
 
       long double BxA[3];
       ccdl::CrossProduct(B,A,BxA);
@@ -314,6 +331,7 @@ double ccdl::DihedralAngle( double const * Ra, double const * Rb, double const *
       B[0] *= sclB;
       B[1] *= sclB;
       B[2] *= sclB;
+      //std::printf("x,den,sclA,sclB = %20.10Le %20.10Le %20.10Le %20.10Le\n",x,den,sclA,sclB);
 
       long double RcbxB[3];
       ccdl::CrossProduct(Rcb,B,RcbxB);
@@ -336,6 +354,7 @@ double ccdl::DihedralAngle( double const * Ra, double const * Rb, double const *
 
 double ccdl::DihedralAngle( double const * Ra, double const * Rb, double const * Rc, double const * Rd, bool & linear, double * G, double * H )
 {
+
   double d = 0.;
   linear = true;
   std::fill( G, G+4*3, 0. );
@@ -370,6 +389,9 @@ double ccdl::DihedralAngle( double const * Ra, double const * Rb, double const *
 	d = -ccdl::PI;
       else
 	d = std::acos( x )-ccdl::PI;
+
+      long double BondProj = vXw[0]*u[0]+vXw[1]*u[1]+vXw[2]*u[2];
+      if ( BondProj > 0.0l ) d = -d;
 
       long double tval, tval1, tval2, tval3, tval4;
       for ( int a=0; a<4; ++a )
@@ -441,19 +463,19 @@ double ccdl::DihedralAngle( double const * Ra, double const * Rb, double const *
 		    
 		    if (a==1 && b==1)
 		      tval +=  ZETA(a,0,1)*ZETA(b,1,2) * (j-i) *
-			pow(-0.5, std::abs(j-i)) * (+w[k]*cos_u - u[k]) / (Lu*Lw*sin_u*sin_u);
+			std::pow(-0.5, std::abs(j-i)) * (+w[k]*cos_u - u[k]) / (Lu*Lw*sin_u*sin_u);
 		    
 		    if ((a==3 && b==2) || (a==3 && b==1) || (a==2 && b==2) || (a==2 && b==1))
 		      tval +=  ZETA(a,3,2)*ZETA(b,2,1) * (j-i) *
-			pow(-0.5, std::abs(j-i)) * (-w[k]*cos_v - v[k]) / (Lv*Lw*sin_v*sin_v);
+			std::pow(-0.5, std::abs(j-i)) * (-w[k]*cos_v - v[k]) / (Lv*Lw*sin_v*sin_v);
 		    
 		    if ((a==2 && b==1) || (a==2 && b==0) || (a==1 && b==1) || (a==1 && b==0))
 		      tval +=  ZETA(a,2,1)*ZETA(b,1,0) * (j-i) *
-			pow(-0.5, std::abs(j-i)) * (-w[k]*cos_u + u[k]) / (Lu*Lw*sin_u*sin_u);
+			std::pow(-0.5, std::abs(j-i)) * (-w[k]*cos_u + u[k]) / (Lu*Lw*sin_u*sin_u);
 		    
 		    if (a==2 && b==2)
 		      tval +=  ZETA(a,1,2)*ZETA(b,2,3) * (j-i) *
-			pow(-0.5, std::abs(j-i)) * (+w[k]*cos_v + v[k]) / (Lv*Lw*sin_v*sin_v);
+			std::pow(-0.5, std::abs(j-i)) * (+w[k]*cos_v + v[k]) / (Lv*Lw*sin_v*sin_v);
 		  }
 		H[ (i+a*3) + (j+b*3)*4*3 ] = tval;
 		H[ (j+b*3) + (i+a*3)*4*3 ] = tval;

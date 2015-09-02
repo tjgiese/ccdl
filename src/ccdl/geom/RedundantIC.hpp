@@ -27,6 +27,7 @@ namespace ccdl
     virtual double CptDifference( double const x1, double const x0 ) const =0;
     virtual double MoveValueToValidRange( double x ) const =0;
     virtual std::string Print() const =0;
+    virtual std::string PrintPrettyValue( double a ) const =0;
 
     double CptConstraintDelta( int const nat, double const * c ) const;
     bool IsFrozen() const { return mFrozen; }
@@ -48,6 +49,7 @@ namespace ccdl
     BondT( int const i, int const j ) : InternalCrd(), i(i), j(j) {};
     virtual ~BondT() {};
     virtual std::string Print() const;
+    virtual std::string PrintPrettyValue( double a ) const;
     virtual bool Freeze( ccdl::InternalCrd const * p );
     virtual double CptValue( int const nat, double const * c ) const;
     virtual void CptWilson( int const nat, double const * c, double * B ) const;
@@ -67,6 +69,7 @@ namespace ccdl
     AngleT( int const i, int const j, int const k ) : InternalCrd(), i(i), j(j), k(k) {};
     virtual ~AngleT() {};
     virtual std::string Print() const;
+    virtual std::string PrintPrettyValue( double a ) const;
     virtual double CptValue( int const nat, double const * c ) const;
     virtual bool Freeze( ccdl::InternalCrd const * p );
     virtual void CptWilson( int const nat, double const * c, double * B ) const;
@@ -86,6 +89,7 @@ namespace ccdl
     DihedralT( int const i, int const j, int const k, int const l ) : InternalCrd(), i(i), j(j), k(k), l(l) {};
     virtual ~DihedralT() {};
     virtual std::string Print() const;
+    virtual std::string PrintPrettyValue( double a ) const;
     virtual bool Freeze( ccdl::InternalCrd const * p );
     virtual double CptValue( int const nat, double const * c ) const;
     virtual void CptWilson( int const nat, double const * c, double * B ) const;
@@ -110,6 +114,7 @@ namespace ccdl
     void FreezeDihedral( int i, int j, int k, int l, double const v );
 
     void PrintReport( std::ostream & cout );
+    void PrintReport( std::ostream & cout, double const * crd );
 
     int  GetNumInternalCrds() const { return qs.size(); }
 

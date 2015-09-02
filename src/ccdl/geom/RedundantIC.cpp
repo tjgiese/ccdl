@@ -31,13 +31,25 @@ std::string ccdl::BondT::Print() const
   std::stringstream msg;
   msg << "B " 
       << std::setw(5) << i+1 << " " 
-      << std::setw(5) << j+1;
+      << std::setw(5) << j+1 << " "
+      << std::setw(5) << 0 << " "
+      << std::setw(5) << 0;
   if ( IsFrozen() )
     msg << " F " << std::fixed << std::setprecision(8) 
-	<< std::setw(12) << mConVal;
-  msg << "\n";
+	<< std::setw(13) << mConVal / ccdl::AU_PER_ANGSTROM << " A  ";
+  else
+    msg << " A " << std::setw(13) << " " << "    ";
   return msg.str();
 }
+std::string ccdl::BondT::PrintPrettyValue( double a ) const
+{
+  a /= ccdl::AU_PER_ANGSTROM;
+  std::stringstream msg;
+  msg << std::fixed << std::setprecision(8) 
+      << std::setw(13) << a << " A";
+  return msg.str();
+}
+
 bool ccdl::BondT::Freeze( ccdl::InternalCrd const * q )
 {
   bool ok = false;
@@ -105,13 +117,24 @@ std::string ccdl::AngleT::Print() const
   msg << "A " 
       << std::setw(5) << i+1 << " " 
       << std::setw(5) << j+1 << " "
-      << std::setw(5) << k+1;
+      << std::setw(5) << k+1 << " "
+      << std::setw(5) << 0;
   if ( IsFrozen() )
     msg << " F " << std::fixed << std::setprecision(8) 
-	<< std::setw(12) << mConVal;
-  msg << "\n";
+	<< std::setw(13) << mConVal * 180./ccdl::PI << " deg";
+  else
+    msg << " A " << std::setw(13) << " " << "    ";
   return msg.str();
 }
+std::string ccdl::AngleT::PrintPrettyValue( double a ) const
+{
+  a *= 180./ccdl::PI;
+  std::stringstream msg;
+  msg << std::fixed << std::setprecision(8) 
+      << std::setw(13) << a << " deg";
+  return msg.str();
+}
+
 bool ccdl::AngleT::Freeze( ccdl::InternalCrd const * q )
 {
   bool ok = false;
@@ -202,10 +225,20 @@ std::string ccdl::DihedralT::Print() const
       << std::setw(5) << l+1;
   if ( IsFrozen() )
     msg << " F " << std::fixed << std::setprecision(8) 
-	<< std::setw(12) << mConVal;
-  msg << "\n";
+	<< std::setw(13) << mConVal * 180./ccdl::PI << " deg";
+  else
+    msg << " A " << std::setw(13) << " " << "    ";
   return msg.str();
 }
+std::string ccdl::DihedralT::PrintPrettyValue( double a ) const
+{
+  a *= 180./ccdl::PI;
+  std::stringstream msg;
+  msg << std::fixed << std::setprecision(8) 
+      << std::setw(13) << a << " deg";
+  return msg.str();
+}
+
 double ccdl::DihedralT::CptValue( int const, double const * c ) const
 {
   bool linear = false;
@@ -218,7 +251,7 @@ bool ccdl::DihedralT::Freeze( ccdl::InternalCrd const * q )
   if ( p )
     {
       if ( ( i == p->i and j == p->j and k == p->k and l == p->l ) or
-	   ( l == p->i and k == p->j and j == p->k and i == p->l) )
+	   ( l == p->i and k == p->j and j == p->k and i == p->l ) )
 	{
 	  mFrozen = true;
 	  mConVal = p->GetConstraintValue();
@@ -267,6 +300,8 @@ double ccdl::DihedralT::CptDifference( double const x1, double const x0 ) const
   double dold = d;
   while ( true )
     {
+      //if ( d >  ccdl::PI ) d = ccdl::TWO_PI - d;
+      //if ( d < -ccdl::PI ) d = ccdl::TWO_PI + d;
       if ( d >  ccdl::PI ) d -= ccdl::TWO_PI;
       if ( d < -ccdl::PI ) d += ccdl::TWO_PI;
       if ( d == dold ) break;
@@ -433,7 +468,19 @@ void ccdl::RedundantIC::PrintReport( std::ostream & cout )
   for ( std::vector< ccdl::pIC >::iterator 
 	  q=qs.begin(), qend=qs.end(); 
 	q!=qend; ++q )
-    cout << (*q)->Print();
+    cout << (*q)->Print() << "\n";
+}
+
+
+void ccdl::RedundantIC::PrintReport( std::ostream & cout, double const * crd )
+{
+  for ( std::vector< ccdl::pIC >::iterator 
+	  q=qs.begin(), qend=qs.end(); 
+	q!=qend; ++q )
+    {
+      double a = (*q)->CptValue( nat, crd );
+      cout << (*q)->Print() << " @ " << (*q)->PrintPrettyValue(a) << "\n";
+    };
 }
 
 
@@ -509,6 +556,9 @@ void ccdl::RedundantIC::CptInternalCrds
     q[i] = qs[i]->CptValue( nat, crd );
 }
 
+
+
+
 void ccdl::RedundantIC::DisplaceByDeltaQ
 ( double * dq, double * crd0, double const TOL )
 {
@@ -522,6 +572,139 @@ void ccdl::RedundantIC::DisplaceByDeltaQ
   double *__restrict__ q0 = old_q.data();
   double *__restrict__ q1 = new_q.data();
   double *__restrict__ qt = tmp_q.data();
+  
+  std::vector<double> Bmat(nat3*nq,0.), Gmat(nq*nq,0.), Ginvmat(nq*nq,0.);
+  double *__restrict__ B = Bmat.data();
+  double *__restrict__ G = Gmat.data();
+  double *__restrict__ Ginv = Ginvmat.data();
+
+  std::vector<double> C(nq,0.);
+  int ncon = GetConstraintMask( C.data() );
+
+  CptInternalCrds( crd0, q0 );
+
+  for ( int i=0; i<nq; ++i )
+    {
+      double final = qs[i]->MoveValueToValidRange( dq[i]+q0[i] );
+      if ( C[i] > 0. )
+	final = qs[i]->MoveValueToValidRange( qs[i]->GetConstraintValue() );
+      dq[i] = qs[i]->CptDifference( final, q0[i] );
+    };
+
+  double dqnorm = 0.;
+  for ( int i=0; i<nq; ++i ) dqnorm += dq[i]*dq[i];
+  if ( dqnorm > 1.e-30 )
+    {
+
+      for ( int iter=0; iter < 90; ++iter )
+	{
+	   std::printf("dq  ");
+	   for ( int i=0; i<nq; ++i )
+	     std::printf("%14.6e",dq[i]);
+	   std::printf("\n");
+
+	  CptTransformData( crd0, B, G, Ginv );
+	  ccdl::sy_dot_v(nq,nq,Ginv,dq,qt);
+	  ccdl::ge_dot_v(nat3,nq,B,qt,crd1);
+
+	  double rms = 0.;
+	  for ( int i=0; i<nat3; ++i ) rms += crd1[i]*crd1[i];
+	  rms = std::sqrt(rms/nat3);
+	  for ( int i=0; i<nat3; ++i ) crd1[i] += crd0[i];
+	  CptInternalCrds( crd1, q1 );
+	  for ( int i=0; i<nq; ++i ) 
+	    {
+	      dq[i] -= qs[i]->CptDifference(q1[i],q0[i]);
+	      double final = qs[i]->MoveValueToValidRange( dq[i]+q1[i] );
+	      dq[i]  = qs[i]->CptDifference( final, q1[i] );
+	    }
+
+	  std::copy( q1, q1+nq, q0 );
+	  std::copy( crd1, crd1+nat3, crd0 );
+	  if ( rms < TOL ) break;
+	};
+    };
+
+  if ( ncon > 0 )
+    {
+      
+      for ( int i=0; i<nq; ++i )
+	{
+	  //if ( C[i] < 0.9 ) C[i] = 0.5;
+	  double final = qs[i]->MoveValueToValidRange( qs[i]->GetConstraintValue() );
+	  dq[i] = C[i] * qs[i]->CptDifference( final, q0[i] );
+	};
+      dqnorm = 0.;
+      for ( int i=0; i<nq; ++i ) dqnorm += dq[i]*dq[i];
+
+      //if ( dqnorm > 0.1 )
+      //std::cerr << "A constraint is redundant with an active coordinate in a manner that cannot acheive the desired displacement simultaneously with the constraint.\n";
+	
+      if ( dqnorm > 1.e-30 )
+	for ( int iter=0; iter < 90; ++iter )
+	  {
+
+	    {
+	      double final = qs[nq-1]->MoveValueToValidRange( qs[nq-1]->GetConstraintValue() );
+	      std::printf("dq %3i ",iter);
+	      std::printf("%14.6f %14.6f %14.6f",
+			  q0[nq-1]*180/ccdl::PI,
+			  final*180/ccdl::PI,
+			  dq[nq-1]*180/ccdl::PI);
+	      std::printf("\n");
+	    }
+
+
+	    CptTransformData( crd0, B, G, Ginv );
+
+
+	    ccdl::sy_dot_v(nq,nq,Ginv,dq,qt);
+	    ccdl::ge_dot_v(nat3,nq,B,qt,crd1);
+
+
+	    double rms = 0.;
+	    for ( int i=0; i<nat3; ++i ) rms += crd1[i]*crd1[i];
+	    rms = std::sqrt(rms/nat3);
+	    for ( int i=0; i<nat3; ++i ) crd1[i] += crd0[i];
+	    CptInternalCrds( crd1, q1 );
+
+	    // std::printf("rms %14.10f\n",rms);
+	    // for ( int i=0; i<nq; ++i )
+	    //   std::printf("q1 %3i %20.10f\n",i,q1[i]);
+
+	    for ( int i=0; i<nq; ++i ) 
+	      {
+		dq[i] -= C[i] * qs[i]->CptDifference(q1[i],q0[i]);
+		double final = qs[i]->MoveValueToValidRange( dq[i]+q1[i] );
+		dq[i]  = C[i] * qs[i]->CptDifference( final, q1[i] );
+	      }
+	    std::copy( q1, q1+nq, q0 );
+	    std::copy( crd1, crd1+nat3, crd0 );
+	    if ( rms < TOL ) break;
+	  };
+    };
+}
+
+
+
+
+
+
+ /*
+void ccdl::RedundantIC::DisplaceByDeltaQ
+( double * dq, double * crd0, double const TOL )
+{
+  int const nat3 = nat*3;
+
+  std::vector<double> new_crd( nat3, 0. );
+  double *__restrict__ crd1 = new_crd.data();
+
+  int const nq = GetNumInternalCrds();
+  std::vector<double> old_q(nq,0.), new_q(nq,0.), tmp_q(nq,0.), del_q(nq,0.);
+  double *__restrict__ q0  = old_q.data();
+  double *__restrict__ q1  = new_q.data();
+  double *__restrict__ qt  = tmp_q.data();
+  double *__restrict__ ddq = del_q.data();
   
   std::vector<double> Bmat(nat3*nq,0.), Gmat(nq*nq,0.), Ginvmat(nq*nq,0.);
   double *__restrict__ B = Bmat.data();
@@ -577,67 +760,96 @@ void ccdl::RedundantIC::DisplaceByDeltaQ
   int ncon = GetConstraintMask( C.data() );
   if ( ncon > 0 )
     {
+      std::fill(dq,dq+nq,0.);
       for ( int i=0; i<nq; ++i )
 	{
 	  double final = qs[i]->MoveValueToValidRange( qs[i]->GetConstraintValue() );
-	  dq[i] = C[i] * qs[i]->CptDifference( final, q0[i] );
+	  ddq[i] = C[i] * qs[i]->CptDifference( final, q0[i] );
 	};
+
+      int cnt = 1;
       dqnorm = 0.;
-      for ( int i=0; i<nq; ++i ) dqnorm += dq[i]*dq[i];
-      if ( dqnorm > 1.e-30 )
-	for ( int iter=0; iter < 30; ++iter )
-	  {
-	    CptTransformData( crd0, B, G, Ginv );
+      for ( int i=0; i<nq; ++i ) dqnorm += ddq[i]*ddq[i];
+      while ( dqnorm > 0. )
+	{
+	  for ( int i=0; i<nq; ++i ) dq[i]  += ddq[i];
+	  std::fill(ddq,ddq+nq,0.);
 
-	    // std::printf("\n========= B =========\n");
-	    // for ( int i=0; i<nat3; ++i )
-	    //   {
-	    // 	for ( int j=0; j<nq; ++j )
-	    // 	  std::printf("%9.3f",B[i+j*nat3]);
-	    // 	std::printf("\n");
-	    //   };
-	    // std::printf("\n========= G =========\n");
-	    // for ( int i=0; i<nq; ++i )
-	    //   {
-	    // 	for ( int j=0; j<nq; ++j )
-	    // 	  std::printf("%9.3f",G[i+j*nq]);
-	    // 	std::printf("\n");
-	    //   };
-	    // std::printf("\n======== Ginv =======\n");
-	    // for ( int i=0; i<nq; ++i )
-	    //   {
-	    // 	for ( int j=0; j<nq; ++j )
-	    // 	  std::printf("%9.3f",Ginv[i+j*nq]);
-	    // 	std::printf("\n");
-	    //   };
+	  double oldrms = 1.e+30;
+	  double oldnrm = 0.;
+	  for ( int i=0; i<nq; ++i ) oldnrm += dq[i]*dq[i];
+	  oldnrm = std::sqrt(oldnrm/nq);
 
-	    ccdl::sy_dot_v(nq,nq,Ginv,dq,qt);
-	    ccdl::ge_dot_v(nat3,nq,B,qt,crd1);
+	  for ( int iter=0; iter < 300; ++iter )
+	    {
 
-
-	    // for ( int i=0; i<nat3; ++i )
-	    //   std::printf("crd1 %3i %20.10f\n",i,crd1[i]);
+	      
+	      
+	      CptTransformData( crd0, B, G, Ginv );
+	      
+	      ccdl::sy_dot_v(nq,nq,Ginv,dq,qt);
+	      ccdl::ge_dot_v(nat3,nq,B,qt,crd1);
+	      
+	      
+	      double rms = 0.;
+	      for ( int i=0; i<nat3; ++i ) rms += crd1[i]*crd1[i];
+	      rms = std::sqrt(rms/nat3);
+	      
+	      double nrm = 0.;
+	      for ( int i=0; i<nq; ++i ) nrm += dq[i]*dq[i];
+	      nrm = std::sqrt(nrm/nq);
 
 
-	    double rms = 0.;
-	    for ( int i=0; i<nat3; ++i ) rms += crd1[i]*crd1[i];
-	    rms = std::sqrt(rms/nat3);
-	    for ( int i=0; i<nat3; ++i ) crd1[i] += crd0[i];
-	    CptInternalCrds( crd1, q1 );
+	      double final = qs[nq-1]->MoveValueToValidRange( q0[nq-1]+dq[nq-1] );
+	      std::printf("dq  ");
+	      std::printf("%14.6f %14.6f %14.6f %14.6f %20.10f",
+			  q0[nq-1]*180/ccdl::PI,
+			  final*180/ccdl::PI,
+			  dq[nq-1]*180/ccdl::PI,
+			  ddq[nq-1]*180/ccdl::PI,
+			  nrm);
+	      std::printf("\n");
 
-	    // std::printf("rms %14.10f\n",rms);
-	    // for ( int i=0; i<nq; ++i )
-	    //   std::printf("q1 %3i %20.10f\n",i,q1[i]);
+	      
+	      // if ( nrm > oldnrm  )
+	      // 	{
+	      // 	  for ( int i=0; i<nq; ++i ) 
+	      // 	    {
+	      // 	      dq[i] *= 0.5;
+	      // 	      ddq[i] += dq[i];
 
-	    for ( int i=0; i<nq; ++i ) 
-	      {
-		dq[i] -= qs[i]->CptDifference(q1[i],q0[i]);
-		double final = qs[i]->MoveValueToValidRange( dq[i]+q1[i] );
-		dq[i]  = qs[i]->CptDifference( final, q1[i] );
-	      }
-	    std::copy( q1, q1+nq, q0 );
-	    std::copy( crd1, crd1+nat3, crd0 );
-	    if ( rms < TOL ) break;
-	  };
+	      // 	      // ccdl::sy_dot_v(nq,nq,Ginv,dq,qt);
+	      // 	      // ccdl::ge_dot_v(nat3,nq,B,qt,crd1);
+	      // 	      // rms = 0.;
+	      // 	      // for ( int i=0; i<nat3; ++i ) rms += crd1[i]*crd1[i];
+	      // 	      // rms = std::sqrt(rms/nat3);
+	      // 	    };
+	      // 	  //oldrms=rms;
+	      // 	  continue;
+	      // 	}
+	      // else
+	      // 	{
+	      // 	  //oldrms = rms;
+	      // 	};
+	      // //std::printf("ok\n");
+	      // oldrms = rms;
+	      // oldnrm = nrm;
+
+	      for ( int i=0; i<nat3; ++i ) crd1[i] += crd0[i];
+	      CptInternalCrds( crd1, q1 );
+	      for ( int i=0; i<nq; ++i ) 
+		{
+		  dq[i] -= qs[i]->CptDifference(q1[i],q0[i]);
+		  double final = qs[i]->MoveValueToValidRange( dq[i]+q1[i] );
+		  dq[i]  = qs[i]->CptDifference( final, q1[i] );
+		}
+	      std::copy( q1, q1+nq, q0 );
+	      std::copy( crd1, crd1+nat3, crd0 );
+	      if ( rms < TOL ) break;
+	    };
+	  dqnorm = 0.;
+	  for ( int i=0; i<nq; ++i ) dqnorm += ddq[i]*ddq[i];
+	};
     };
 }
+*/
