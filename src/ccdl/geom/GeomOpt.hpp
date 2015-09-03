@@ -115,7 +115,7 @@ int ccdl::gopt::CptHessian
 
 
 
-
+#include "XyzFile.hpp"
 
 template <class T>
 int ccdl::CartOptMin
@@ -127,15 +127,24 @@ int ccdl::CartOptMin
   std::ostream & cout = *(opts.ostr);
   double maxstep      = opts.maxstep;
 
+  if ( opts.type == ccdl::gopt::TS )
+    {
+      if ( opts.update != ccdl::gopt::PSB and
+	   opts.update != ccdl::gopt::PSBMS )
+	opts.update = ccdl::gopt::PSBMS;
+      opts.calcfc = true;
+    }
+
   int nxc = 3*nat;
   int nxh = nxc*nxc;
   ccdl::gopt::Step step( nxc ), prevstep( nxc );
-  std::vector<double> DGC( nxc, 0. ), DXC( nxc, 0. );
+  std::vector<double> DGC( nxc, 0. ), DXC( nxc, 0. ),EIGVALS( nxc, 0. );
   double *__restrict__ dgc = DGC.data();
   double *__restrict__ dxc = DXC.data();
-
+  double *__restrict__ eigvals = EIGVALS.data();
   double de = 0.;
   std::copy( xc, xc+nxc, step.x.data() );
+
 
   bool CONVERGED = false;
   for ( int iter=0; iter < opts.maxiter; ++iter )
@@ -143,16 +152,24 @@ int ccdl::CartOptMin
       bool cpt_hessian = opts.calcall;
       if ( iter == 0 and opts.calcfc ) 
 	cpt_hessian = true;
+      //if ( iter > 0 and de > 0. ) cpt_hessian = true;
       if ( cpt_hessian ) 
 	ccdl::gopt::CptHessian( nat, step.x.data(), opts.delta,
 				step.h.data(), fcn );
 
+
+      {
+	std::vector<int> z( nat, 6 );
+	ccdl::WriteXyz( std::cout, nat, z.data(), step.x.data() );
+      }
+      
       //-----------------------------------------------------
       step.e = fcn( nat, step.x.data(), step.g.data() );
       //-----------------------------------------------------
       de = step.e - prevstep.e;
       double grms = 0.;
       double xrms = 0.;
+      double xlen = 0.;
       double gmax = -1.e+30;
       double xmax = -1.e+30;
       for ( int a=0; a<nat; ++a )
@@ -167,6 +184,7 @@ int ccdl::CartOptMin
 	      xnrm += dxc[i]*dxc[i];
 	      gnrm += step.g[i]*step.g[i];
 	    };
+	  xlen += xnrm;
 	  xrms += xnrm;
 	  grms += gnrm;
 	  xmax = std::max( xmax, std::sqrt( xnrm ) );
@@ -174,36 +192,53 @@ int ccdl::CartOptMin
 	};
       xrms = std::sqrt( xrms / nxc );
       grms = std::sqrt( grms / nxc );
+      xlen = std::sqrt( xlen );
 
       double ade = std::abs(de);
       double dde = std::abs(de-step.predicted_de);
 
 #define FMTF(a,b) std::fixed      << std::setw(a) << std::setprecision(b)
 #define FMTE(a,b) std::scientific << std::setw(a) << std::setprecision(b)
-#define FMT1(str,a,b) (str) << FMTF(14,8) << (a) << FMTE(11,1) << (b) << ( (a) > (b) ? " F\n" : " T\n" )
-#define FMT2(str,a)   (str) << FMTF(14,8) << (a) << "\n"
+#define FMT1(str,a,b) (str) << FMTF(14,8) << (a) << FMTE(11,1) << (b) << ( std::abs((a)) > (b) ? " F\n" : " T\n" )
+#define FMT2(str,a)   (str) << FMTE(14,4) << (a) << "\n"
+#define FMT3(str,a,b) (str) << FMTE(14,4) << (a) << FMTE(11,1) << (b) << ( std::abs((a)) > (b) ? " F\n" : " T\n" )
 
+      cout << "\n\n";
+      cout << "GEOMOPT ITER " << std::setw(4) << iter << "\n";
+      cout << "GEOMOPT Energy " << FMTF(20,8) << step.e << "\n";
       cout << FMT1("GEOMOPT MAX Force    ",gmax,opts.gmax_tol);
       cout << FMT1("GEOMOPT RMS Force    ",grms,opts.grms_tol);
-      cout << FMT1("GEOMOPT MAX Displ    ",xmax,opts.xmax_tol);
-      cout << FMT1("GEOMOPT RMS Displ    ",xrms,opts.xrms_tol);
-      cout << FMT2("GEOMOPT Predicted dE ",step.predicted_de);
-      cout << FMT1("GEOMOPT Actual dE    ",ade,opts.ener_tol);
-      cout << FMT2("GEOMOPT Pred-Act ddE ",dde);
+      if ( iter > 0 )
+	{
+	  cout << FMT1("GEOMOPT MAX Displ    ",xmax,opts.xmax_tol);
+	  cout << FMT1("GEOMOPT RMS Displ    ",xrms,opts.xrms_tol);
+	  cout << FMT2("GEOMOPT Predicted dE ",step.predicted_de);
+	  cout << FMT3("GEOMOPT Actual dE    ",de,opts.ener_tol);
+	  if ( std::abs( step.predicted_de ) > 1.e-8 )
+	    cout << FMT2("GEOMOPT Act/Pred  dE ",de/step.predicted_de);
+	  else
+	    cout << FMT2("GEOMOPT Act/Pred  dE ",1.234567890123456789);
 
-#undef FMTF
-#undef FMTE
-#undef FMT1
-#undef FMT2
+	  cout << "GEOMOPT Step Length  "
+	       << FMTE(14,4) << xlen
+	       << FMTE(11,1) << maxstep << " max\n";
+	};
 
       CONVERGED = ( gmax <= opts.gmax_tol and
 		    grms <= opts.grms_tol and
 		    xmax <= opts.xmax_tol and
 		    xrms <= opts.xrms_tol and
 		    ade  <= opts.ener_tol );
+      if ( ! CONVERGED )
+	CONVERGED = ( ( gmax < 0.05 * opts.gmax_tol and 
+			ade  < opts.ener_tol ) or
+		      ( gmax < opts.gmax_tol and 
+			ade < 1.e-12 ) );
+
       if ( CONVERGED )
 	{
 	  std::copy( step.x.data(), step.x.data() + nxc, xc );
+	  break;
 	};
 
       // std::printf(" x:");
@@ -216,9 +251,22 @@ int ccdl::CartOptMin
 
       if ( ade > 1.e-30 and iter and opts.varmaxstep )
 	{
-	  double ratio = dde/ade;
-	  if ( ratio < 0.3 ) maxstep *= 1.1;
-	  else if ( ratio > 0.9 ) maxstep /= 1.1;
+	  //double ratio = dde/ade;
+	  if ( std::abs( step.predicted_de ) > 1.e-8 )
+	    {
+	      double ratio = de / step.predicted_de;
+	      if ( ratio > 0.75 and xlen < 1. )
+	        maxstep *= 1.25;
+	      else if ( ratio < 0. and de > 0. and xlen > opts.xmax_tol )
+		maxstep /= 1.3333333333333333333333333333;
+	    }
+	  // double rho = de / step.predicted_de;
+	  // if ( rho > 0.75 and 5./(4. * xlen) > maxstep )
+	  // //if ( rho > 0.75 and 5./4. * xlen > maxstep )
+	  //   maxstep *= 2.;
+	  // else if ( rho < 0.25 )
+	  //   maxstep = 1./(4. * xlen);
+	  // //maxstep = 1./4. * xlen;
 	};
 
 
@@ -266,18 +314,27 @@ int ccdl::CartOptMin
 	case ccdl::gopt::MIN:
 	  steplen = ccdl::gopt::CptDeltaX_TrustRadius
 	    ( nxc, prevstep.h.data(), prevstep.g.data(), 
-	      maxstep, dxc );
+	      maxstep, dxc, eigvals );
 	  break;
 	  
 	case ccdl::gopt::TS: // need to add following options
 	  steplen = ccdl::gopt::CptDeltaX_EigenFollow
 	    ( nxc, prevstep.h.data(), prevstep.g.data(), 
-	      maxstep, dxc );
+	      maxstep, dxc, eigvals );
 	  break;
 	  
 	default:
 	  break;
 	}
+
+      cout << "GEOMOPT EigVals ";
+      int neig = std::min( 5, nxc );
+      for ( int i=0; i<neig; ++i )
+	cout << FMTE(11,2) << eigvals[i];
+      cout << "\n";
+
+      if ( opts.type == ccdl::gopt::TS and eigvals[0] >= -1.e-4 )
+	cout << "WARNING The lowest eigenvalue not suited for a TS search. This won't work.\n";
 
       
       for ( int i=0; i<nxc; ++i ) step.x[i] = prevstep.x[i] + dxc[i];
@@ -291,6 +348,11 @@ int ccdl::CartOptMin
   if ( ! CONVERGED and ! ERROR ) ERROR = 1;
   return ERROR;
 }
+
+#undef FMTF
+#undef FMTE
+#undef FMT1
+#undef FMT2
 
 #endif
 

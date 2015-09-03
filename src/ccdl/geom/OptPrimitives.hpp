@@ -8,11 +8,11 @@ namespace ccdl
 
     double CptDeltaX_TrustRadius
     ( int const n, double const * H, double const * g,
-      double const trust_radius, double * dx );
+      double const trust_radius, double * dx, double * evals );
 
     double CptDeltaX_EigenFollow
     ( int const n, double const * H, double const * g, 
-      double trust_radius, double * dx );
+      double trust_radius, double * dx, double * evals );
 
 
     double PredictEnergyChange

@@ -283,12 +283,12 @@ namespace lpck
 
 double ccdl::gopt::CptDeltaX_TrustRadius
 ( int const n, double const * H, double const * g,
-  double const trust_radius, double * dx )
+  double const trust_radius, double * dx, double * E )
 {
   // computes Eq (22) via Eq (23)-(24)
   double rad2 = trust_radius * trust_radius;
-  std::vector<double> E(n,0.),U(n*n,0.),T(n,0.);
-  lpck::eigen(n,H,E.data(),U.data());
+  std::vector<double> U(n*n,0.),T(n,0.);
+  lpck::eigen(n,H,E,U.data());
 
 
 
@@ -298,7 +298,7 @@ double ccdl::gopt::CptDeltaX_TrustRadius
   dgemv_( "T", &n, &n, &alpha, U.data(), &n, g, &one, &beta, T.data(), &one );
   // T[i]*T[i] == the numerator of Eq (24)
   
-  double lambda_hi = E[0]-1.e-8;
+  double lambda_hi = E[0]-1.e-9;
   if ( lambda_hi > 0. ) lambda_hi = 0.;
   double tau2_hi = 0.;
   for ( int i=0; i<n; ++i ) tau2_hi += std::pow( T[i]/(E[i]-lambda_hi), 2 ); // Eq (24)
@@ -311,6 +311,12 @@ double ccdl::gopt::CptDeltaX_TrustRadius
       double lambda_lo = -5./trust_radius;
       double tau2_lo = 0.;
       for ( int i=0; i<n; ++i ) tau2_lo += std::pow( T[i]/(E[i]-lambda_lo), 2 ); // Eq (24)
+      while ( tau2_lo > rad2 )
+	{
+	  lambda_lo *= 2;
+	  tau2_lo = 0.;
+	  for ( int i=0; i<n; ++i ) tau2_lo += std::pow( T[i]/(E[i]-lambda_lo), 2 ); // Eq (24)
+	}
 
       // initial midpoint of the bisection
       lambda = 0.5*(lambda_hi+lambda_lo);
@@ -319,6 +325,7 @@ double ccdl::gopt::CptDeltaX_TrustRadius
 
       double error = tau2-rad2;
       // bisect until close
+      double dlambda = lambda_hi-lambda_lo;
       while ( std::abs(error) > rad2*1.e-10 )
 	{
 	  if ( tau2 > rad2 )
@@ -329,6 +336,8 @@ double ccdl::gopt::CptDeltaX_TrustRadius
 	  tau2 = 0.;
 	  for ( int i=0; i<n; ++i ) tau2 += std::pow( T[i]/(E[i]-lambda), 2 ); // Eq (24)
 	  error = tau2-rad2;
+	  if ( std::abs(lambda_hi-lambda_lo) == dlambda ) break;
+	  dlambda = std::abs(lambda_hi-lambda_lo);
 	};
     };
 
@@ -348,14 +357,14 @@ double ccdl::gopt::CptDeltaX_TrustRadius
 
 
 
-
+/*
 double ccdl::gopt::CptDeltaX_EigenFollow
-( int const n, double const * H, double const * g, double trust_radius, double * dx )
+( int const n, double const * H, double const * g, double trust_radius, double * dx, double * E )
 {
   // computes Eq (11) from Peng_IsraelJChem_1993_v33_p449
   double rad2 = trust_radius * trust_radius;
-  std::vector<double> E(n,0.),U(n*n,0.),T(n,0.);
-  lpck::eigen(n,H,E.data(),U.data());
+  std::vector<double> U(n*n,0.),T(n,0.);
+  lpck::eigen(n,H,E,U.data());
 
   double alpha=1.;
   double beta =0.;
@@ -378,7 +387,7 @@ double ccdl::gopt::CptDeltaX_EigenFollow
     {
       rad2 -= tau2;
 
-      double lambda_hi = E[1]-1.e-8;
+      double lambda_hi = E[1]-1.e-9;
       if ( lambda_hi > 0. ) lambda_hi = 0.;
       double tau2_hi = 0.;
       for ( int i=1; i<n; ++i ) tau2_hi += std::pow( T[i]/(E[i]-lambda_hi), 2 ); // Eq (24)
@@ -391,6 +400,12 @@ double ccdl::gopt::CptDeltaX_EigenFollow
 	  double lambda_lo = -5./trust_radius;
 	  double tau2_lo = 0.;
 	  for ( int i=1; i<n; ++i ) tau2_lo += std::pow( T[i]/(E[i]-lambda_lo), 2 ); // Eq (24)
+	  while ( tau2_lo > rad2 )
+	    {
+	      lambda_lo *= 2;
+	      tau2_lo = 0.;
+	      for ( int i=0; i<n; ++i ) tau2_lo += std::pow( T[i]/(E[i]-lambda_lo), 2 ); // Eq (24)
+	    }
 
 	  // initial midpoint of the bisection
 	  lambda = 0.5*(lambda_hi+lambda_lo);
@@ -399,8 +414,10 @@ double ccdl::gopt::CptDeltaX_EigenFollow
 
 	  double error = tau2-rad2;
 	  // bisect until close
+	  double dlambda = lambda_hi-lambda_lo;
 	  while ( std::abs(error) > rad2*1.e-10 )
 	    {
+	      //std::printf("t2 r2 %20.10e %20.10e %20.10e\n",tau2,rad2,lambda_hi-lambda_lo);
 	      if ( tau2 > rad2 )
 		lambda_hi = lambda;
 	      else if ( tau2 < rad2 )
@@ -409,6 +426,8 @@ double ccdl::gopt::CptDeltaX_EigenFollow
 	      tau2 = 0.;
 	      for ( int i=1; i<n; ++i ) tau2 += std::pow( T[i]/(E[i]-lambda), 2 ); // Eq (24)
 	      error = tau2-rad2;
+	      if ( std::abs(lambda_hi-lambda_lo) == dlambda ) break;
+	      dlambda = std::abs(lambda_hi-lambda_lo);
 	    };
 	};
 
@@ -429,6 +448,66 @@ double ccdl::gopt::CptDeltaX_EigenFollow
   //std::printf("%20.10e %20.10e\n",tau2,rad2);
   return std::sqrt( tau2 ); // actual step size taken
 }
+*/
+
+ 
+double ccdl::gopt::CptDeltaX_EigenFollow
+( int const n, double const * H, double const * g, 
+  double trust_radius, double * dx, double * E )
+{
+  double zero_tol = 0.;
+  // computes Eq (11) from Peng_IsraelJChem_1993_v33_p449
+  double rad2 = trust_radius * trust_radius;
+  std::vector<double> U(n*n,0.),T(n,0.);
+  lpck::eigen(n,H,E,U.data());
+
+  double alpha=1.;
+  double beta =0.;
+  int one     =1;
+  dgemv_( "T", &n, &n, &alpha, U.data(), &n, g, &one, &beta, T.data(), &one );
+
+  double lambda = 0.;
+  if ( E[0] > zero_tol and 0.5*E[1] > E[0] )
+    {
+      alpha = 1.;
+      lambda = 0.5 * ( E[0] + 0.5*E[1] );
+    }
+  else if ( E[0] > zero_tol )
+    {
+      alpha = (E[1]-E[0])/E[1];
+      lambda = 0.5 * ( E[0] + 0.5*(E[0]+E[1]) );
+    }
+  else
+    {
+      alpha = 1.;
+      lambda = 0.25 * ( E[1]+E[0] );
+    }
+
+  std::fill(dx,dx+n,0.);
+  double tau2 = 0.;
+  for ( int i=0; i<n; ++i )
+    {
+      double xi = 0.;
+      if ( std::abs( E[i]-lambda ) > 1.e-30 )
+	xi = alpha * T[i]/( lambda - E[i] );
+      tau2 += xi*xi;
+    }
+  double scl = 1.;
+  if ( tau2 > rad2 )
+    scl = trust_radius / std::sqrt( tau2 );
+  for ( int i=0; i<n; ++i )
+    {
+      double xi = 0.;
+      if ( std::abs( E[i]-lambda ) > 1.e-30 )
+	xi = scl * alpha * T[i]/( lambda - E[i] );
+      daxpy_( &n, &xi, U.data()+i*n, &one, dx, &one ); // Eq (23)
+    };
+  tau2 = ddot_(&n,dx,&one,dx,&one);
+  //std::printf("%20.10e %20.10e\n",tau2,rad2);
+  return std::sqrt( tau2 ); // actual step size taken
+}
+
+
 
 
 
