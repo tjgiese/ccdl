@@ -149,13 +149,6 @@ int ccdl::CartOptMin
   bool CONVERGED = false;
   for ( int iter=0; iter < opts.maxiter; ++iter )
     {
-      bool cpt_hessian = opts.calcall;
-      if ( iter == 0 and opts.calcfc ) 
-	cpt_hessian = true;
-      //if ( iter > 0 and de > 0. ) cpt_hessian = true;
-      if ( cpt_hessian ) 
-	ccdl::gopt::CptHessian( nat, step.x.data(), opts.delta,
-				step.h.data(), fcn );
 
 
       {
@@ -199,9 +192,9 @@ int ccdl::CartOptMin
 
 #define FMTF(a,b) std::fixed      << std::setw(a) << std::setprecision(b)
 #define FMTE(a,b) std::scientific << std::setw(a) << std::setprecision(b)
-#define FMT1(str,a,b) (str) << FMTF(14,8) << (a) << FMTE(11,1) << (b) << ( std::abs((a)) > (b) ? " F\n" : " T\n" )
+#define FMT1(str,a,b) (str) << FMTF(14,8) << (a) << FMTE(14,4) << (b) << ( std::abs((a)) > (b) ? " F\n" : " T\n" )
 #define FMT2(str,a)   (str) << FMTE(14,4) << (a) << "\n"
-#define FMT3(str,a,b) (str) << FMTE(14,4) << (a) << FMTE(11,1) << (b) << ( std::abs((a)) > (b) ? " F\n" : " T\n" )
+#define FMT3(str,a,b) (str) << FMTE(14,4) << (a) << FMTE(14,4) << (b) << ( std::abs((a)) > (b) ? " F\n" : " T\n" )
 
       cout << "\n\n";
       cout << "GEOMOPT ITER " << std::setw(4) << iter << "\n";
@@ -212,16 +205,16 @@ int ccdl::CartOptMin
 	{
 	  cout << FMT1("GEOMOPT MAX Displ    ",xmax,opts.xmax_tol);
 	  cout << FMT1("GEOMOPT RMS Displ    ",xrms,opts.xrms_tol);
-	  cout << FMT2("GEOMOPT Predicted dE ",step.predicted_de);
+	  //cout << FMT2("GEOMOPT Predicted dE ",step.predicted_de);
 	  cout << FMT3("GEOMOPT Actual dE    ",de,opts.ener_tol);
-	  if ( std::abs( step.predicted_de ) > 1.e-8 )
-	    cout << FMT2("GEOMOPT Act/Pred  dE ",de/step.predicted_de);
-	  else
-	    cout << FMT2("GEOMOPT Act/Pred  dE ",1.234567890123456789);
+	  // if ( std::abs( step.predicted_de ) > 1.e-8 )
+	  //   cout << FMT2("GEOMOPT Act/Pred  dE ",de/step.predicted_de);
+	  // else
+	  //   cout << FMT2("GEOMOPT Act/Pred  dE ",1.234567890123456789);
 
 	  cout << "GEOMOPT Step Length  "
 	       << FMTE(14,4) << xlen
-	       << FMTE(11,1) << maxstep << " max\n";
+	       << FMTE(14,4) << maxstep << " max\n";
 	};
 
       CONVERGED = ( gmax <= opts.gmax_tol and
@@ -234,7 +227,8 @@ int ccdl::CartOptMin
 			ade  < opts.ener_tol ) or
 		      ( gmax < opts.gmax_tol and 
 			ade < 1.e-12 ) );
-
+      if ( ! CONVERGED )
+	CONVERGED = ( gmax < 0.01 * opts.gmax_tol );
       if ( CONVERGED )
 	{
 	  std::copy( step.x.data(), step.x.data() + nxc, xc );
@@ -249,6 +243,7 @@ int ccdl::CartOptMin
       // for ( int i=0; i<n*n; ++i ) std::printf("%9.2e",step.h[i]);
       // std::printf("\n");
 
+      /*
       if ( ade > 1.e-30 and iter and opts.varmaxstep )
 	{
 	  //double ratio = dde/ade;
@@ -268,75 +263,152 @@ int ccdl::CartOptMin
 	  //   maxstep = 1./(4. * xlen);
 	  // //maxstep = 1./4. * xlen;
 	};
+      */
 
+      bool redo = false;
+      {
+	std::vector<double> go(prevstep.g), gn(step.g);
+	double onrm = 0., nnrm = 0., ond = 0.;
+	for ( int i=0; i<nxc; ++i )
+	  {
+	    onrm += go[i]*go[i];
+	    nnrm += gn[i]*gn[i];
+	    ond  += go[i]*gn[i];
+	  };
+	if ( onrm > 1.e-8 and nnrm > 1.e-8 )
+	  ond = ond / std::sqrt( onrm*nnrm );
+	nnrm = std::sqrt(nnrm/nxc);
+	onrm = std::sqrt(onrm/nxc);
+	if ( nnrm > 1.5 * onrm and iter and de > 0. )
+	  {
+	    cout << "GEOMOPT Reject step  " 
+		 << FMTF(14,8) << nnrm 
+		 << FMTF(14,8) << onrm << " treat as line search" << "\n"; 
+	    redo = true;
+	    maxstep /= ( 1.5 * 0.8 + std::min(4.,nnrm/onrm) * 0.2 );
+	  }
+	else if ( nnrm > onrm and iter and de > 0. )
+	  {
+	    cout << "GEOMOPT Reject step  " 
+		 << FMTF(14,8) << nnrm 
+		 << FMTF(14,8) << onrm << " treat as line search" << "\n"; 
+	    redo = true;
+	    maxstep /= 1.5;
+	  }		 
+	else if ( onrm > 1.e-8 and nnrm > 1.e-8 and de <= 0. and ond > 0. )
+	  maxstep *= ( 1. + std::exp(-onrm) * ond );
+	//else if ( de < 0. and iter ) maxstep *= 1.05;
+	else if ( de > 0. and iter ) 
+	  maxstep /= 1.25;
+      }
 
-      prevstep = step;
-
-      switch ( opts.update )
+      bool update_hessian = false;
+      if ( ! redo )
 	{
-	case ccdl::gopt::BFGS:
-	  // MIN SEARCH
-	  ccdl::gopt::UpdateHessian_BFGS
-	    ( nxc, prevstep.h.data(), dgc, dxc, step.h.data() );
-	  break;
+	  bool cpt_hessian = opts.calcall;
+	  if ( iter == 0 and opts.calcfc ) 
+	    cpt_hessian = true;
+	  //if ( iter > 0 and de > 0. ) cpt_hessian = true;
+	  if ( cpt_hessian ) 
+	    {
+	      ccdl::gopt::CptHessian( nat, step.x.data(), opts.delta,
+				      step.h.data(), fcn );
+	      prevstep = step;
+	    }
+	  else
+	    {
+	      prevstep = step;
+	      update_hessian = true;
 
-	case ccdl::gopt::MS:
-	  // MIN SEARCH
-	  ccdl::gopt::UpdateHessian_MS
-	    ( nxc, prevstep.h.data(), dgc, dxc, step.h.data() );
-	  break;
+	      switch ( opts.update )
+		{
+		case ccdl::gopt::BFGS:
+		  // MIN SEARCH
+		  ccdl::gopt::UpdateHessian_BFGS
+		    ( nxc, prevstep.h.data(), dgc, dxc, step.h.data() );
+		  break;
+		  
+		case ccdl::gopt::MS:
+		  // MIN SEARCH
+		  ccdl::gopt::UpdateHessian_MS
+		    ( nxc, prevstep.h.data(), dgc, dxc, step.h.data() );
+		  break;
+		  
+		case ccdl::gopt::BFGSMS:
+		  // MIN SEARCH
+		  ccdl::gopt::UpdateHessian_Bofill_BFGS_MS
+		    ( nxc, prevstep.h.data(), dgc, dxc, step.h.data() );
+		  break;
+		  
+		case ccdl::gopt::PSB:
+		  // TS SEARCH
+		  ccdl::gopt::UpdateHessian_PSB
+		    ( nxc, prevstep.h.data(), dgc, dxc, step.h.data() );
+		  break;
+		  
+		case ccdl::gopt::PSBMS:
+		  // TS SEARCH
+		  ccdl::gopt::UpdateHessian_Bofill_PSB_MS
+		    ( nxc, prevstep.h.data(), dgc, dxc, step.h.data() );
+		  break;
+		  
+		default:
+		  break;
+		}
 
-	case ccdl::gopt::BFGSMS:
-	  // MIN SEARCH
-	  ccdl::gopt::UpdateHessian_Bofill_BFGS_MS
-	    ( nxc, prevstep.h.data(), dgc, dxc, step.h.data() );
-	  break;
 
-	case ccdl::gopt::PSB:
-	  // TS SEARCH
-	  ccdl::gopt::UpdateHessian_PSB
-	    ( nxc, prevstep.h.data(), dgc, dxc, step.h.data() );
-	  break;
+	      // if ( posdef_h and eigvals[0] < -1.e-8 )
+	      // 	{
+	      // 	  redo = true;
+	      // 	  step = prevstep;
+	      // 	  maxstep /= 2.;
+	      // 	};
 
-	case ccdl::gopt::PSBMS:
-	  // TS SEARCH
-	  ccdl::gopt::UpdateHessian_Bofill_PSB_MS
-	    ( nxc, prevstep.h.data(), dgc, dxc, step.h.data() );
-	  break;
-
-	default:
-	  break;
-	}
+	    };
+	};
 
       double steplen = 0.;
-      switch ( opts.type )
+      bool posdef_h = eigvals[0] > -1.e-8 and iter > 1 and opts.calcfc;
+      while ( true )
 	{
-	case ccdl::gopt::MIN:
-	  steplen = ccdl::gopt::CptDeltaX_TrustRadius
-	    ( nxc, prevstep.h.data(), prevstep.g.data(), 
-	      maxstep, dxc, eigvals );
-	  break;
-	  
-	case ccdl::gopt::TS: // need to add following options
-	  steplen = ccdl::gopt::CptDeltaX_EigenFollow
-	    ( nxc, prevstep.h.data(), prevstep.g.data(), 
-	      maxstep, dxc, eigvals );
-	  break;
-	  
-	default:
-	  break;
-	}
+	  switch ( opts.type )
+	    {
+	    case ccdl::gopt::MIN:
+	      steplen = ccdl::gopt::CptDeltaX_TrustRadius
+		( nxc, prevstep.h.data(), prevstep.g.data(), 
+		  maxstep, dxc, eigvals );
+	      break;
+	      
+	    case ccdl::gopt::TS: // need to add following options
+	      steplen = ccdl::gopt::CptDeltaX_EigenFollow
+		( nxc, prevstep.h.data(), prevstep.g.data(), 
+		  maxstep, dxc, eigvals );
+	      break;
+	      
+	    default:
+	      break;
+	    }
+	  if ( ! update_hessian or ! posdef_h ) break;
+	  if ( eigvals[0] >= -1.e-8 ) break;
+	  //cout << "Scaling step because Hessian is no longer positive\n";// << FMTE(12,3) << maxstep * 0.25 << "\n";
+	  //maxstep *= 0.1;
+	  posdef_h = false;
+	  update_hessian = false;
+	  cout << "Recomputing Hessian because it is no longer positive definite\n";
+	  ccdl::gopt::CptHessian( nat, prevstep.x.data(), opts.delta,
+				  prevstep.h.data(), fcn );
+	};
 
-      cout << "GEOMOPT EigVals ";
-      int neig = std::min( 5, nxc );
+      cout << "GEOMOPT Eigv";
+      int neig = std::min( 6, nxc );
       for ( int i=0; i<neig; ++i )
 	cout << FMTE(11,2) << eigvals[i];
       cout << "\n";
 
+
       if ( opts.type == ccdl::gopt::TS and eigvals[0] >= -1.e-4 )
 	cout << "WARNING The lowest eigenvalue not suited for a TS search. This won't work.\n";
 
-      
       for ( int i=0; i<nxc; ++i ) step.x[i] = prevstep.x[i] + dxc[i];
       std::copy( step.x.data(), step.x.data() + nxc, xc );
 

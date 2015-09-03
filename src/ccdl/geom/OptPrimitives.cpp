@@ -285,6 +285,10 @@ double ccdl::gopt::CptDeltaX_TrustRadius
 ( int const n, double const * H, double const * g,
   double const trust_radius, double * dx, double * E )
 {
+
+  // for ( int i=0; i<n; ++i )
+  //   dx[i] = -trust_radius * g[i];
+
   // computes Eq (22) via Eq (23)-(24)
   double rad2 = trust_radius * trust_radius;
   std::vector<double> U(n*n,0.),T(n,0.);
@@ -531,6 +535,8 @@ void ccdl::gopt::UpdateHessian_BFGS( int const n, double const * H, double const
   int one = 1;
   std::copy(H,H+n*n,Hnew);
   double beta = 0, alpha = 1. / ddot_(&n,dx,&one,g,&one);
+  //std::printf("bfgs alpha = %20.10e\n",alpha);
+  //if ( alpha < 1.e+99 ) { std::fprintf(stderr,"BFGS premature exit\n");return;}
   dger_( &n, &n, &alpha, g, &one, g, &one, Hnew, &n ); // Hnew[i+j*n] += alpha*g[i]*g[j]
   alpha = 1.;
   std::vector<double> v(n,0.);
