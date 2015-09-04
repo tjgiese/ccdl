@@ -5,6 +5,7 @@
 #include <iostream>
 #include <iomanip>
 #include <cmath>
+#include "../constants.hpp"
 #include "OptPrimitives.hpp"
 
 namespace ccdl
@@ -52,6 +53,7 @@ namespace ccdl
     bool   calcall;
     int    maxiter;
     double maxstep;
+    double limstep; // variable step cannot exceed this
     bool   varmaxstep;
     int    eigvec;
     double ener_tol;
@@ -91,31 +93,75 @@ int ccdl::gopt::CptHessian
 ( int nat, double * crd, double DEL, double * h, T fcn )
 {
   int n = 3*nat;
-  std::vector<double> ghi(n,0.);
-  std::vector<double> glo(n,0.);
-  for ( int i=0; i<n; ++i )
+  if ( DEL > 0. )
     {
-      crd[i] += DEL;
+      std::vector<double> ghi(n,0.);
+      std::vector<double> glo(n,0.);
+      for ( int i=0; i<n; ++i )
+	{
+	  crd[i] += DEL;
+	  fcn( nat, crd, ghi.data() );
+	  crd[i] -= 2*DEL;
+	  fcn( nat, crd, glo.data() );
+	  crd[i] += DEL;
+	  for ( int j=0; j<n; ++j )
+	    h[j+i*n] = (ghi[j]-glo[j])/(2.*DEL);
+	};
+      for ( int i=0; i<n; ++i )
+	for ( int j=0; j<i; ++j )
+	  {
+	    double avg = 0.5*(h[i+j*n]+h[j+i*n]);
+	    h[i+j*n] = avg;
+	    h[j+i*n] = avg;
+	  };
+    }
+  else
+    {
+      std::vector<double> ghi(n,0.);
       fcn( nat, crd, ghi.data() );
-      crd[i] -= 2*DEL;
-      fcn( nat, crd, glo.data() );
-      crd[i] += DEL;
-      for ( int j=0; j<n; ++j )
-	h[j+i*n] = (ghi[j]-glo[j])/(2.*DEL);
-    };
-  for ( int i=0; i<n; ++i )
-    for ( int j=0; j<i; ++j )
-      {
-	double avg = 0.5*(h[i+j*n]+h[j+i*n]);
-	h[i+j*n] = avg;
-	h[j+i*n] = avg;
-      };
+
+      std::vector<double> glo(n,0.);
+      for ( int i=0; i<n; ++i )
+	{
+	  crd[i] -= DEL;
+	  fcn( nat, crd, glo.data() );
+	  crd[i] += DEL;
+	  for ( int j=0; j<n; ++j )
+	    h[j+i*n] = (ghi[j]-glo[j])/(DEL);
+	};
+      for ( int i=0; i<n; ++i )
+	for ( int j=0; j<i; ++j )
+	  {
+	    double avg = 0.5*(h[i+j*n]+h[j+i*n]);
+	    h[i+j*n] = avg;
+	    h[j+i*n] = avg;
+	  };
+    }
   return 0;
 }
 
 
-
+#include <cstdio>
 #include "XyzFile.hpp"
+
+extern "C"
+{
+  double ddot_(const int *n, double const *dx, const int *incx,
+	       double const *dy, const int *incy);
+}
+namespace ccdl
+{
+  namespace gopt
+  {
+    double ddot( int n, double const * A, double const * B )
+    {
+      int inc=1;
+      return ddot_( &n, A, &inc, B, &inc );
+    }
+  }
+}
+
+
 
 template <class T>
 int ccdl::CartOptMin
@@ -145,6 +191,9 @@ int ccdl::CartOptMin
   double de = 0.;
   std::copy( xc, xc+nxc, step.x.data() );
 
+  //std::vector<double> BTUC( nxc, 0. ); // backtracking direction
+  //double *__restrict__ btuc = BTUC.data();
+  bool backtracking = false;
 
   bool CONVERGED = false;
   for ( int iter=0; iter < opts.maxiter; ++iter )
@@ -267,40 +316,83 @@ int ccdl::CartOptMin
 
       bool redo = false;
       {
-	std::vector<double> go(prevstep.g), gn(step.g);
-	double onrm = 0., nnrm = 0., ond = 0.;
-	for ( int i=0; i<nxc; ++i )
-	  {
-	    onrm += go[i]*go[i];
-	    nnrm += gn[i]*gn[i];
-	    ond  += go[i]*gn[i];
-	  };
-	if ( onrm > 1.e-8 and nnrm > 1.e-8 )
-	  ond = ond / std::sqrt( onrm*nnrm );
-	nnrm = std::sqrt(nnrm/nxc);
-	onrm = std::sqrt(onrm/nxc);
-	if ( nnrm > 1.5 * onrm and iter and de > 0. )
+	double gogn = ccdl::gopt::ddot( nxc, prevstep.g.data(), step.g.data() );
+	double gogo = ccdl::gopt::ddot( nxc, prevstep.g.data(), prevstep.g.data() );
+	double gngn = ccdl::gopt::ddot( nxc, step.g.data(), step.g.data() );
+	double gndx = ccdl::gopt::ddot( nxc, step.g.data(), dxc );
+	double godx = ccdl::gopt::ddot( nxc, prevstep.g.data(), dxc );
+
+	double ugg = 0.;
+	if ( gogo > 1.e-8 and gngn > 1.e-8 )
+	  ugg = gogn / std::sqrt(gogo*gngn);
+	double ogrms = std::sqrt( gogo/nxc );
+	double ngrms = std::sqrt( gngn/nxc );
+
+	double WolfeAlpha = 0.1;
+	double WolfeBeta  = 0.5;
+	double Wolfe1 = WolfeAlpha * gndx;
+	double Wolfe2 = WolfeBeta  * godx;
+	// cout << "GEOMOPT Wolfe dE<g.dx" 
+	//      << FMTF(14,8) << de
+	//      << FMTF(14,8) << Wolfe1 
+	//      << (de<Wolfe1 ? " T" : " F") << "\n"; 
+	// cout << "GEOMOPT Wolfe ndx<odx" 
+	//      << FMTF(14,8) << gndx
+	//      << FMTF(14,8) << Wolfe2
+	//      << (gndx<Wolfe2 ? " T" : " F") << "\n";
+	 
+
+	// if ( gndx > Wolfe2 and de < 0. )
+	//   {
+	//     cout << "GEOMOPT Reject step  Wolfe 2 -- increase trust radius\n";
+	//     redo = true;
+	//     maxstep *= 1.5;
+	//   }
+	// else 
+	  if ( ngrms > 1.5 * ogrms and iter and de > 0. )
 	  {
 	    cout << "GEOMOPT Reject step  " 
-		 << FMTF(14,8) << nnrm 
-		 << FMTF(14,8) << onrm << " treat as line search" << "\n"; 
+		 << FMTF(14,8) << ngrms
+		 << FMTF(14,8) << ogrms << " perform a backtrack" << "\n"; 
 	    redo = true;
-	    maxstep /= ( 1.5 * 0.8 + std::min(4.,nnrm/onrm) * 0.2 );
+	    backtracking = true;
+	    maxstep /= ( 1.5 * 0.8 + std::min(4.,ngrms/ogrms) * 0.2 );
 	  }
-	else if ( nnrm > onrm and iter and de > 0. )
+	else if ( ngrms > ogrms and iter and de > 0. )
 	  {
 	    cout << "GEOMOPT Reject step  " 
-		 << FMTF(14,8) << nnrm 
-		 << FMTF(14,8) << onrm << " treat as line search" << "\n"; 
+		 << FMTF(14,8) << ngrms
+		 << FMTF(14,8) << ogrms << " perform a backtrack" << "\n"; 
 	    redo = true;
+	    backtracking = true;
 	    maxstep /= 1.5;
 	  }		 
-	else if ( onrm > 1.e-8 and nnrm > 1.e-8 and de <= 0. and ond > 0. )
-	  maxstep *= ( 1. + std::exp(-onrm) * ond );
-	//else if ( de < 0. and iter ) maxstep *= 1.05;
-	else if ( de > 0. and iter ) 
-	  maxstep /= 1.25;
+	else if ( ogrms > 1.e-8 and ngrms > 1.e-8 and de <= 0. and ugg > 0. )
+	  {
+	    if ( ! backtracking )
+	      {
+		maxstep *= ( 1. + 0.3*std::exp(-ogrms) * ugg );
+	      }
+	      else
+	      {
+		maxstep /= 1.3; //( 1. + std::exp(-ogrms) * ugg );
+		cout << "GEOMOPT Decreasing step to avoid backtrack path\n";
+	      };
+	    backtracking = false;
+	  }
+	else if ( de > 0. and iter ) //and de > Wolfe1 ) 
+	  {
+	    maxstep /= 1.25;
+	    backtracking = false;
+	  }
+	else
+	  backtracking = false;
+	  //else if ( gndx > Wolfe2 ) maxstep *= 1.001;
       }
+
+
+      maxstep = std::min( maxstep, opts.limstep );
+      //maxstep = std::max( maxstep, 0.001 );
 
       bool update_hessian = false;
       if ( ! redo )
@@ -356,14 +448,6 @@ int ccdl::CartOptMin
 		  break;
 		}
 
-
-	      // if ( posdef_h and eigvals[0] < -1.e-8 )
-	      // 	{
-	      // 	  redo = true;
-	      // 	  step = prevstep;
-	      // 	  maxstep /= 2.;
-	      // 	};
-
 	    };
 	};
 
@@ -388,10 +472,30 @@ int ccdl::CartOptMin
 	    default:
 	      break;
 	    }
+	  {
+	    std::vector<double> t(nxc);
+	    for ( int i=0; i<nxc; ++i ) t[i] = prevstep.x[i] + dxc[i];
+	    double minsep = 1000000.;
+	    for ( int i=1; i<nat; ++i )
+	      for ( int j=0; j<i; ++j )
+		{
+		  double x = t[0+i*3]-t[0+j*3];
+		  double y = t[1+i*3]-t[1+j*3];
+		  double z = t[2+i*3]-t[2+j*3];
+		  double r = std::sqrt( x*x+y*y+z*z );
+		  minsep = std::min( minsep, r );
+		};
+	    if ( minsep < 0.5 * ccdl::AU_PER_ANGSTROM )
+	      {
+		cout << "GEOMOPT Rescaling step to avoid close contact: " 
+		     << FMTF(14,8) << minsep / ccdl::AU_PER_ANGSTROM << " A\n";
+		maxstep /= 2.;
+		continue;
+	      };
+	  }
+	 
 	  if ( ! update_hessian or ! posdef_h ) break;
 	  if ( eigvals[0] >= -1.e-8 ) break;
-	  //cout << "Scaling step because Hessian is no longer positive\n";// << FMTE(12,3) << maxstep * 0.25 << "\n";
-	  //maxstep *= 0.1;
 	  posdef_h = false;
 	  update_hessian = false;
 	  cout << "Recomputing Hessian because it is no longer positive definite\n";

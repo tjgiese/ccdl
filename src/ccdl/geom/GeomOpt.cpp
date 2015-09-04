@@ -20,6 +20,7 @@ ccdl::OptOptions::OptOptions()
     calcall( false ),
     maxiter( 100 ),
     maxstep( 0.5 ),
+    limstep( 1.0 ),
     varmaxstep( true ),
     eigvec( -1 ),
     ener_tol( 1.e-8 ),

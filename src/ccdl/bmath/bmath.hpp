@@ -6,8 +6,11 @@ namespace ccdl
 {
 
   double v_dot_v( int n, double const * A, double const * B );
+  
+  // A[i+j*m] += a*x[i]*y[j]
+  void v_tensor_v( double const a, int const m, double const * x, int const n, double const * y, double * A );
 
-  void axpy( double const a, int const n, double * x, double * y );
+  void axpy( double const a, int const n, double const * x, double * y );
 
   void ge_dot_v( int nfA, int nsA, double const * A, double const * x,double * Ax,
 		 double alpha = 1., double beta  = 0. );

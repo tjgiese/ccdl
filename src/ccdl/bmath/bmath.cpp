@@ -15,7 +15,18 @@ double ccdl::v_dot_v( int n, double const * A, double const * B )
 }
 
 
-void ccdl::axpy( double const a, int const n, double * x, double * y )
+void ccdl::v_tensor_v
+( double const a, 
+  int const m, double const * x, int const n, double const * y, 
+  double * A )
+{
+  int inc=1;
+  FORTRAN_NAME(dger)( &m, &n, &a, x, &inc, y, &inc, A, &m );
+}
+
+
+
+void ccdl::axpy( double const a, int const n, double const * x, double * y )
 {
   int inc=1;
   FORTRAN_NAME(daxpy)( &n, &a, x, &inc, y, &inc );

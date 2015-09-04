@@ -190,8 +190,8 @@ FORTRAN_NAME(dtrsv)(const char *uplo, const char *trans,
 /** \private */
 extern void
 FORTRAN_NAME(dger)(const int *m, const int *n, double const *alpha,
-	       double *x, const int *incx,
-	       double *y, const int *incy,
+	       double const *x, const int *incx,
+	       double const *y, const int *incy,
 	       double *a, const int *lda);
 /* DSYR - perform the symmetric rank 1 operation A := alpha*x*x' + A */
 
