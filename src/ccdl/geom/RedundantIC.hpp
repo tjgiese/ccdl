@@ -115,6 +115,8 @@ namespace ccdl
 
     void PrintReport( std::ostream & cout );
     void PrintReport( std::ostream & cout, double const * crd );
+    void PrintCrd( std::ostream & cout, int i );
+    void PrintPrettyValue( std::ostream & cout, int i, double const * crd );
 
     int  GetNumInternalCrds() const { return qs.size(); }
 

@@ -47,7 +47,7 @@ std::string ccdl::BondT::PrintPrettyValue( double a ) const
   a /= ccdl::AU_PER_ANGSTROM;
   std::stringstream msg;
   msg << std::fixed << std::setprecision(8) 
-      << std::setw(13) << a << " A";
+      << std::setw(13) << a << " A  ";
   return msg.str();
 }
 
@@ -599,10 +599,10 @@ void ccdl::RedundantIC::DisplaceByDeltaQ
 
       for ( int iter=0; iter < 90; ++iter )
 	{
-	   std::printf("dq  ");
-	   for ( int i=0; i<nq; ++i )
-	     std::printf("%14.6e",dq[i]);
-	   std::printf("\n");
+	   // std::printf("dq  ");
+	   // for ( int i=0; i<nq; ++i )
+	   //   std::printf("%14.6e",dq[i]);
+	   // std::printf("\n");
 
 	  CptTransformData( crd0, B, G, Ginv );
 	  ccdl::sy_dot_v(nq,nq,Ginv,dq,qt);
@@ -722,6 +722,9 @@ void ccdl::RedundantIC::GrdAndHesTransform
   // Eq (3)
   ccdl::ge_dot_sy( ncg, nq, B, nq, nq, Ginv, BGinv );
   ccdl::gt_dot_v( ncg, nq, BGinv, cg, qg );
+
+  //for ( int i=0; i<nq; ++i ) std::printf("%14.5e",qg[i]); std::printf("\n");
+
   // Eq (6)
   for ( int q=0; q<nq; ++q )
     {
@@ -734,10 +737,27 @@ void ccdl::RedundantIC::GrdAndHesTransform
   // Eq (9)
   ccdl::sy_dot_v( nq, nq, P.data(), qg, Ht );
   std::copy( Ht, Ht+nq, qg );
+
+  //for ( int i=0; i<nq; ++i ) std::printf("%14.5e",qg[i]); std::printf("\n");
+
   ccdl::sy_dot_ge( nq, nq, qh, nq, nq, P.data(), Ht );
   ccdl::sy_dot_ge( nq, nq, P.data(), nq, nq, Ht, qh );
   for ( int i=0; i<nq; ++i )
     P[i+i*nq] -= 1.;
   for ( int i=0; i<nqh; ++i )
     qh[i] -= 1000. * P[i];
+
+  //std::fill( qh, qh+nqh, 0. ); for ( int i=0; i<nq; ++i ) qh[i+i*nq] = 1.;
 }
+
+
+void ccdl::RedundantIC::PrintCrd( std::ostream & cout, int i )
+{
+  cout << qs[i]->Print();
+} 
+
+void ccdl::RedundantIC::PrintPrettyValue( std::ostream & cout, int i, double const * c )
+{
+  double a = qs[i]->CptValue( nat, c );
+  cout << qs[i]->PrintPrettyValue(a);
+} 
