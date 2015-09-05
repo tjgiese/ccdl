@@ -492,7 +492,7 @@ void ccdl::RedundantIC::CptTransformData
 {
   int const nat3 = 3*nat;
   int const nq = GetNumInternalCrds();
-  std::fill( B, B + nq*nat, 0. );
+  std::fill( B, B + nq*nat3, 0. );
   // Bxq = dq/dx
   for ( int i=0; i<nq; ++i )
     qs[i]->CptWilson( nat, crd, B + i*nat3 );
@@ -694,10 +694,11 @@ void ccdl::RedundantIC::DisplaceByDeltaQ
 
 void ccdl::RedundantIC::GrdAndHesTransform
 ( double const *__restrict__ crd, 
-  double const *__restrict__ cg, 
-  double const *__restrict__ ch, 
+  double *__restrict__ cg, 
+  double *__restrict__ ch, 
   double *__restrict__ qg, 
-  double *__restrict__ qh )
+  double *__restrict__ qh,
+  bool c2q_AND_q2c )
 {
   int ncg = nat*3;
   int nch = ncg*ncg;
@@ -748,6 +749,97 @@ void ccdl::RedundantIC::GrdAndHesTransform
     qh[i] -= 1000. * P[i];
 
   //std::fill( qh, qh+nqh, 0. ); for ( int i=0; i<nq; ++i ) qh[i+i*nq] = 1.;
+
+  if ( c2q_AND_q2c )
+    {
+      // cg = B . qg
+      ccdl::ge_dot_v( ncg, nq, B, qg, cg );
+
+      // ch = B.qh.Bt + B'.qg
+      ccdl::ge_dot_sy( ncg, nq, B,  nq, nq, qh,  Ht );
+      ccdl::ge_dot_gt( ncg, nq, Ht, ncg, nq, B, ch );
+
+      for ( int q=0; q<nq; ++q )
+	{
+	  qs[q]->CptHessian( nat, crd, Ht );
+	  ccdl::axpy( qg[q], nch, Ht, ch );
+	};
+    }
+
+}
+
+
+void ccdl::RedundantIC::GrdTransform
+( double const *__restrict__ crd, 
+  double *__restrict__ cg, 
+  double *__restrict__ qg, 
+  bool c2q_AND_q2c )
+{
+  int ncg = nat*3;
+  int nch = ncg*ncg;
+  int nq  = qs.size();
+
+  int tsize = std::max( nq*nq, ncg*nq );
+  int hsize = std::max( nch, nq*ncg );
+  std::vector<double> Bmat(ncg*nq,0.),BmatGinv(tsize,0.),Ginvmat(nq*nq,0.);
+  std::vector<double> Htmat(hsize,0.);
+  double *__restrict__ B      = Bmat.data();
+  double *__restrict__ BGinv  = BmatGinv.data();
+  double *__restrict__ Ginv   = Ginvmat.data();
+  double *__restrict__ Ht     = Htmat.data();
+  CptTransformData( crd, B, BGinv, Ginv );
+
+  std::vector<double> P(nq*nq,0.);
+  CptProjector( BGinv, Ginv, P.data() );
+
+  // Eq (3)
+  ccdl::ge_dot_sy( ncg, nq, B, nq, nq, Ginv, BGinv );
+  ccdl::gt_dot_v( ncg, nq, BGinv, cg, qg );
+
+  // Eq (9)
+  ccdl::sy_dot_v( nq, nq, P.data(), qg, Ht );
+  std::copy( Ht, Ht+nq, qg );
+
+  if ( c2q_AND_q2c )
+    {
+      // Eq (2)
+      // cg = B . qg
+      ccdl::ge_dot_v( ncg, nq, B, qg, cg );
+    }
+
+}
+
+
+
+void ccdl::RedundantIC::HesBackTransform
+( double const *__restrict__ crd, 
+  double const *__restrict__ qg, 
+  double const *__restrict__ qh,
+  double *__restrict__ ch )
+{
+  int ncg = nat*3;
+  int nch = ncg*ncg;
+  int nq  = qs.size();
+
+  int hsize = std::max( nch, nq*ncg );
+  std::vector<double> Bmat(ncg*nq,0.);
+  std::vector<double> Htmat(hsize,0.);
+  double *__restrict__ B      = Bmat.data();
+  double *__restrict__ Ht     = Htmat.data();
+
+  std::fill( B, B + nq*ncg, 0. );
+  // Bxq = dq/dx
+  for ( int i=0; i<nq; ++i )
+    qs[i]->CptWilson( nat, crd, B + i*ncg );
+
+  // ch = B.qh.Bt + B'.qg
+  ccdl::ge_dot_sy( ncg, nq, B,  nq, nq, qh,  Ht );
+  ccdl::ge_dot_gt( ncg, nq, Ht, ncg, nq, B, ch );
+  for ( int q=0; q<nq; ++q )
+    {
+      qs[q]->CptHessian( nat, crd, Ht );
+      ccdl::axpy( qg[q], nch, Ht, ch );
+    };
 }
 
 
@@ -761,3 +853,15 @@ void ccdl::RedundantIC::PrintPrettyValue( std::ostream & cout, int i, double con
   double a = qs[i]->CptValue( nat, c );
   cout << qs[i]->PrintPrettyValue(a);
 } 
+
+
+void ccdl::RedundantIC::CptDifference( double const * hi, double const * lo, double * diff )
+{
+  int nq = GetNumInternalCrds();
+  for ( int i=0; i<nq; ++i ) 
+    {
+      double a = qs[i]->MoveValueToValidRange( hi[i] );
+      double b = qs[i]->MoveValueToValidRange( lo[i] );
+      diff[i]  = qs[i]->CptDifference( a, b );
+    }
+}

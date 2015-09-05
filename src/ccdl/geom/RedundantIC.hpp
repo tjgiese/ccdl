@@ -119,11 +119,18 @@ namespace ccdl
     void PrintPrettyValue( std::ostream & cout, int i, double const * crd );
 
     int  GetNumInternalCrds() const { return qs.size(); }
+    int  GetNumAtoms() const { return nat; }
 
-    void DisplaceByDeltaQ( double * dq, double * crd0, double const TOL=1.e-6 );
+    void DisplaceByDeltaQ( double * dq, double * crd0, double const TOL=1.e-7 );
+
+    void GrdTransform( double const * crd, double * cg, double * qg, bool c2q_AND_q2c = false );
+
+    void GrdAndHesTransform( double const * crd, double * cg, double * ch, double * qg, double * qh, bool c2q_AND_q2c = false );
+
+    void HesBackTransform( double const * crd,  double const * qg, double const * qh, double * ch );
 
 
-    void GrdAndHesTransform( double const * crd, double const * cg, double const * ch, double * qg, double * qh );
+    void CptDifference( double const * hi, double const * lo, double * diff );
 
     void CptInternalCrds( double const * crd, double * q );
 
