@@ -998,7 +998,7 @@ int ccdl::DLCOptMin
   bool backtracking = false;
   int nbacktracks = 0;
   bool CONVERGED = false;
-  
+  bool calculated_fc = false;
 
   
   for ( int iter=0; iter < opts.maxiter; ++iter )
@@ -1123,38 +1123,23 @@ int ccdl::DLCOptMin
       //std::printf("maxstep = %13.4e\n",maxstep);
 
 
-      /*
-      if ( backtracking )
-	{
-	  nbacktracks++;
-	  if ( nbacktracks == 4 )
-	    {
-	      cout << "GEOMOPT Too many backtracks. Resetting Hessian to diagonal.\n";
-	      // if ( dlc != NULL )
-	      // 	for ( int i=0; i<step.nq; ++i )
-	      // 	  for ( int j=0; j < step.nq; ++j )
-	      // 	    if ( i != j )
-	      // 	      step.hq[j+i*step.nq] = 0.;
-	      // 	    else
-	      // 	      step.hq[j+i*step.nq] += 1.;
-	      // int n3 = step.nat*3;
-	      // for ( int i=0; i<n3; ++i )
-	      // 	for ( int j=0; j < n3; ++j )
-	      // 	  if ( i != j )
-	      // 	    step.h[j+i*n3] = 0.;
-	      // 	  else
-	      // 	    step.h[j+i*n3] += 1.;
-	    }
-	};
-      */
+      
 
       bool update_hessian = false;
       if ( ! redo )
 	{
 	  bool cpt_hessian = opts.calcall;
-	  if ( iter == 0 and opts.calcfc ) 
-	    cpt_hessian = true;
-
+	  if ( opts.calcfc and not calculated_fc )
+	    { 
+	      if ( step.info.gc_max > 50. )
+		cout << "GEOMOPT Postponing calcfc because the gradient is so large\n";
+	      else
+		{
+		  cpt_hessian = true;
+		  calculated_fc = true;
+		}
+	    };
+	  
 	  if ( cpt_hessian ) 
 	    {
 	      //std::printf("cpt hessian\n");
@@ -1168,7 +1153,33 @@ int ccdl::DLCOptMin
 	    };
 	  //std::printf("prevstep = step\n");
 	  prevstep = step; step.prevstep = &prevstep;
+	}
+      else if ( backtracking and not opts.calcall )
+	{
+	  nbacktracks++;
+	  if ( nbacktracks > 9 and nbacktracks % 10 == 0 )
+	    {
+	      cout << "GEOMOPT Too many backtracks. Resetting Hessian to diagonal.\n";
+	      if ( dlc != NULL )
+	      	for ( int i=0; i<step.nq; ++i )
+	      	  for ( int j=0; j < step.nq; ++j )
+	      	    if ( i != j )
+	      	      step.hq[j+i*step.nq] = 0.;
+	      	    else
+	      	      step.hq[j+i*step.nq] += 1.;
+	      int n3 = step.nat*3;
+	      for ( int i=0; i<n3; ++i )
+	      	for ( int j=0; j < n3; ++j )
+	      	  if ( i != j )
+	      	    step.h[j+i*n3] = 0.;
+	      	  else
+	      	    step.h[j+i*n3] += 1.;
+	      prevstep = step; step.prevstep = &prevstep;
+	    }
 	};
+      
+
+
 
       double steplen = 0.;
       bool posdef_h = step.eigvals[0] > -1.e-8 and iter > 1 and opts.calcfc;
@@ -1212,6 +1223,7 @@ int ccdl::DLCOptMin
 	};
 
 
+      cout << "GEOMOPT Backtrack count " << nbacktracks << "\n";
       cout << "GEOMOPT Eigv";
       int neig = std::min( 6, std::min(step.n,step.nq) );
       for ( int i=0; i<neig; ++i )

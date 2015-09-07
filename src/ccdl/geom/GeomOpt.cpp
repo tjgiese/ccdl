@@ -234,7 +234,7 @@ namespace ccdl
       while ( true ) // first find a lambda that doesn't cause lapack to explode
 	{
 	  ctr++;
-	  if ( ctr > 10000 )
+	  if ( ctr > 1000 )
 	    {
 	      std::cerr << "ccdl::gopt::steppt::FindStepLength "
 			<< "infinite loop encountered while finding "
@@ -274,7 +274,7 @@ namespace ccdl
 	}
       lambda_lo = steps[1].lambda;
 
-      //std::printf("dxmax @ evals[0]  %13.4e (%13.4e)\n",lambda_lo,steps[1].dxmax);
+      //std::printf("dxmax @ evals[0] %5i  %13.4e (%13.4e)\n",ctr,lambda_lo,steps[1].dxmax);
 
       steps[0] = steps[1];
       if ( steps[0].dxmax > trust_radius )
@@ -285,7 +285,7 @@ namespace ccdl
 	  while ( true )
 	    {
 	      ctr++;
-	      if ( ctr > 10000 )
+	      if ( ctr > 1000 )
 		{
 		  std::cerr << "ccdl::gopt::steppt::FindStepLength "
 			    << "infinite loop encountered while finding "
@@ -311,10 +311,12 @@ namespace ccdl
 	      dxprev = steps[1].dxmax;
 	    }
 	}
+
+      //std::printf("dxmax lbound %5i  %13.4e (%13.4e)\n",ctr,lambda_lo,steps[1].dxmax);
+
       if ( steps[1].dxmax > trust_radius )
 	{
 
-	  // TIM HERE MAKE SURE THE DXMAX IS REALLY OBEYED HERE
 
 	  //std::printf("DXMAX TOO BIG %13.4e %13.4e\n",steps[1].dxmax, trust_radius);
 	  if ( dlc == NULL )
@@ -356,7 +358,11 @@ namespace ccdl
 		  if ( maxdx < trust_radius )
 		    {
 		      slo = s;
-		      if ( std::abs(maxdx-trust_radius) < 1.e-5 ) break;
+		      if ( std::abs(maxdx-trust_radius) < 1.e-5 )
+			{ 
+			  //std::printf("dxmax error %5i  %13.4e\n",iter,maxdx);
+			  break;
+			};
 		    }
 		  else if ( maxdx > trust_radius )
 		    shi = s;
@@ -384,7 +390,10 @@ namespace ccdl
 	      else
 		steps[2] = steps[1];
 	      if ( std::abs(steps[2].dxmax - trust_radius) < 1.e-6 )
-		break;
+		{
+		  //std::printf("bisection took %i\n",i);
+		  break;
+		};
 	    }
 	};
 
@@ -418,7 +427,7 @@ namespace ccdl
       while ( true )
 	{
 	  ctr++;
-	  if ( ctr > 10000 )
+	  if ( ctr > 100 )
 	    {
 	      std::cerr << "ccdl::gopt::steppt::FindStepLength "
 			<< "infinite loop encountered while bracketing "
@@ -440,6 +449,7 @@ namespace ccdl
 	    };
 	}
       ccdl::gopt::steppt trust_step( steps[0] );
+      //std::printf("rfo ubound took %i\n",ctr);
       // the rfo minimum is between steps[1] and steps[2]
       //std::printf("rfo between       %13.4e %13.4e (%13.4e %13.4e) [%13.4e %13.4e]\n",
       //	  steps[1].lambda, steps[2].lambda,
@@ -450,11 +460,12 @@ namespace ccdl
 	{
 	  steps[0] = steps[1];
 	  steps[1] = steps[2];
+	  double lold = steps[0].lambda;
 	  ctr=0;
 	  while ( true )
 	    {
 	      ctr++;
-	      if ( ctr > 10000 )
+	      if ( ctr > 100 )
 		{
 		  std::cerr << "ccdl::gopt::steppt::FindStepLength "
 			    << "infinite loop encountered while bisecting "
@@ -466,15 +477,19 @@ namespace ccdl
 	      double lnew = 0.5 * ( steps[0].lambda + steps[1].lambda );
 	      steps[2].SetLambda( lnew );
 	      std::sort( steps.begin(), steps.end(), &ccdl::gopt::steps_rfo_min );
-	      //      std::printf("rfo %13.5e %13.5e %13.5e (%13.5e %13.5e %13.5e)\n",
-	      //	  steps[0].lambda,steps[1].lambda,steps[2].lambda,
-	      //	  steps[0].rfo,steps[1].rfo,steps[2].rfo);
+
+	      // std::printf("rfo %13.5e %13.5e %13.5e (%13.5e %13.5e %13.5e)\n",
+	      // 		  steps[0].lambda,steps[1].lambda,steps[2].lambda,
+	      // 		  steps[0].rfo,steps[1].rfo,steps[2].rfo);
 	      //if ( steps[2].SetLambda( lnew ) );
 	      
 	      if ( std::abs( steps[1].rfo-steps[0].rfo ) < 1.e-9 or
-		   std::abs( steps[1].lambda-steps[0].lambda ) < 1.e-8 ) break;
+		   std::abs( steps[1].lambda-steps[0].lambda ) < 1.e-8 or
+		   lnew == lold ) break;
+	      lold = lnew;
+
 	    }
-	  
+	  //std::printf("rfo search took %i\n",ctr);
 	  //std::printf("rfo   @           %13.4e\n",
 	  //	      steps[0].lambda );
 	}
