@@ -267,13 +267,15 @@ void ccdl::DihedralT::CptWilson( int const nat, double const * c, double * B ) c
   bool linear = false;
   ccdl::DihedralAngle( c+3*i, c+3*j,c+3*k, c+3*l, linear, tmp );
   std::fill( B, B + 3*nat, 0. );
-  for ( int u=0; u<3; ++u )
-    {
-      B[ u+i*3 ] = tmp[ u+0*3 ];
-      B[ u+j*3 ] = tmp[ u+1*3 ];
-      B[ u+k*3 ] = tmp[ u+2*3 ];
-      B[ u+l*3 ] = tmp[ u+3*3 ];
-    };
+  //std::printf("angle %13.4e %i\n",angle,(int)linear); 
+  if ( ! linear )
+    for ( int u=0; u<3; ++u )
+      {
+	B[ u+i*3 ] = tmp[ u+0*3 ];
+	B[ u+j*3 ] = tmp[ u+1*3 ];
+	B[ u+k*3 ] = tmp[ u+2*3 ];
+	B[ u+l*3 ] = tmp[ u+3*3 ];
+      };
 }
 void ccdl::DihedralT::CptHessian( int const nat, double const * c, double * B ) const
 {
@@ -500,7 +502,7 @@ void ccdl::RedundantIC::CptTransformData
   ccdl::gt_dot_ge( nat3, nq, B, nat3, nq, B, G );
   std::copy( G, G+nq*nq, Ginv );
   // G^{-1}
-  ccdl::sdd_sym_power( -1., nq, nq, Ginv, 1.e-12 );
+  ccdl::sdd_sym_power( -1., nq, nq, Ginv, 1.e-9 );
 }
 
 
@@ -540,7 +542,7 @@ void ccdl::RedundantIC::CptProjector
       // C.P'.C
       ccdl::di_dot_ge( nq,nq, C.data(), nq,nq, PC.data(), CPC.data() );
       // (C.P'.C)^{-1}
-      ccdl::sdd_sym_power( -1., nq, nq, CPC.data(), 1.e-12 );
+      ccdl::sdd_sym_power( -1., nq, nq, CPC.data(), 1.e-9 );
       ccdl::ge_dot_sy( nq,nq, PC.data(), nq,nq, CPC.data(), Pp.data() );
       // P = P' - (P'C).(C.P'.C)^{-1}.(C.P')
       ccdl::ge_dot_gt( nq,nq, Pp.data(), nq,nq, PC.data(), P, -1., 1. );
@@ -646,13 +648,13 @@ void ccdl::RedundantIC::DisplaceByDeltaQ
 	  {
 
 	    {
-	      double final = qs[nq-1]->MoveValueToValidRange( qs[nq-1]->GetConstraintValue() );
-	      std::printf("dq %3i ",iter);
-	      std::printf("%14.6f %14.6f %14.6f",
-			  q0[nq-1]*180/ccdl::PI,
-			  final*180/ccdl::PI,
-			  dq[nq-1]*180/ccdl::PI);
-	      std::printf("\n");
+	      // double final = qs[nq-1]->MoveValueToValidRange( qs[nq-1]->GetConstraintValue() );
+	      // std::printf("dq %3i ",iter);
+	      // std::printf("%14.6f %14.6f %14.6f",
+	      // 		  q0[nq-1]*180/ccdl::PI,
+	      // 		  final*180/ccdl::PI,
+	      // 		  dq[nq-1]*180/ccdl::PI);
+	      // std::printf("\n");
 	    }
 
 
@@ -805,6 +807,19 @@ void ccdl::RedundantIC::GrdTransform
       // Eq (2)
       // cg = B . qg
       ccdl::ge_dot_v( ncg, nq, B, qg, cg );
+
+      // std::printf("qg ");
+      // for ( int i=0; i<nq; ++i )
+      // 	std::printf("%13.4e",qg[i]);
+      // std::printf("\n");
+
+      // for ( int i=0; i<ncg; ++i )
+      // 	{
+      // 	  for ( int j=0; j<nq; ++j )
+      // 	    std::printf("%13.4e",B[i+j*ncg]);
+      // 	  std::printf("\n");
+      // 	}
+
     }
 
 }

@@ -53,14 +53,36 @@ namespace ccdl
 		  double * U, double * w, double * VT );
 
   int sdd_power( double const power, 
-		  int const nf, int const ns, double * A, 
-		  double TOL = 1.e-20 );
+		 int const nf, int const ns, double * A, 
+		 double TOL = 1.e-20 );
 
   int sdd_sym_power( double const power, 
 		      int const nf, int const ns, double * A, 
 		      double TOL = 1.e-20 );
 
   int sym_inverse( int const nf, int const ns, double * A );
+
+
+
+  int query_eigen( int const N );
+  int eigen( int const n, double const * symat, 
+	     double * E, double * U, int const nscr, double * scr );
+  int eigen( int const n, double const * symat, 
+	     double * E, double * U );
+
+  int query_dsyev( int const N );
+  int dsyev( int const N, double const * symat, 
+	     double * E, double * U, int const nscr, double * scr );
+
+  int query_dsyevd( int const N );
+  int iquery_dsyevd( int const N );
+  int dsyevd( int const N, double const * symat, 
+	      double * E, double * U, int const nscr, double * scr );
+
+  int query_dsyevr( int const N );
+  int iquery_dsyevr( int const N );
+  int dsyevr( int const N, double const * symat, 
+	      double * E, double * U, int const nscr, double * scr );
 
 }
 

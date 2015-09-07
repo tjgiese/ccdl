@@ -3,7 +3,7 @@
 #include <vector>
 #include <iostream>
 #include <cmath>
-
+#include <cassert>
 
 #include "LAPACK.hpp"
 
@@ -312,3 +312,215 @@ int ccdl::sym_inverse( int const nf, int const , double * A )
 	A[j+i*nf] = A[i+j*nf];
   return info;
 }
+
+
+
+
+
+
+
+
+
+
+
+int ccdl::query_dsyev( int const N )
+{
+  double p = 0.;
+  int info = 0;
+  int lwork=-1;
+  double work = 0.;
+  dsyev_("V","U", &N, &p,
+	 &N, &p,
+	 &work, &lwork, &info );
+  //assert( info == 0 );
+  //std::cout << "query_dsyev " << work << "\n";
+  return (int)work;
+}
+
+int ccdl::query_dsyevd( int const N )
+{
+  int info = 0;
+  int lwork=-1;
+  double work = 0.;
+  int liwork=-1;
+  int iwork = 0;
+  double p = 0.;
+  dsyevd_("V","U",
+	  &N,&p,
+	  &N,&p,
+	  &work, &lwork,
+	  &iwork, &liwork,
+	  &info );
+  assert( info == 0 );
+  return work;
+}
+
+int ccdl::query_dsyevr( int const N )
+{
+  int info  =  0, ISUPPZ = 0, IL = 1, IU = N, M = N;
+  double work = 0., p = 0., VL = 0., VU = 0.;
+  int lwork = -1, liwork=-1, iwork = 0;
+  double ABSTOL = dlamch_("Safe minimum");
+  dsyevr_("V","A","U",
+	  &N,&p,&N,
+	  &VL,&VU,
+	  &IL,&IU,
+	  &ABSTOL,
+	  &M,&p,&p,&N,
+	  &ISUPPZ,
+	  &work,&lwork,
+	  &iwork,&liwork,
+	  &info );
+  assert( info == 0 );
+  return ((int)work) + N*N;
+}
+
+int ccdl::iquery_dsyevd( int const N )
+{
+  int info = 0;
+  int lwork=-1;
+  double work = 0.;
+  int liwork=-1;
+  int iwork = 0;
+  double p = 0.;
+  dsyevd_("V","U",
+	  &N,&p,
+	  &N,&p,
+	  &work, &lwork,
+	  &iwork, &liwork,
+	  &info );
+  assert( info == 0 );
+  return iwork;
+}
+
+int ccdl::iquery_dsyevr( int const N )
+{
+  int info  =  0, ISUPPZ = 0, IL = 1, IU = N, M = N;
+  double work = 0., p = 0., VL = 0., VU = 0.;
+  int lwork = -1, liwork=-1, iwork = 0;
+  double ABSTOL = 0.;
+  dsyevr_("V","A","U",
+	  &N,&p,&N,
+	  &VL,&VU,
+	  &IL,&IU,
+	  &ABSTOL,
+	  &M,&p,&p,&N,
+	  &ISUPPZ,
+	  &work,&lwork,
+	  &iwork,&liwork,
+	  &info );
+  assert( info == 0 );
+  return iwork+2*N;
+}
+
+
+
+int ccdl::dsyev
+( int const N, double const * symat, 
+  double * E, double * U, int const nscr, double * scr )
+{
+  int const nf = N;
+  std::copy( symat, symat+nf*nf, U );
+  int info = 0;
+  dsyev_("V","U", &nf, U,
+	 &nf, E,
+	 scr, &nscr, &info );
+  return info;
+}
+
+int ccdl::dsyevd
+( int const N, double const * symat, 
+  double * E, double * U, int const nscr, double * scr )
+{
+  int const nf = N;
+  std::copy( symat, symat+nf*nf, U );
+  int info = 0;
+  int liwork= ccdl::iquery_dsyevd(nf);
+  std::vector<int> iwork(liwork);
+  dsyevd_("V","U",
+	  &nf,U,
+	  &nf,E,
+	  scr, &nscr,
+	  iwork.data(), &liwork,
+	  &info );
+  return info;
+}
+
+int ccdl::dsyevr
+( int const N, double const * symat, 
+  double * E, double * U, int const nscr, double * scr )
+{
+  int const nf = N;
+  int const N2 = nf*nf;
+  double * T = scr;
+  int const lwork = nscr-N2;
+  double * work = scr + N2;
+  for ( int i=0; i<N2; ++i )
+    T[i] = symat[i];
+  int info,M;
+  int const liwork = ccdl::iquery_dsyevr(nf);
+  std::vector<int> isuppz(liwork);
+  int * iwork = isuppz.data() + 2*nf;
+  const double VL = 0., VU = 0.;
+  const int IL = 1, IU = nf;
+  const double ABSTOL = dlamch_("Safe minimum");
+  dsyevr_("V","A","U",
+	  &nf,T,&nf,
+	  &VL,&VU,
+	  &IL,&IU,
+	  &ABSTOL,
+	  &M,E,U,&nf,
+	  isuppz.data(),
+	  work,&lwork,
+	  iwork,&liwork,
+	  &info );
+  return info;
+}
+
+
+
+
+#define EVMAX 70
+#define EVRMAX 440
+
+
+int ccdl::query_eigen( int const N )
+{
+  int n = 1;
+  if ( N < EVMAX )
+    { n = ccdl::query_dsyev(N); }
+  else if ( N < EVRMAX )
+    { n = ccdl::query_dsyevr(N); }
+  else
+    { n = ccdl::query_dsyevd(N); };
+  return n;
+}
+
+
+int ccdl::eigen
+( int const n, double const * symat, 
+  double * E, double * U, int const nscr, double * scr )
+{
+  int info = 0;
+  if ( n < EVMAX )
+    { info = ccdl::dsyev(n,symat,E,U,nscr,scr); }
+  else if ( n < EVRMAX )
+    { info = ccdl::dsyevr(n,symat,E,U,nscr,scr); }
+  else
+    { info = ccdl::dsyevd(n,symat,E,U,nscr,scr); };
+  return info;
+}
+
+
+int ccdl::eigen
+( int const n, double const * symat, 
+  double * E, double * U )
+{
+  int nscr = ccdl::query_eigen( n );
+  std::vector<double> scr(nscr,0.);
+  return eigen( n,symat,E,U,nscr,scr.data() );
+}
+
+#undef EVMAX
+#undef EVRMAX
+

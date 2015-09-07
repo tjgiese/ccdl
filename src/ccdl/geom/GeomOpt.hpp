@@ -25,7 +25,7 @@ namespace ccdl
       StepInfo();
       void CptInfo( ccdl::gopt::Step & step, ccdl::gopt::Step & prevstep );
 
-      double de,de_abs;
+      double de,de_abs,de_pred;
       double gc_rms, gc_max;
       double dxc_rms, dxc_max, dxc_len;
     };
@@ -1045,6 +1045,7 @@ int ccdl::DLCOptMin
 	// double WolfeBeta  = 0.5;
 	// double Wolfe1 = WolfeAlpha * gndx;
 	// double Wolfe2 = WolfeBeta  * godx;
+
 	 
 
 	  if ( ngrms > 1.5 * ogrms and iter and step.info.de > 0. )
@@ -1089,7 +1090,22 @@ int ccdl::DLCOptMin
       }
 
 
+      
+      if ( step.info.dxc_max > 1.e-20 )
+	maxstep = std::min( 2 * step.info.dxc_max, maxstep );
+
+
+
       maxstep = std::min( maxstep, opts.limstep );
+      if ( redo )
+	{
+	  step = prevstep;
+	}
+      else if ( step.info.gc_rms < 1. )
+	{
+	  maxstep = std::max( maxstep, step.info.gc_rms / 1000. );
+	}
+      step.maxstep = maxstep;
 
 
       bool update_hessian = false;

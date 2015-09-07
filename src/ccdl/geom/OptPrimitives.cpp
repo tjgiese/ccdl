@@ -274,9 +274,152 @@ namespace lpck
 #undef EVMAX
 #undef EVRMAX
 
+
+
 }
 
 
+struct rfo_search
+{
+  rfo_search() : radius(0.), e(1.e+100), lambda(1.e+100) {}
+  void step( int const n, double const * H, double const * g )
+  {
+    std::vector<double> dx(n,0.);
+    int one=1;
+    ccdl::gopt::CptDeltaX_dsysv( n, H, g, lambda, dx.data() );
+    radius = std::sqrt( ddot_(&n,dx.data(),&one,dx.data(),&one) );
+    e = ccdl::gopt::PredictEnergyChange( n, H, g, dx.data() ) / ( 1. + radius*radius );
+  }
+  double radius;
+  double e;
+  double lambda;
+};
+
+bool rfo_lt( rfo_search const & lhs, rfo_search const & rhs )
+{
+  return lhs.e < rhs.e;
+}
+
+
+double rfo_step( int const n, double const * H, double const * g, double const lambda, double * dx )
+{
+  int one=1;
+  ccdl::gopt::CptDeltaX_dsysv( n, H, g, lambda, dx );
+  double radius = ddot_(&n,dx,&one,dx,&one);
+  return ccdl::gopt::PredictEnergyChange( n, H, g, dx ) / ( 1. + radius );
+}
+
+double CalcParabolaVertex( double x1, double y1, double x2, double y2, double x3, double y3 )
+{
+  double denom = (x1 - x2) * (x1 - x3) * (x2 - x3);
+  double A     = (x3 * (y2 - y1) + x2 * (y1 - y3) + x1 * (y3 - y2)) / denom;
+  double B     = (x3*x3 * (y1 - y2) + x2*x2 * (y3 - y1) + x1*x1 * (y2 - y3)) / denom;
+  //double C     = (x2 * x3 * (x2 - x3) * y1 + x3 * x1 * (x3 - x1) * y2 + x1 * x2 * (x1 - x2) * y3) / denom;
+  
+  return -B / (2*A);
+  //yv = C - B*B / (4*A);
+}
+
+#include <algorithm>
+
+double ccdl::gopt::CptDeltaX_RFO
+( int const n, double const * H, double const * g,
+  double const trust_radius, double * dx )
+{
+  /*
+  int m = n+1;
+  int m2 = m*m;
+  std::vector<double> h( m2, 0. ),e( m ),u( m2, 0. );
+  for ( int j=0; j<n; ++j )
+    for ( int i=0; i<n; ++i )
+      h[i+j*m] = H[i+j*n];
+  for ( int i=0; i<n; ++i )
+    h[i+n*m] = g[i];
+  for ( int i=0; i<n; ++i )
+    h[n+i*m] = g[i];
+
+  lpck::eigen(m,h.data(),e.data(),u.data());
+
+  double len = 0.;
+  for ( int i=0; i<m; ++i )
+    {
+      if ( std::abs( u[n+i*m] ) > 1.e-8 )
+	{
+	  for ( int j=0; j<n; ++j )
+	    {
+	      dx[j] = u[j+i*m] / u[n+i*m];
+	      len += dx[j]*dx[j];
+	    }
+	  break;
+	}
+    }
+  return std::sqrt(len);
+  */
+  std::vector<double> U(n*n,0.),E(n,0.);
+  lpck::eigen(n,H,E.data(),U.data());
+
+
+  std::vector<rfo_search> s(4);
+  s[0].lambda = E[0]-1.e-13;
+  s[0].step(n,H,g);
+
+  if ( s[0].radius > trust_radius )
+    {
+      for ( int i=0; i<100; ++i )
+	{
+	  s[1] = s[0];
+	  if ( s[0].lambda < -1. )
+	    s[0].lambda *= 4;
+	  else if ( s[0].lambda > 1. )
+	    s[0].lambda /= 4;
+	  else
+	    s[0].lambda -= 2.1;
+	  s[0].step(n,H,g);
+	  //if ( s[0].radius > trust_radius ) s[0] = s[1];
+	  std::printf("0 %13.4e %13.4e\n",s[0].radius,s[0].e);
+	  if ( std::abs(s[1].e-s[0].e) < 1.e-8 ) break;
+	  if ( s[0].radius < trust_radius ) break;
+	} 
+    }
+
+  s[2].lambda = s[0].lambda - 0.5 * std::abs(s[0].lambda);
+  s[2].step(n,H,g);
+  if ( s[2].e < 0. )
+    {
+      for ( int i=0; i < 100; ++i )
+	{
+	  s[1] = s[2];
+	  s[2].lambda -= 0.5 * std::abs(s[2].lambda);
+	  s[2].step(n,H,g);
+	  //if ( s[0].radius > trust_radius ) s[0] = s[1];
+	  std::printf("1 %13.4e %13.4e\n",s[2].radius,s[2].e);
+	  if ( std::abs(s[1].e-s[2].e) < 1.e-8 ) break;
+	  if ( s[2].e > s[1].e ) break;
+	} 
+    };
+
+
+  std::printf("%3i",-1);
+  for ( int k=0; k<4; k += 2 )
+    std::printf("(%12.3e %12.3e %12.3e) ",s[k].e,s[k].lambda,s[k].radius);
+  std::printf("\n");
+  for ( int i=0; i<50; ++i )
+    {
+      double del = s[2].lambda-s[0].lambda;
+      s[1].lambda = (1./3.)*del + s[0].lambda;
+      s[3].lambda = (2./3.)*del + s[0].lambda;
+      s[1].step(n,H,g);
+      s[3].step(n,H,g);
+
+      std::sort( s.begin(), s.end(), rfo_lt );
+      std::printf("%3i",i);
+      for ( int k=0; k<4; ++k )
+	std::printf("(%12.3e %12.3e %12.3e) ",s[k].e,s[k].lambda,s[k].radius);
+      std::printf("\n");
+    }
+  ccdl::gopt::CptDeltaX_dsysv( n, H, g, s[0].lambda, dx );
+  return s[0].radius;
+}
 
 
 
@@ -523,7 +666,7 @@ double ccdl::gopt::PredictEnergyChange( int const n, double const * H, double co
   double alpha = 0.5;
   double beta  = 1.0;
   int one      = 1;
-  dsymv_( "U", &n, &alpha, H, &n, g, &one, &beta, v.data(), &one );
+  dsymv_( "U", &n, &alpha, H, &n, dx, &one, &beta, v.data(), &one );
   alpha = ddot_( &n, v.data(), &one, dx, &one );
   return alpha;
 }

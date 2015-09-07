@@ -320,14 +320,18 @@ double ccdl::DihedralAngle( double const * Ra, double const * Rb, double const *
 
       long double const ncb = std::sqrt(Rcb[0]*Rcb[0]+Rcb[1]*Rcb[1]+Rcb[2]*Rcb[2]);
 
-      long double const sclA = 1. / ( n2A*ncb );
+      long double sclA = 1. / ( n2A*ncb );
+      if ( std::abs(sclA) > 1.e+8l ) 
+	{ sclA = 0.; }
       A[0] *= sclA;
       A[1] *= sclA;
       A[2] *= sclA;
       long double AxRcb[3];
       ccdl::CrossProduct(A,Rcb,AxRcb);
 
-      long double const sclB = 1. / ( n2B*ncb );
+      long double sclB = 1. / ( n2B*ncb );
+      if ( std::abs(sclB) > 1.e+8l ) 
+	{ sclB = 0.; }
       B[0] *= sclB;
       B[1] *= sclB;
       B[2] *= sclB;

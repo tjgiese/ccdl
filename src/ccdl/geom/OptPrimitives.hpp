@@ -6,6 +6,10 @@ namespace ccdl
   namespace gopt
   {
 
+    double CptDeltaX_RFO
+    ( int const n, double const * H, double const * g,
+      double const trust_radius, double * dx );
+
     double CptDeltaX_TrustRadius
     ( int const n, double const * H, double const * g,
       double const trust_radius, double * dx, double * evals );
