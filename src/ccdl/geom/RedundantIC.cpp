@@ -707,10 +707,9 @@ void ccdl::RedundantIC::GrdAndHesTransform
   int nq  = qs.size();
   int nqh = nq*nq;
 
-  int tsize = std::max( nq*nq, ncg*nq );
-  int hsize = std::max( nch, nq*ncg );
+  int tsize = std::max( nch, std::max( nq*nq, ncg*nq ) );
   std::vector<double> Bmat(ncg*nq,0.),BmatGinv(tsize,0.),Ginvmat(nq*nq,0.);
-  std::vector<double> Hxmat(ch,ch+nch),Htmat(hsize,0.);
+  std::vector<double> Hxmat(ch,ch+nch),Htmat(tsize,0.);
   double *__restrict__ B      = Bmat.data();
   double *__restrict__ BGinv  = BmatGinv.data();
   double *__restrict__ Ginv   = Ginvmat.data();
@@ -781,10 +780,9 @@ void ccdl::RedundantIC::GrdTransform
   int nch = ncg*ncg;
   int nq  = qs.size();
 
-  int tsize = std::max( nq*nq, ncg*nq );
-  int hsize = std::max( nch, nq*ncg );
+  int tsize = std::max( nch, std::max( nq*nq, ncg*nq ) );
   std::vector<double> Bmat(ncg*nq,0.),BmatGinv(tsize,0.),Ginvmat(nq*nq,0.);
-  std::vector<double> Htmat(hsize,0.);
+  std::vector<double> Htmat(tsize,0.);
   double *__restrict__ B      = Bmat.data();
   double *__restrict__ BGinv  = BmatGinv.data();
   double *__restrict__ Ginv   = Ginvmat.data();
@@ -836,7 +834,7 @@ void ccdl::RedundantIC::HesBackTransform
   int nch = ncg*ncg;
   int nq  = qs.size();
 
-  int hsize = std::max( nch, nq*ncg );
+  int hsize = std::max( nch, std::max( nq*nq, nq*ncg ) );
   std::vector<double> Bmat(ncg*nq,0.);
   std::vector<double> Htmat(hsize,0.);
   double *__restrict__ B      = Bmat.data();

@@ -274,7 +274,7 @@ namespace ccdl
 	}
       lambda_lo = steps[1].lambda;
 
-      std::printf("dxmax @ evals[0]  %13.4e (%13.4e)\n",lambda_lo,steps[1].dxmax);
+      //std::printf("dxmax @ evals[0]  %13.4e (%13.4e)\n",lambda_lo,steps[1].dxmax);
 
       steps[0] = steps[1];
       if ( steps[0].dxmax > trust_radius )
@@ -302,7 +302,7 @@ namespace ccdl
 		lambda_lo -= 0.2;
 	      steps[1].SetLambda( lambda_lo );	  
 
-	      std::printf("lambda %13.4e %13.4e\n",steps[1].lambda, steps[1].dxmax);
+	      //std::printf("lambda %13.4e %13.4e\n",steps[1].lambda, steps[1].dxmax);
 
 	      if ( steps[1].dxmax < trust_radius )
 		break;
@@ -316,25 +316,55 @@ namespace ccdl
 
 	  // TIM HERE MAKE SURE THE DXMAX IS REALLY OBEYED HERE
 
+	  //std::printf("DXMAX TOO BIG %13.4e %13.4e\n",steps[1].dxmax, trust_radius);
 	  if ( dlc == NULL )
-	    std::copy( steps[1].dx.data(), steps[1].dx.data() + ng, dx );
+	    {
+	      double s   = trust_radius / steps[0].dxmax;
+	      for ( int i=0; i<ng; ++i )
+		steps[1].dx[i] *= s;
+	      std::copy( steps[1].dx.data(), steps[1].dx.data() + ng, dx );
+	    }
 	  else
 	    {
-	      //int nat = dlc->GetNumAtoms();
-	      //int nat3 = nat*3;
+	      int nat = dlc->GetNumAtoms();
+	      int nat3 = nat*3;
 	      steps[0] = steps[1];
 	      std::vector<double> ddq( steps[1].dq );
-	      double scl = 0.9 * trust_radius / steps[0].dxmax;
-	      {
-		for ( std::size_t k=0; k<ddq.size(); ++k )
-		  ddq[k] = scl * steps[0].dq[k];
-		steps[1].dq = ddq;
-		//steps[1].x.assign( x0, x0+nat3 );
-		//dlc->DisplaceByDeltaQ( ddq, steps[1].x.data() );
-	      }
+	      std::vector<double> xv( nat3 );
+	      double shi = 1.;
+	      double slo = 1.e-12;
+	      double s   = trust_radius / steps[0].dxmax;
+	      for ( int iter=0; iter < 100; ++iter )
+		{
+		  for ( std::size_t k=0; k<ddq.size(); ++k )
+		    ddq[k] = s * steps[0].dq[k];
+		  steps[1].dq = ddq;
+		  std::copy( x0, x0+nat3, xv.data() );
+		  dlc->DisplaceByDeltaQ( ddq.data(), xv.data() );
+		  double maxdx = 0.;
+		  for ( int a=0; a<nat; ++a )
+		    {
+		      double x = xv[0+a*3]-x0[0+a*3];
+		      double y = xv[1+a*3]-x0[1+a*3];
+		      double z = xv[2+a*3]-x0[2+a*3];
+		      double r2 = x*x+y*y+z*z;
+		      maxdx = std::max( maxdx, std::sqrt(r2) );
+		    };
+		  steps[1].dxmax = maxdx;
+		  // std::printf("s %13.4e < %13.4e < %13.4e (%13.4e)\n",
+		  // 	      slo,s,shi,maxdx);
+		  if ( maxdx < trust_radius )
+		    {
+		      slo = s;
+		      if ( std::abs(maxdx-trust_radius) < 1.e-5 ) break;
+		    }
+		  else if ( maxdx > trust_radius )
+		    shi = s;
+		  s = (slo+shi)/2.;
+		}
 	      std::copy( steps[1].dq.data(), steps[1].dq.data() + ng, dx );
 	    }
-	  std::printf("DXMAX TOO BIG %13.4e %13.4e\n",steps[1].dxmax, trust_radius);
+	  //std::printf("DXMAX REDUCED TO %13.4e %13.4e\n",steps[1].dxmax, trust_radius);
 	  return 1;
 	}
 

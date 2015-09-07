@@ -980,7 +980,7 @@ int ccdl::DLCOptMin
   int ERROR = 0;
   std::ostream & cout = *(opts.ostr);
   double maxstep      = opts.maxstep;
-
+  double limstep      = opts.limstep;
   if ( opts.type == ccdl::gopt::TS )
     {
       if ( opts.update != ccdl::gopt::PSB and
@@ -998,6 +998,7 @@ int ccdl::DLCOptMin
   bool backtracking = false;
   int nbacktracks = 0;
   bool CONVERGED = false;
+  
 
   
   for ( int iter=0; iter < opts.maxiter; ++iter )
@@ -1058,6 +1059,7 @@ int ccdl::DLCOptMin
 		 << FMTF(14,8) << ogrms << " perform a backtrack" << "\n"; 
 	    redo = true;
 	    backtracking = true;
+	    limstep = std::min(limstep,maxstep*1.5);
 	    maxstep /= ( 1.5 * 0.8 + std::min(4.,ngrms/ogrms) * 0.2 );
 	  }
 	else if ( ngrms > ogrms and iter and step.info.de > 0. )
@@ -1067,6 +1069,7 @@ int ccdl::DLCOptMin
 		 << FMTF(14,8) << ogrms << " perform a backtrack" << "\n"; 
 	    redo = true;
 	    backtracking = true;
+	    limstep = std::min(limstep,maxstep*1.5);
 	    maxstep /= 1.5;
 	  }		 
 	else if ( ogrms > 1.e-8 and ngrms > 1.e-8 and step.info.de <= 0. and ugg > 0. )
@@ -1099,7 +1102,7 @@ int ccdl::DLCOptMin
 
 
 
-      maxstep = std::min( maxstep, opts.limstep );
+      maxstep = std::min( maxstep, limstep );
       if ( redo )
 	{
 	  step = prevstep;
@@ -1114,10 +1117,10 @@ int ccdl::DLCOptMin
 	    };
 	  // //////////////////////
 	  maxstep = std::max( maxstep, step.info.gc_rms / 100. );
-	  maxstep = std::min( maxstep, opts.limstep );
+	  maxstep = std::min( maxstep, limstep );
 	}
       step.maxstep = maxstep;
-      std::printf("maxstep = %13.4e\n",maxstep);
+      //std::printf("maxstep = %13.4e\n",maxstep);
 
 
       /*
