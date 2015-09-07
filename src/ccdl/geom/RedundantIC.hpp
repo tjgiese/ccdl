@@ -59,6 +59,8 @@ namespace ccdl
     int i,j;
   };
 
+
+
   class AngleT : public InternalCrd
   {
   public:
@@ -100,18 +102,63 @@ namespace ccdl
   };
 
 
+  class CartT : public InternalCrd
+  {
+  public:
+
+    using InternalCrd::Freeze;
+
+    CartT() : InternalCrd(), a(0), k(0) {};
+    CartT( int const a, int const k ) : InternalCrd(), a(a), k(k) {};
+    virtual ~CartT() {};
+    virtual std::string Print() const;
+    virtual std::string PrintPrettyValue( double a ) const;
+    virtual bool Freeze( ccdl::InternalCrd const * p );
+    virtual double CptValue( int const nat, double const * c ) const;
+    virtual void CptWilson( int const nat, double const * c, double * B ) const;
+    virtual void CptHessian( int const nat, double const * c, double * B ) const;
+    virtual double CptDifference( double const x1, double const x0 ) const;
+    virtual double MoveValueToValidRange( double x ) const;
+    int a,k;
+  };
+
+
+  class R12T : public InternalCrd
+  {
+  public:
+
+    using InternalCrd::Freeze;
+
+    R12T() : InternalCrd(), i(0), j(0), k(0), l(0) {};
+    R12T( int const i, int const j, int const k, int const l ) : InternalCrd(), i(i), j(j), k(k), l(l) {};
+    virtual ~R12T() {};
+    virtual std::string Print() const;
+    virtual std::string PrintPrettyValue( double a ) const;
+    virtual bool Freeze( ccdl::InternalCrd const * p );
+    virtual double CptValue( int const nat, double const * c ) const;
+    virtual void CptWilson( int const nat, double const * c, double * B ) const;
+    virtual void CptHessian( int const nat, double const * c, double * B ) const;
+    virtual double CptDifference( double const x1, double const x0 ) const;
+    virtual double MoveValueToValidRange( double x ) const;
+    int i,j,k,l;
+  };
+
+
+
   class RedundantIC
   {
   public:
 
-    RedundantIC( int const nat, int const * z, double const * crd, bool merge_fragments = true );
+    RedundantIC( int const nat, int const * z, double const * crd, bool cartesian = false,bool merge_fragments = true );
 
-    void reset( int const nat, int const * z, double const * crd, bool merge_fragments = true );
+    void reset( int const nat, int const * z, double const * crd, bool cartesian = false, bool merge_fragments = true );
 
 
     void FreezeBond( int i, int j, double const v );
     void FreezeAngle( int i, int j, int k, double const v );
     void FreezeDihedral( int i, int j, int k, int l, double const v );
+    void FreezeR12( int i, int j, int k, int l, double const v );
+    void FreezeR12( int i, int j, int l, double const v );
 
     void PrintReport( std::ostream & cout );
     void PrintReport( std::ostream & cout, double const * crd );
@@ -128,6 +175,10 @@ namespace ccdl
     void GrdAndHesTransform( double const * crd, double * cg, double * ch, double * qg, double * qh, bool c2q_AND_q2c = false );
 
     void HesBackTransform( double const * crd,  double const * qg, double const * qh, double * ch );
+
+    void CptQ2CEstimator( double const * x0, double * BGinv );
+    void EstimateQ2C( double const * BGinv, double const * dq, 
+		      double * approx_dx );
 
 
     void CptDifference( double const * hi, double const * lo, double * diff );

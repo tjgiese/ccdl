@@ -26,6 +26,7 @@ namespace ccdl
       double const * x0;
       std::vector<double> dq;
       std::vector<double> dx;
+      std::tr1::shared_ptr< std::vector<double> > BGinv;
       ccdl::RedundantIC * dlc;
 
       double lambda;
@@ -80,7 +81,14 @@ namespace ccdl
 	if ( dlc == NULL )
 	  dx=dq;
 	else
-	  dx.assign(3*dlc->GetNumAtoms(),0.);
+	  {
+	    int nq = dlc->GetNumInternalCrds();
+	    int nat = dlc->GetNumAtoms();
+	    int nat3 = 3 * nat;
+	    dx.assign(nat3,0.);
+	    BGinv.reset( new std::vector<double>( nat3*nq, 0. ) );
+	    dlc->CptQ2CEstimator( X0, BGinv->data() );
+	  };
 	ccdl::gt_dot_v( n, n, evecs, g, numer.data() );
       }
 
@@ -115,35 +123,34 @@ namespace ccdl
 	    dx = dq;
 	  }
 	else
+	  // {
+	  //   nat = dlc->GetNumAtoms();
+	  //   t.resize( 3*nat );
+	  //   std::copy( x0, x0 + 3*nat, t.data() );
+	  //   std::vector<double> ddq(dq);
+	  //   dlc->DisplaceByDeltaQ( ddq.data(), t.data() );
+	  //   nat = dlc->GetNumAtoms();
+	  //   dxlen = 0.;
+	  //   dxmax = 0.;
+	  //   for ( int i=0; i<nat*3; ++i )
+	  //     {
+	  // 	dx[i] = t[i] - x0[i];
+	  // 	dxlen += dx[i]*dx[i];		
+	  //     }
+	  //   dxlen = std::sqrt( dxlen );
+	  // }
 	  {
 	    nat = dlc->GetNumAtoms();
-	    t.resize( 3*nat );
-	    std::copy( x0, x0 + 3*nat, t.data() );
-	    std::vector<double> ddq(dq);
-	    dlc->DisplaceByDeltaQ( ddq.data(), t.data() );
-	    nat = dlc->GetNumAtoms();
-
-	    // {
-	    //   std::printf("%i\n",nat);
-	    //   std::printf("%20.10f\n",lambda);
-	    //   for ( int i=0; i<nat; ++i )
-	    // 	{
-	    // 	  std::printf("X ");
-	    // 	  for ( int k=0; k<3; ++k )
-	    // 	    std::printf("%20.10f",t[k+i*3]/ccdl::AU_PER_ANGSTROM);
-	    // 	  std::printf("\n");
-	    // 	}
-	    // };
-
+	    int nat3 = nat*3;
+	    dlc->EstimateQ2C( BGinv->data(), dq.data(), dx.data() );
 	    dxlen = 0.;
 	    dxmax = 0.;
-	    for ( int i=0; i<nat*3; ++i )
-	      {
-		dx[i] = t[i] - x0[i];
-		dxlen += dx[i]*dx[i];		
-	      }
+	    for ( int i=0; i<nat3; ++i )
+	      dxlen += dx[i]*dx[i]; 
 	    dxlen = std::sqrt( dxlen );
 	  }
+
+
 	//std::printf("nat = %i\n",nat);
 	dxmax = 0.;
 	int i=0;
@@ -341,17 +348,33 @@ namespace ccdl
 		  for ( std::size_t k=0; k<ddq.size(); ++k )
 		    ddq[k] = s * steps[0].dq[k];
 		  steps[1].dq = ddq;
-		  std::copy( x0, x0+nat3, xv.data() );
-		  dlc->DisplaceByDeltaQ( ddq.data(), xv.data() );
 		  double maxdx = 0.;
-		  for ( int a=0; a<nat; ++a )
-		    {
-		      double x = xv[0+a*3]-x0[0+a*3];
-		      double y = xv[1+a*3]-x0[1+a*3];
-		      double z = xv[2+a*3]-x0[2+a*3];
-		      double r2 = x*x+y*y+z*z;
-		      maxdx = std::max( maxdx, std::sqrt(r2) );
-		    };
+
+		  // {
+		  //   std::copy( x0, x0+nat3, xv.data() );
+		  //   dlc->DisplaceByDeltaQ( ddq.data(), xv.data() );
+		  //   for ( int a=0; a<nat; ++a )
+		  //     {
+		  // 	double x = xv[0+a*3]-x0[0+a*3];
+		  // 	double y = xv[1+a*3]-x0[1+a*3];
+		  // 	double z = xv[2+a*3]-x0[2+a*3];
+		  // 	double r2 = x*x+y*y+z*z;
+		  // 	maxdx = std::max( maxdx, std::sqrt(r2) );
+		  //     };
+		  // }
+		  {
+		    dlc->EstimateQ2C( steps[1].BGinv->data(), ddq.data(), xv.data() );
+		    for ( int a=0; a<nat; ++a )
+		      {
+			double x = xv[0+a*3];
+			double y = xv[1+a*3];
+			double z = xv[2+a*3];
+			double r2 = x*x+y*y+z*z;
+			maxdx = std::max( maxdx, std::sqrt(r2) );
+		      };
+		  }
+
+
 		  steps[1].dxmax = maxdx;
 		  // std::printf("s %13.4e < %13.4e < %13.4e (%13.4e)\n",
 		  // 	      slo,s,shi,maxdx);
@@ -397,8 +420,7 @@ namespace ccdl
 	    }
 	};
 
-      //std::printf("trust @           %13.4e (%13.4e)\n",
-      //	  steps[2].lambda, steps[2].dxmax );
+      //std::printf("trust @           %13.4e (%13.4e)\n",steps[2].lambda, steps[2].dxmax );
 
       // steps[2] is now at the trust radius
       // We can now search for a lambda to minimize the rfo, as long as
@@ -478,6 +500,21 @@ namespace ccdl
 	      steps[2].SetLambda( lnew );
 	      std::sort( steps.begin(), steps.end(), &ccdl::gopt::steps_rfo_min );
 
+	      /// screw this =============================
+	      if ( steps[1].rfo > steps[0].rfo )
+		{
+		  steps[1] = steps[0];
+		  break;
+		}
+	      else if ( steps[1].rfo > steps[2].rfo )
+		{
+		  steps[1] = steps[2];
+		  break;
+		}
+	      else
+		break;
+	      /// screw this =============================
+
 	      // std::printf("rfo %13.5e %13.5e %13.5e (%13.5e %13.5e %13.5e)\n",
 	      // 		  steps[0].lambda,steps[1].lambda,steps[2].lambda,
 	      // 		  steps[0].rfo,steps[1].rfo,steps[2].rfo);
@@ -490,8 +527,10 @@ namespace ccdl
 
 	    }
 	  //std::printf("rfo search took %i\n",ctr);
-	  //std::printf("rfo   @           %13.4e\n",
-	  //	      steps[0].lambda );
+	  //std::printf("rfo   @           %13.4e\n",steps[0].lambda );
+
+
+
 	}
       else
 	{
@@ -518,8 +557,7 @@ namespace ccdl
       // interpret the trust_radius as the dxmax
 
 
-      //std::printf("close @           %13.4e (%13.4e) [%13.4e]\n",
-      //	  steps[0].lambda,steps[0].dxmax,min0/ccdl::AU_PER_ANGSTROM );
+      //std::printf("close @           %13.4e (%13.4e) [%13.4e]\n",steps[0].lambda,steps[0].dxmax,min0/ccdl::AU_PER_ANGSTROM );
 
 
       if ( dlc == NULL )
@@ -609,7 +647,7 @@ void ccdl::gopt::StepInfo::CptInfo
 	  step.dgq[i] = step.gq[i] - prevstep.gq[i];
 	  step.dxq[i] = step.xq[i] - prevstep.xq[i];
 	}
-      //step.dlc->CptDifference( step.xq.data(), prevstep.xq.data(), step.dxq.data() );
+      step.dlc->CptDifference( step.xq.data(), prevstep.xq.data(), step.dxq.data() );
 
       de_pred = ccdl::gopt::PredictEnergyChange
 	( step.nq, step.hq.data(), prevstep.gq.data(), step.dxq.data() );
@@ -664,7 +702,7 @@ ccdl::gopt::Step::Step
       hq.assign(nq*nq,0.);
       dxq.assign(nq,0.);
       dgq.assign(nq,0.);
-      dlc->DisplaceByDeltaQ( dxq.data(), x.data(), 1.e-8 );
+      dlc->DisplaceByDeltaQ( dxq.data(), x.data(), 1.e-7 );
       dlc->CptInternalCrds( x.data(), xq.data() );
       for ( int i=0; i<nq; ++i )
 	hq[i+i*nq] = 1.;
@@ -920,7 +958,8 @@ void ccdl::gopt::Step::Move( double & mxstep )
     }
   else
     {
-      dlc->DisplaceByDeltaQ( dxq.data(), x.data(), 1.e-8 );
+      double disp_tol = std::max( 1.e-9, std::min( 1.e-6, info.dxc_max/10. ) );
+      dlc->DisplaceByDeltaQ( dxq.data(), x.data(), disp_tol );
       dlc->CptInternalCrds( x.data(), xq.data() );
 
 

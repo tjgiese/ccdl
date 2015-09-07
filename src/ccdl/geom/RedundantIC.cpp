@@ -326,6 +326,206 @@ double ccdl::DihedralT::MoveValueToValidRange( double d ) const
 }
 
 
+
+
+
+
+
+
+
+
+
+
+std::string ccdl::CartT::Print() const
+{
+  std::stringstream msg;
+  if ( k == 0 )
+    msg << "X ";
+  else if ( k == 1 )
+    msg << "Y ";
+  else
+    msg << "Z ";
+  msg << std::setw(5) << a+1 << " " 
+      << std::setw(5) << 0 << " "
+      << std::setw(5) << 0 << " "
+      << std::setw(5) << 0;
+  if ( IsFrozen() )
+    msg << " F " << std::fixed << std::setprecision(8) 
+	<< std::setw(13) << mConVal / ccdl::AU_PER_ANGSTROM << " A  ";
+  else
+    msg << " A " << std::setw(13) << " " << "    ";
+  return msg.str();
+}
+std::string ccdl::CartT::PrintPrettyValue( double a ) const
+{
+  a /= ccdl::AU_PER_ANGSTROM;
+  std::stringstream msg;
+  msg << std::fixed << std::setprecision(8) 
+      << std::setw(13) << a << " A  ";
+  return msg.str();
+}
+
+bool ccdl::CartT::Freeze( ccdl::InternalCrd const * q )
+{
+  bool ok = false;
+  ccdl::CartT const * p = dynamic_cast<ccdl::CartT const *>(q);
+  if ( p )
+    {
+      if ( a == p->a and k == p->k )
+	{
+	  mFrozen = true;
+	  mConVal = p->GetConstraintValue();
+	  ok = true;
+	};
+    };
+  return ok;
+}
+double ccdl::CartT::CptValue( int const , double const * c ) const
+{
+  return c[k+a*3];
+}
+void ccdl::CartT::CptWilson( int const nat, double const * , double * B ) const
+{
+  std::fill( B, B + 3*nat, 0. );
+  B[ k + a*3 ] = 1.;
+}
+void ccdl::CartT::CptHessian( int const nat, double const * , double * B ) const
+{
+  std::fill( B, B + 3*nat*3*nat, 0. );
+}
+double ccdl::CartT::CptDifference( double const x1, double const x0 ) const
+{
+  return x1-x0;
+}
+double ccdl::CartT::MoveValueToValidRange( double d ) const
+{
+  return d;
+}
+
+
+
+
+
+
+
+
+
+
+
+std::string ccdl::R12T::Print() const
+{
+  std::stringstream msg;
+  msg << "B " 
+      << std::setw(5) << i+1 << " " 
+      << std::setw(5) << j+1 << " "
+      << std::setw(5) << k+1 << " "
+      << std::setw(5) << l+1;
+  if ( IsFrozen() )
+    msg << " F " << std::fixed << std::setprecision(8) 
+	<< std::setw(13) << mConVal / ccdl::AU_PER_ANGSTROM << " A  ";
+  else
+    msg << " A " << std::setw(13) << " " << "    ";
+  return msg.str();
+}
+std::string ccdl::R12T::PrintPrettyValue( double a ) const
+{
+  a /= ccdl::AU_PER_ANGSTROM;
+  std::stringstream msg;
+  msg << std::fixed << std::setprecision(8) 
+      << std::setw(13) << a << " A  ";
+  return msg.str();
+}
+
+bool ccdl::R12T::Freeze( ccdl::InternalCrd const * q )
+{
+  bool ok = false;
+  ccdl::R12T const * p = dynamic_cast<ccdl::R12T const *>(q);
+  if ( p )
+    {
+      if ( i == p->i and j == p->j and k == p->k and l == p->l )
+	{
+	  mFrozen = true;
+	  mConVal = p->GetConstraintValue();
+	  ok = true;
+	};
+    };
+  return ok;
+}
+double ccdl::R12T::CptValue( int const , double const * c ) const
+{
+  return ccdl::Bond( c+3*i, c+3*j )-ccdl::Bond( c+3*k, c+3*l );
+}
+void ccdl::R12T::CptWilson( int const nat, double const * c, double * B ) const
+{
+  double tmp1[ 3*2 ],tmp2[ 3*2 ];
+  ccdl::Bond( c+3*i, c+3*j, tmp1 );
+  ccdl::Bond( c+3*k, c+3*l, tmp2 );
+  std::fill( B, B + 3*nat, 0. );
+  for ( int u=0; u<3; ++u )
+    {
+      B[ u+i*3 ] += tmp1[ u+0*3 ];
+      B[ u+j*3 ] += tmp1[ u+1*3 ];
+      B[ u+k*3 ] -= tmp2[ u+0*3 ];
+      B[ u+l*3 ] -= tmp2[ u+1*3 ];
+    };
+}
+void ccdl::R12T::CptHessian( int const nat, double const * c, double * B ) const
+{
+  std::fill( B, B + 3*nat*3*nat, 0. );
+  double grd[ 3*2 ];
+  double tmp[ (3*2)*(3*2) ];
+
+  ccdl::Bond( c+3*i, c+3*j, grd, tmp );
+  int ats[2] = { i,j };
+  for ( int a=0; a<2; ++a )
+    {
+      int aa = ats[a];
+      for ( int u=0; u<3; ++u )
+	for ( int b=0; b<2; ++b )
+	  {
+	    int bb = ats[b];
+	    for ( int v=0; v<3; ++v )
+	      B[ (v+bb*3) + (u+aa*3)*(3*nat) ] 
+		= tmp[ (v+b*3) + (u+a*3)*(3*2) ];
+	  };
+    };
+  ccdl::Bond( c+3*k, c+3*l, grd, tmp );
+  ats[0] = k;
+  ats[1] = l;
+  for ( int a=0; a<2; ++a )
+    {
+      int aa = ats[a];
+      for ( int u=0; u<3; ++u )
+	for ( int b=0; b<2; ++b )
+	  {
+	    int bb = ats[b];
+	    for ( int v=0; v<3; ++v )
+	      B[ (v+bb*3) + (u+aa*3)*(3*nat) ] 
+		-= tmp[ (v+b*3) + (u+a*3)*(3*2) ];
+	  };
+    };
+}
+double ccdl::R12T::CptDifference( double const x1, double const x0 ) const
+{
+  return x1-x0;
+}
+double ccdl::R12T::MoveValueToValidRange( double d ) const
+{
+  return d;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 // struct ictype
 // {
 //   ictype() : i(-1),j(-1),k(-1),l(-1) {}
@@ -359,13 +559,13 @@ double ccdl::DihedralT::MoveValueToValidRange( double d ) const
 
 
 ccdl::RedundantIC::RedundantIC
-( int const nat, int const * z, double const * crd, bool merge_fragments )
+( int const nat, int const * z, double const * crd, bool cartesian, bool merge_fragments )
 {
-  reset( nat,z,crd,merge_fragments );
+  reset( nat,z,crd,cartesian,merge_fragments );
 }
 
 void ccdl::RedundantIC::reset
-( int const num_atoms, int const * z, double const * crd, bool merge_fragments )
+( int const num_atoms, int const * z, double const * crd, bool cartesian, bool merge_fragments )
 {
   nat = num_atoms;
   std::vector< ccdl::pIC > frozens;
@@ -374,28 +574,40 @@ void ccdl::RedundantIC::reset
       frozens.push_back( *q );
   qs.resize( 0 );
 
-  ccdl::AutoBondFrag abf( nat,z,crd,merge_fragments );
-  for ( int a=0; a<abf.nbonds; ++a )
+  if ( cartesian )
     {
-      pIC t( new ccdl::BondT( abf.bonds[0+a*2], 
-			      abf.bonds[1+a*2] ) );
-      qs.push_back( t );
-    };
-  for ( int a=0; a<abf.nangles; ++a )
+      for ( int a=0; a<nat; ++a )
+	for ( int k=0; k<3; ++k )
+	  {
+	    pIC t( new ccdl::CartT( a, k ) );
+	    qs.push_back( t );
+	  };
+    }
+  else
     {
-      pIC t( new ccdl::AngleT( abf.angles[0+a*3], 
-			       abf.angles[1+a*3], 
-			       abf.angles[2+a*3] ) );
-      qs.push_back( t );
-    };
-  for ( int a=0; a<abf.ntorsions; ++a )
-    {
-      pIC t( new ccdl::DihedralT( abf.torsions[0+a*4], 
-				  abf.torsions[1+a*4], 
-				  abf.torsions[2+a*4],
-				  abf.torsions[3+a*4] ) );
-      qs.push_back( t );
-    };
+      ccdl::AutoBondFrag abf( nat,z,crd,merge_fragments );
+      for ( int a=0; a<abf.nbonds; ++a )
+	{
+	  pIC t( new ccdl::BondT( abf.bonds[0+a*2], 
+				  abf.bonds[1+a*2] ) );
+	  qs.push_back( t );
+	};
+      for ( int a=0; a<abf.nangles; ++a )
+	{
+	  pIC t( new ccdl::AngleT( abf.angles[0+a*3], 
+				   abf.angles[1+a*3], 
+				   abf.angles[2+a*3] ) );
+	  qs.push_back( t );
+	};
+      for ( int a=0; a<abf.ntorsions; ++a )
+	{
+	  pIC t( new ccdl::DihedralT( abf.torsions[0+a*4], 
+				      abf.torsions[1+a*4], 
+				      abf.torsions[2+a*4],
+				      abf.torsions[3+a*4] ) );
+	  qs.push_back( t );
+	};
+    }
 
   for ( std::vector< ccdl::pIC >::iterator 
 	  f=frozens.begin(), fend=frozens.end(); 
@@ -461,7 +673,26 @@ void ccdl::RedundantIC::FreezeDihedral( int i, int j, int k, int l, double const
     qs.push_back( f );
 }
 
+void ccdl::RedundantIC::FreezeR12( int i, int j, int k, int l, double const v )
+{
+  ccdl::pIC f( new ccdl::R12T( i, j, k, l ) );
+  f->Freeze( v );
+  bool ok = false;
+  for ( std::vector< ccdl::pIC >::iterator 
+	  q=qs.begin(), qend=qs.end(); 
+	q!=qend; ++q )
+    {
+      ok = (*q)->Freeze( f.get() );
+      if ( ok ) break;
+    }
+  if ( ! ok )
+    qs.push_back( f );
+}
 
+void ccdl::RedundantIC::FreezeR12( int i, int j, int l, double const v )
+{
+  FreezeR12( i,j, j,l, v );
+}
 
 
 
@@ -594,12 +825,13 @@ void ccdl::RedundantIC::DisplaceByDeltaQ
       dq[i] = qs[i]->CptDifference( final, q0[i] );
     };
 
+  std::vector<double> backup;
   double dqnorm = 0.;
   for ( int i=0; i<nq; ++i ) dqnorm += dq[i]*dq[i];
+  bool OK = false;
   if ( dqnorm > 1.e-30 )
     {
-
-      for ( int iter=0; iter < 90; ++iter )
+      for ( int iter=0; iter < 50; ++iter )
 	{
 	   // std::printf("dq  ");
 	   // for ( int i=0; i<nq; ++i )
@@ -609,6 +841,8 @@ void ccdl::RedundantIC::DisplaceByDeltaQ
 	  CptTransformData( crd0, B, G, Ginv );
 	  ccdl::sy_dot_v(nq,nq,Ginv,dq,qt);
 	  ccdl::ge_dot_v(nat3,nq,B,qt,crd1);
+
+	  if ( iter == 0 ) backup.assign( crd1, crd1+nat3 );
 
 	  double rms = 0.;
 	  for ( int i=0; i<nat3; ++i ) rms += crd1[i]*crd1[i];
@@ -624,11 +858,20 @@ void ccdl::RedundantIC::DisplaceByDeltaQ
 
 	  std::copy( q1, q1+nq, q0 );
 	  std::copy( crd1, crd1+nat3, crd0 );
-	  if ( rms < TOL ) break;
+	  if ( rms < TOL ) 
+	    { 
+	      OK = true;
+	      break;
+	    };
+	};
+      if ( ! OK )
+	{
+	  std::copy( backup.data(), backup.data()+nat3, crd0 );
+	  return;
 	};
     };
 
-  if ( ncon > 0 )
+  if ( ncon > 0 and OK )
     {
       
       for ( int i=0; i<nq; ++i )
@@ -644,7 +887,7 @@ void ccdl::RedundantIC::DisplaceByDeltaQ
       //std::cerr << "A constraint is redundant with an active coordinate in a manner that cannot acheive the desired displacement simultaneously with the constraint.\n";
 	
       if ( dqnorm > 1.e-30 )
-	for ( int iter=0; iter < 90; ++iter )
+	for ( int iter=0; iter < 50; ++iter )
 	  {
 
 	    {
@@ -877,4 +1120,39 @@ void ccdl::RedundantIC::CptDifference( double const * hi, double const * lo, dou
       double b = qs[i]->MoveValueToValidRange( lo[i] );
       diff[i]  = qs[i]->CptDifference( a, b );
     }
+}
+
+
+
+
+
+
+void ccdl::RedundantIC::CptQ2CEstimator
+( double const * x0, double * BGinv )
+{
+  int const nat3 = nat*3;
+  int const nq = GetNumInternalCrds();
+
+  std::vector<double> Bmat(nat3*nq,0.), Gmat(nq*nq,0.), Ginvmat(nq*nq,0.);
+  double *__restrict__ B = Bmat.data();
+  double *__restrict__ G = Gmat.data();
+  double *__restrict__ Ginv = Ginvmat.data();
+
+  CptTransformData( x0, B, G, Ginv );
+  ccdl::ge_dot_sy( nat3, nq, B, nq, nq, Ginv, BGinv );
+}
+
+
+void ccdl::RedundantIC::EstimateQ2C
+( double const * BGinv, double const * DQ, 
+  double * approx_dx )
+{
+  int const nat3 = nat*3;
+  int const nq = GetNumInternalCrds();
+
+  std::vector<double> dq( DQ, DQ+nq );
+  for ( int i=0; i<nq; ++i )
+    if ( qs[i]->IsFrozen() ) 
+      dq[i] = 0.;
+  ccdl::ge_dot_v( nat3, nq, BGinv, dq.data(), approx_dx );
 }
