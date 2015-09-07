@@ -996,7 +996,10 @@ int ccdl::DLCOptMin
   step.prevstep = &prevstep;
 
   bool backtracking = false;
+  int nbacktracks = 0;
   bool CONVERGED = false;
+
+  
   for ( int iter=0; iter < opts.maxiter; ++iter )
     {
 
@@ -1092,7 +1095,7 @@ int ccdl::DLCOptMin
 
       
       if ( step.info.dxc_max > 1.e-20 )
-	maxstep = std::min( 2 * step.info.dxc_max, maxstep );
+	maxstep = std::min( 3 * step.info.dxc_max, maxstep );
 
 
 
@@ -1103,10 +1106,44 @@ int ccdl::DLCOptMin
 	}
       else if ( step.info.gc_rms < 1. )
 	{
-	  maxstep = std::max( maxstep, step.info.gc_rms / 1000. );
+	  // //////////////////////
+	  if ( step.info.dxc_max > 1.e-20 && not backtracking )
+	    {
+	      maxstep = 2 * step.info.dxc_max;
+	      if ( step.info.gc_rms > 0.1 )maxstep = std::min( maxstep, step.info.gc_rms / 3. );
+	    };
+	  // //////////////////////
+	  maxstep = std::max( maxstep, step.info.gc_rms / 100. );
+	  maxstep = std::min( maxstep, opts.limstep );
 	}
       step.maxstep = maxstep;
+      std::printf("maxstep = %13.4e\n",maxstep);
 
+
+      /*
+      if ( backtracking )
+	{
+	  nbacktracks++;
+	  if ( nbacktracks == 4 )
+	    {
+	      cout << "GEOMOPT Too many backtracks. Resetting Hessian to diagonal.\n";
+	      // if ( dlc != NULL )
+	      // 	for ( int i=0; i<step.nq; ++i )
+	      // 	  for ( int j=0; j < step.nq; ++j )
+	      // 	    if ( i != j )
+	      // 	      step.hq[j+i*step.nq] = 0.;
+	      // 	    else
+	      // 	      step.hq[j+i*step.nq] += 1.;
+	      // int n3 = step.nat*3;
+	      // for ( int i=0; i<n3; ++i )
+	      // 	for ( int j=0; j < n3; ++j )
+	      // 	  if ( i != j )
+	      // 	    step.h[j+i*n3] = 0.;
+	      // 	  else
+	      // 	    step.h[j+i*n3] += 1.;
+	    }
+	};
+      */
 
       bool update_hessian = false;
       if ( ! redo )

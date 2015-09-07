@@ -678,6 +678,8 @@ void ccdl::gopt::UpdateHessian_BFGS( int const n, double const * H, double const
   int one = 1;
   std::copy(H,H+n*n,Hnew);
   double beta = 0, alpha = 1. / ddot_(&n,dx,&one,g,&one);
+  //std::printf("BFGS alpha %20.10e\n",alpha);
+  if ( alpha < 0. ) return;
   //std::printf("bfgs alpha = %20.10e\n",alpha);
   //if ( alpha < 1.e+99 ) { std::fprintf(stderr,"BFGS premature exit\n");return;}
   dger_( &n, &n, &alpha, g, &one, g, &one, Hnew, &n ); // Hnew[i+j*n] += alpha*g[i]*g[j]

@@ -230,8 +230,19 @@ namespace ccdl
       double lambda_hi = lambda_never_gt;
       double lambda_lo = lambda_hi;
       double delta =  std::max( std::abs(lambda_hi) , 5.e-5 );
+      int ctr = 0;
       while ( true ) // first find a lambda that doesn't cause lapack to explode
 	{
+	  ctr++;
+	  if ( ctr > 10000 )
+	    {
+	      std::cerr << "ccdl::gopt::steppt::FindStepLength "
+			<< "infinite loop encountered while finding "
+			<< "a reasonable lambda\n"
+			<< "Expect your optimization to fail"
+			<< std::endl;
+	      break;
+	    };
 	  //std::printf("lambda %13.4e ",lambda_hi);
 	  if ( steps[1].SetLambda( lambda_hi ) )
 	    {
@@ -263,15 +274,27 @@ namespace ccdl
 	}
       lambda_lo = steps[1].lambda;
 
-      //std::printf("dxmax @ evals[0]  %13.4e (%13.4e)\n",lambda_lo,steps[1].dxmax);
+      std::printf("dxmax @ evals[0]  %13.4e (%13.4e)\n",lambda_lo,steps[1].dxmax);
 
       steps[0] = steps[1];
       if ( steps[0].dxmax > trust_radius )
 	{
 	  double dxprev = steps[0].dxmax;
 	  //for ( int i=0; i<20; ++i )
+	  ctr = 0;
 	  while ( true )
 	    {
+	      ctr++;
+	      if ( ctr > 10000 )
+		{
+		  std::cerr << "ccdl::gopt::steppt::FindStepLength "
+			    << "infinite loop encountered while finding "
+			    << "a lambda less than trust_radius\n"
+			    << "Expect your optimization to fail"
+			    << std::endl;
+		  break;
+		};
+
 	      steps[0] = steps[1];
 	      if ( std::abs( lambda_lo ) > 0.1 ) 
 		lambda_lo -= std::max(0.1,std::abs(lambda_lo));
@@ -279,7 +302,7 @@ namespace ccdl
 		lambda_lo -= 0.2;
 	      steps[1].SetLambda( lambda_lo );	  
 
-	      //std::printf("lambda %13.4e %13.4e\n",steps[1].lambda, steps[1].dxmax);
+	      std::printf("lambda %13.4e %13.4e\n",steps[1].lambda, steps[1].dxmax);
 
 	      if ( steps[1].dxmax < trust_radius )
 		break;
@@ -290,6 +313,9 @@ namespace ccdl
 	}
       if ( steps[1].dxmax > trust_radius )
 	{
+
+	  // TIM HERE MAKE SURE THE DXMAX IS REALLY OBEYED HERE
+
 	  if ( dlc == NULL )
 	    std::copy( steps[1].dx.data(), steps[1].dx.data() + ng, dx );
 	  else
@@ -308,8 +334,8 @@ namespace ccdl
 	      }
 	      std::copy( steps[1].dq.data(), steps[1].dq.data() + ng, dx );
 	    }
+	  std::printf("DXMAX TOO BIG %13.4e %13.4e\n",steps[1].dxmax, trust_radius);
 	  return 1;
-	  //std::printf("DXMAX TOO BIG %13.4e %13.4e\n",steps[1].dxmax, trust_radius);
 	}
 
       //std::printf("trust between     %13.4e %13.4e (%13.4e %13.4e)  tr %13.4e\n",
@@ -358,8 +384,19 @@ namespace ccdl
       // forward search for an rfo that's less than the current rfo
       delta = 0.05 * std::abs(lambda_hi);
       lambda_hi -= delta;
+      ctr=0;
       while ( true )
 	{
+	  ctr++;
+	  if ( ctr > 10000 )
+	    {
+	      std::cerr << "ccdl::gopt::steppt::FindStepLength "
+			<< "infinite loop encountered while bracketing "
+			<< "the rfo\n"
+			<< "Expect your optimization to fail"
+			<< std::endl;
+	      break;
+	    };
 	  steps[1] = steps[2];
 	  steps[2].SetLambda( lambda_hi );
 	  if ( steps[2].rfo >= steps[1].rfo )
@@ -383,8 +420,19 @@ namespace ccdl
 	{
 	  steps[0] = steps[1];
 	  steps[1] = steps[2];
+	  ctr=0;
 	  while ( true )
 	    {
+	      ctr++;
+	      if ( ctr > 10000 )
+		{
+		  std::cerr << "ccdl::gopt::steppt::FindStepLength "
+			    << "infinite loop encountered while bisecting "
+			    << "the rfo\n"
+			    << "Expect your optimization to fail"
+			    << std::endl;
+		  break;
+		};
 	      double lnew = 0.5 * ( steps[0].lambda + steps[1].lambda );
 	      steps[2].SetLambda( lnew );
 	      std::sort( steps.begin(), steps.end(), &ccdl::gopt::steps_rfo_min );
@@ -410,6 +458,7 @@ namespace ccdl
       double min0 = steps[0].MinSeparation();
       if ( min0 < 0.6 * ccdl::AU_PER_ANGSTROM )
 	{
+	  delta = 0.05 * std::abs(steps[1].lambda);
 	  steps[1] = steps[0];
 	  for ( int i=0; i<10; ++i )
 	    {
@@ -434,11 +483,6 @@ namespace ccdl
 	std::copy( steps[0].dq.data(), steps[0].dq.data() + ng, dx );
 
 
-      {
-	
-
-      }
-
       return steps[0].dxmax;
     }
 
@@ -456,7 +500,7 @@ bool ccdl::gopt::steps_rfo_min( ccdl::gopt::steppt const & a,
 
 
 
-ccdl::gopt::StepInfo::StepInfo ()
+ccdl::gopt::StepInfo::StepInfo()
   : de(0.), de_abs(0.), de_pred(0.),
     gc_rms(0.), gc_max( -1.e+30 ),
     dxc_rms(0.), dxc_max( -1.e+30 ), dxc_len(0.)
@@ -862,15 +906,15 @@ ccdl::OptOptions::OptOptions()
     calcfc( false ),
     calcall( false ),
     maxiter( 100 ),
-    maxstep( 0.5 ),
+    maxstep( 1.0 ),
     limstep( 1.0 ),
     varmaxstep( true ),
     eigvec( -1 ),
-    ener_tol( 1.e-8 ),
+    ener_tol( 1.e-7 ),
     gmax_tol( 1.e-4 ),
-    xmax_tol( 1.e-4 ),
-    grms_tol( 1.e-4 ),
-    xrms_tol( 1.e-4 ),
+    xmax_tol( 1.e-3 ),
+    grms_tol( 5.e-5 ),
+    xrms_tol( 5.e-4 ),
     ostr( &std::cout )
 {}
 
