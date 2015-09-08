@@ -8,6 +8,11 @@ namespace ccdl
   namespace gopt
   {
 
+
+    double MinSeparation( int nat, double const * c );
+    double MaxDisplacement( int nat, double const * newc, double const * oldc );
+    double MaxDisplacement( int nat, double const * dc );
+
     struct steppt;
     bool steps_rfo_min( ccdl::gopt::steppt const & a,
 			ccdl::gopt::steppt const & b );
@@ -583,9 +588,73 @@ bool ccdl::gopt::steps_rfo_min( ccdl::gopt::steppt const & a,
 
 
 
+
+
+
+
+
+
+
+
+
+
+double ccdl::gopt::MinSeparation( int nat, double const * t )
+{
+  double minsep = 10000000.;
+  for ( int i=0; i<nat; ++i )
+    {
+      for ( int j=0; j<i; ++j )
+	{
+	  double x = t[0+i*3]-t[0+j*3];
+	  double y = t[1+i*3]-t[1+j*3];
+	  double z = t[2+i*3]-t[2+j*3];
+	  double r = std::sqrt( x*x+y*y+z*z );
+	  minsep = std::min( minsep, r );
+	};
+    };
+  return minsep;
+}
+
+double ccdl::gopt::MaxDisplacement( int nat, double const * newc, double const * oldc )
+{
+  double maxdx = -1.;
+  for ( int i=0; i<nat; ++i )
+    {
+      double x = newc[0+i*3]-oldc[0+i*3];
+      double y = newc[1+i*3]-oldc[1+i*3];
+      double z = newc[2+i*3]-oldc[2+i*3];
+      double r = std::sqrt( x*x+y*y+z*z );
+      maxdx = std::max( maxdx, r );
+    };
+  return maxdx;
+}
+
+double ccdl::gopt::MaxDisplacement( int nat, double const * dc )
+{
+  double maxdx = -1.;
+  for ( int i=0; i<nat; ++i )
+    {
+      double x = dc[0+i*3];
+      double y = dc[1+i*3];
+      double z = dc[2+i*3];
+      double r = std::sqrt( x*x+y*y+z*z );
+      maxdx = std::max( maxdx, r );
+    };
+  return maxdx;
+}
+
+
+
+
+
+
+
+
+
+
 ccdl::gopt::StepInfo::StepInfo()
   : de(0.), de_abs(0.), de_pred(0.),
-    gc_rms(0.), gc_max( -1.e+30 ),
+    pgc_rms(0.), pgc_max( -1.e+30 ),
     dxc_rms(0.), dxc_max( -1.e+30 ), dxc_len(0.)
 {}
 
@@ -596,8 +665,8 @@ void ccdl::gopt::StepInfo::CptInfo
   de      = 0.; 
   de_abs  = 0.;
   de_pred = 0.;
-  gc_rms  = 0.; 
-  gc_max  = -1.e+30;
+  pgc_rms  = 0.; 
+  pgc_max  = -1.e+30;
   dxc_rms = 0.; 
   dxc_max = -1.e+30;
   dxc_len = 0.;
@@ -609,8 +678,9 @@ void ccdl::gopt::StepInfo::CptInfo
 
   step.dxc.resize( 3*nat );
   step.dgc.resize( 3*nat );
+  step.dpgc.resize( 3*nat );
 
-  step.GrdTransform( true );
+  step.GrdTransform();
 
   //std::printf("cpt info\n");
   for ( int a=0; a<nat; ++a )
@@ -621,22 +691,23 @@ void ccdl::gopt::StepInfo::CptInfo
 	{
 	  int i=k+a*3;
 	  //std::printf("%20.10f (%20.10f)",step.x[i],prevstep.x[i]);
-	  step.dxc[i] = step.x[i]-prevstep.x[i];
-	  step.dgc[i] = step.g[i]-prevstep.g[i];
+	  step.dxc[i]  = step.xc[i]-prevstep.xc[i];
+	  step.dgc[i]  = step.gc[i]-prevstep.gc[i];
+	  step.dpgc[i] = step.pgc[i]-prevstep.pgc[i];
 	  xcnrm += step.dxc[i]*step.dxc[i];
-	  gcnrm += step.g[i]*step.g[i];
+	  gcnrm += step.pgc[i]*step.pgc[i];
 	};
       //std::printf("\n");
       dxc_len += xcnrm;
       dxc_rms += xcnrm;
-      gc_rms  += gcnrm;
+      pgc_rms += gcnrm;
       //std::printf("max -> %12.8f\n",std::sqrt( xcnrm ) );
       dxc_max  = std::max( dxc_max, std::sqrt( xcnrm ) );
-      gc_max   = std::max( gc_max,  std::sqrt( gcnrm ) );
+      pgc_max  = std::max( pgc_max, std::sqrt( gcnrm ) );
     };
-  dxc_rms = std::sqrt( dxc_rms / step.n );
+  dxc_rms = std::sqrt( dxc_rms / step.nc );
   dxc_len = std::sqrt( dxc_len );
-  gc_rms  = std::sqrt( gc_rms / step.n );
+  pgc_rms = std::sqrt( pgc_rms / step.nc );
 
   if ( step.dlc != NULL )
     {
@@ -649,13 +720,13 @@ void ccdl::gopt::StepInfo::CptInfo
 	}
       step.dlc->CptDifference( step.xq.data(), prevstep.xq.data(), step.dxq.data() );
 
-      de_pred = ccdl::gopt::PredictEnergyChange
-	( step.nq, step.hq.data(), prevstep.gq.data(), step.dxq.data() );
-    }
-  else
+      //de_pred = ccdl::gopt::PredictEnergyChange
+      //( step.nq, step.hq.data(), prevstep.gq.data(), step.dxq.data() );
+    };
+  //  else
     {
       de_pred = ccdl::gopt::PredictEnergyChange
-	( step.n, step.h.data(), prevstep.g.data(), step.dxc.data() );
+	( step.nc, step.phc.data(), prevstep.pgc.data(), step.dxc.data() );
     }
 }
 
@@ -680,15 +751,17 @@ ccdl::gopt::Step::Step
 ( int nat, double const * crd,
   ccdl::OptOptions & options, ccdl::RedundantIC * dlcobj )
   : nat( nat ), 
-    n( nat*3 ), 
+    nc( nat*3 ), 
     nq( 0 ),
     nmax( nat*3 ),
     maxstep( options.maxstep ),
     e(0.), 
     predicted_de(0.),
-    x(crd,crd+n),
-    g(n,0.), 
-    h(n*n,0.),
+    xc(crd,crd+nc),
+    gc(nc,0.), 
+    hc(nc*nc,0.),
+    pgc(nc,0.),
+    phc(nc*nc,0.),
     opts( &options ),
     dlc( dlcobj ),
     prevstep( NULL )
@@ -696,44 +769,49 @@ ccdl::gopt::Step::Step
   if ( dlc != NULL )
     {
       nq = dlc->GetNumInternalCrds();
-      nmax = std::max(n,nq);
+      nmax = std::max(nc,nq);
       xq.assign(nq,0.);
       gq.assign(nq,0.);
       hq.assign(nq*nq,0.);
       dxq.assign(nq,0.);
       dgq.assign(nq,0.);
-      dlc->DisplaceByDeltaQ( dxq.data(), x.data(), 1.e-7 );
-      dlc->CptInternalCrds( x.data(), xq.data() );
+      dlc->DisplaceByDeltaQ( dxq.data(), xc.data(), 1.e-7 );
+      dlc->CptInternalCrds( xc.data(), xq.data() );
       for ( int i=0; i<nq; ++i )
 	hq[i+i*nq] = 1.;
     }
   eigvals.assign( nmax, 0. );
-  for ( int i=0; i<n; ++i )
-    h[i+i*n] = 1.;
+  for ( int i=0; i<nc; ++i )
+    hc[i+i*nc] = 1.;
 }
 
-void ccdl::gopt::Step::GrdTransform( bool q2c )
+
+void ccdl::gopt::Step::GrdTransform()
 {
-  if ( dlc == NULL ) return;
+  pgc = gc;
+  if ( dlc != NULL )
+    dlc->GrdTransform( xc.data(), pgc.data(), 
+		       gq.data(), true );
 
-   // std::cerr << "Pre transform gradients\n";
-   // std::vector<int> z(nat,1);
-   // ccdl::WriteXyz( std::cerr, nat, z.data(), g.data() );
-
-  dlc->GrdTransform( x.data(), g.data(), 
-		     gq.data(), q2c );
-
+  // std::cerr << "Pre transform gradients\n";
+  // std::vector<int> z(nat,1);
+  // ccdl::WriteXyz( std::cerr, nat, z.data(), gc.data() );
+  
   // std::cerr << "Post transform gradients\n";
-  // ccdl::WriteXyz( std::cerr, nat, z.data(), g.data() );
+  // ccdl::WriteXyz( std::cerr, nat, z.data(), pgc.data() );
 
 }
 
-void ccdl::gopt::Step::GrdAndHesTransform( bool q2c )
+
+void ccdl::gopt::Step::GrdAndHesTransform()
 {
-  if ( dlc == NULL ) return;
-  dlc->GrdAndHesTransform( x.data(), g.data(), h.data(), 
-			   gq.data(), hq.data(), q2c );
+  pgc = gc;
+  phc = hc;
+  if ( dlc != NULL ) 
+    dlc->GrdAndHesTransform( xc.data(), pgc.data(), phc.data(), 
+			     gq.data(), hq.data(), true );
 }
+
 
 void ccdl::gopt::Step::CptInfo( ccdl::gopt::Step & prev )
 {
@@ -764,16 +842,16 @@ void ccdl::gopt::Step::Print
 	 << FMTE(11,2) << maxstep
 	 << FMTE(11,2) << info.dxc_max 
 	 << FMTE(11,2) << info.dxc_rms
-	 << FMTE(11,2) << info.gc_max
-	 << FMTE(11,2) << info.gc_rms
+	 << FMTE(11,2) << info.pgc_max
+	 << FMTE(11,2) << info.pgc_rms
 	 << "\n";
   
   if ( dlc != NULL )
-    dlc->PrintReport( cout, x.data() );
+    dlc->PrintReport( cout, xc.data() );
   
   cout << "GEOMOPT Energy " << FMTF(20,8) << e << "\n";
-  cout << FMT1("GEOMOPT MAX Force    ",info.gc_max,opts->gmax_tol);
-  cout << FMT1("GEOMOPT RMS Force    ",info.gc_rms,opts->grms_tol);
+  cout << FMT1("GEOMOPT MAX Force    ",info.pgc_max,opts->gmax_tol);
+  cout << FMT1("GEOMOPT RMS Force    ",info.pgc_rms,opts->grms_tol);
   if ( iter > 0 )
     {
       cout << FMT1("GEOMOPT MAX Displ    ",info.dxc_max,opts->xmax_tol);
@@ -786,27 +864,27 @@ void ccdl::gopt::Step::Print
 	   << FMTE(14,4) << info.dxc_max //info.dxc_len
 	   << FMTE(14,4) << maxstep << " max\n";    
     };
-
+  
 }
 
 
 bool ccdl::gopt::Step::CheckConvergence()
 {
   bool CONVERGED = false;
-  CONVERGED = ( info.gc_max <= opts->gmax_tol and
-		info.gc_rms <= opts->grms_tol and
+  CONVERGED = ( info.pgc_max <= opts->gmax_tol and
+		info.pgc_rms <= opts->grms_tol and
 		info.dxc_max <= opts->xmax_tol and
 		info.dxc_rms <= opts->xrms_tol and
 		info.de_abs  <= opts->ener_tol );
 
   if ( ! CONVERGED )
-    CONVERGED = ( ( info.gc_max < 0.05 * opts->gmax_tol and 
+    CONVERGED = ( ( info.pgc_max < 0.05 * opts->gmax_tol and 
 		    info.de_abs  < opts->ener_tol ) or
-		  ( info.gc_max < opts->gmax_tol and 
+		  ( info.pgc_max < opts->gmax_tol and 
 		    info.de_abs < 1.e-12 ) );
 
   if ( ! CONVERGED )
-    CONVERGED = ( info.gc_max < 0.01 * opts->gmax_tol );
+    CONVERGED = ( info.pgc_max < 0.01 * opts->gmax_tol );
 
   return CONVERGED;
 }
@@ -816,21 +894,21 @@ bool ccdl::gopt::Step::CheckConvergence()
 
 void ccdl::gopt::Step::UpdateHessian()
 {
-  int ncrd = n;
+  int ncrd = nc;
 
-  double * Hold = prevstep->h.data();
-  double * Hnew = h.data();
+  double * Hold = prevstep->hc.data();
+  double * Hnew = hc.data();
   double * DG = dgc.data();
   double * DX = dxc.data();
 
-  if ( dlc != NULL )
-    {
-      ncrd = nq;
-      Hold = prevstep->hq.data();
-      Hnew = hq.data();
-      DG = dgq.data();
-      DX = dxq.data();
-    };
+  // if ( dlc != NULL )
+  //   {
+  //     ncrd = nq;
+  //     Hold = prevstep->hq.data();
+  //     Hnew = hq.data();
+  //     DG = dgq.data();
+  //     DX = dxq.data();
+  //   };
 
   double dxnrm = ccdl::v_dot_v( ncrd, DX, DX );
   if ( dxnrm > 1.e-15 )
@@ -872,7 +950,9 @@ void ccdl::gopt::Step::UpdateHessian()
 	}
     }
 
-  if ( dlc != NULL ) dlc->HesBackTransform( x.data(), gq.data(), hq.data(), h.data() );
+  GrdAndHesTransform();
+
+  //if ( dlc != NULL ) dlc->HesBackTransform( x.data(), gq.data(), hq.data(), h.data() );
 
 
   // std::printf("Hold\n");
@@ -909,9 +989,9 @@ void ccdl::gopt::Step::Move( double & mxstep )
 {
   maxstep = mxstep;
 
-  int N = n;
-  double * H = h.data();
-  double * G = g.data();
+  int N = nc;
+  double * H = hc.data();
+  double * G = gc.data();
   double * DX = dxc.data();
   if ( dlc != NULL )
     {
@@ -925,42 +1005,87 @@ void ccdl::gopt::Step::Move( double & mxstep )
   switch ( opts->type )
     {
     case ccdl::gopt::MIN:
-      {
-	
-	// for ( int i=0; i<N; ++i )
-	//   {
-	//     for ( int j=0; j<N; ++j )
-	//       std::printf("%12.3e",H[i+j*N]);
-	//     std::printf("\n");
-	//   };
-	    
-	//ccdl::gopt::CptDeltaX_TrustRadius( N, H, G, maxstep, DX, eigvals.data() );
-	//ccdl::gopt::CptDeltaX_RFO( N, H, G, maxstep, DX );
-	ccdl::gopt::FindStepLength( N, H, G, x.data(), maxstep, DX, eigvals.data(), dlc );
-
-      };
+      //ccdl::gopt::CptDeltaX_TrustRadius( N, H, G, maxstep, DX, eigvals.data() );
+      ccdl::gopt::FindStepLength( N, H, G, xc.data(), maxstep, DX, eigvals.data(), dlc );
       break;
-      
     case ccdl::gopt::TS: // need to add following options
       ccdl::gopt::CptDeltaX_EigenFollow
 	( N, H, G, maxstep, DX, eigvals.data() );
       break;
-      
     default:
       break;
     }
 
-  x = prevstep->x;
+  xc = prevstep->xc;
   xq = prevstep->xq;
   if ( dlc == NULL )
     {
-      for ( int i=0; i<n; ++i ) x[i] += dxc[i];
+      for ( int i=0; i<nc; ++i ) xc[i] += dxc[i];
     }
   else
     {
+      std::vector<double> t( xc );
+
       double disp_tol = std::max( 1.e-9, std::min( 1.e-6, info.dxc_max/10. ) );
-      dlc->DisplaceByDeltaQ( dxq.data(), x.data(), disp_tol );
-      dlc->CptInternalCrds( x.data(), xq.data() );
+      dlc->DisplaceByDeltaQ( dxq.data(), t.data(), disp_tol );
+
+      double minsep = ccdl::gopt::MinSeparation(nat,t.data());
+      double maxdx  = ccdl::gopt::MaxDisplacement(nat,t.data(),xc.data());
+
+      if ( minsep < 0.6 * ccdl::AU_PER_ANGSTROM or maxdx > 3. * ccdl::AU_PER_ANGSTROM )
+	{
+	  *(opts->ostr) << "GEOMOPT DLC step failed; performing step in cartesians\n";
+	  t = xc;
+	  N = nc;
+	  H = phc.data();
+	  G = pgc.data();
+	  DX = dxc.data();
+	  switch ( opts->type )
+	    {
+	    case ccdl::gopt::MIN:
+	      //ccdl::gopt::CptDeltaX_TrustRadius( N, H, G, maxstep, DX, eigvals.data() );
+	      ccdl::gopt::FindStepLength( N, H, G, t.data(), maxstep, DX, eigvals.data(), NULL );
+	      break;
+	    case ccdl::gopt::TS: // need to add following options
+	      ccdl::gopt::CptDeltaX_EigenFollow
+		( N, H, G, maxstep, DX, eigvals.data() );
+	      break;
+	    default:
+	      break;
+	    }
+
+	  maxdx = ccdl::gopt::MaxDisplacement(nat,dxc.data());
+	  double nrm = maxstep / maxdx;
+	  for ( int i=0; i<nc; ++i ) 
+	    {
+	      dxc[i] *= nrm;
+	      t[i] += dxc[i];
+	      //std::printf("%15.10f (%15.10f) [%15.10f]",t[i]/ccdl::AU_PER_ANGSTROM,dxc[i]/ccdl::AU_PER_ANGSTROM,(t[i]-dxc[i])/ccdl::AU_PER_ANGSTROM);
+	      if ( (i+1)%3 == 0 ) std::printf("\n");
+	    };
+	  // now re-enforce constraints
+	  dxq.assign(nq,0.);
+	  xc=t;
+	  std::vector<double> x0(xc);
+	  dlc->DisplaceByDeltaQ( dxq.data(), xc.data() );
+	  minsep = ccdl::gopt::MinSeparation( nat, xc.data() );
+	  maxdx = ccdl::gopt::MaxDisplacement( nat, xc.data(), x0.data() );
+	  if ( minsep < 0.6 * ccdl::AU_PER_ANGSTROM or maxdx > 3. * ccdl::AU_PER_ANGSTROM )
+	    {
+	      *(opts->ostr) << "GEOMOPT Warning: constraints are not being enforced at this step\n";
+	      xc=x0;
+	    }
+	  else
+	    xc=t;
+	}
+      else
+	{
+	  xc = t;
+	}
+      //std::cout << "SIZE " << dlc->GetNumInternalCrds() << " " << xq.size() << std::endl;
+      //dlc->CptInternalCrds( xc.data(), xq.data() );
+
+
 
 
       // {
