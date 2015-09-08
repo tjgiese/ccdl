@@ -218,6 +218,36 @@ namespace ccdl
       ccdl::eigen( ng, H, evals, evecs.data() );
       std::vector< ccdl::gopt::steppt > steps(3);
 
+      // find the first non-negligble eigenvalue
+      // {
+      // 	int istart = 0;
+      // 	int ineg = ng;
+      // 	for ( int i=0; i<ng; ++i )
+      // 	  {
+      // 	    if ( evals[i] < -1.e-9 )
+      // 	      ineg = i;
+      // 	    if ( evals[i] > 1.e-9 )
+      // 	      {
+      // 		istart = i;
+      // 		break;
+      // 	      }
+      // 	  };
+      // 	if ( ineg == ng and evals[istart] > 0.1 and std::abs(evals[istart]-1.) > 1 )
+      // 	  {
+      // 	    steps[0].reset( ng, H, evals, evecs.data(), g, q0.data(), x0, dlc );
+      // 	    steps[0].SetLambda( 0. );
+	  
+      // 	    if ( dlc == NULL )
+      // 	      std::copy( steps[0].dx.data(), steps[0].dx.data() + ng, dx );
+      // 	    else
+      // 	      std::copy( steps[0].dq.data(), steps[0].dq.data() + ng, dx );
+	    
+      // 	    return steps[0].dxmax;
+      // 	  };
+	
+      // }
+
+
       std::vector<double> tmpH;
       // if ( evals[0] < -100. )
       // 	{
@@ -1061,7 +1091,7 @@ void ccdl::gopt::Step::Move( double & mxstep )
 	      dxc[i] *= nrm;
 	      t[i] += dxc[i];
 	      //std::printf("%15.10f (%15.10f) [%15.10f]",t[i]/ccdl::AU_PER_ANGSTROM,dxc[i]/ccdl::AU_PER_ANGSTROM,(t[i]-dxc[i])/ccdl::AU_PER_ANGSTROM);
-	      if ( (i+1)%3 == 0 ) std::printf("\n");
+	      //if ( (i+1)%3 == 0 ) std::printf("\n");
 	    };
 	  // now re-enforce constraints
 	  dxq.assign(nq,0.);
