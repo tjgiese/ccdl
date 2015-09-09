@@ -102,6 +102,7 @@ namespace ccdl
 	
 	lambda = L;
 
+	
 	std::fill(dq.data(),dq.data()+n,0.);
 	for ( int i=0; i<n; ++i )
 	  {
@@ -110,6 +111,33 @@ namespace ccdl
 	      alpha = numer[i]/(lambda-evals[i]);
 	    ccdl::axpy( alpha, n, evecs+i*n, dq.data() );
 	  };
+	
+
+
+	/*
+	double delta = lambda-evals[0];
+	std::fill(dq.data(),dq.data()+n,0.);
+	for ( int i=0; i<n; ++i )
+	  {
+	    double alpha = 0.;
+
+	    // ? hmm why does this  work... doesn't seem like it should
+	    
+	    //double denom = i == 0 ? delta : delta-evals[i]; 
+
+	    // This one does not work at all
+	    //double lambda_i = evals[i]-evals[0] + lambda;
+	    //double denom = (lambda_i - evals[i]);
+
+	    // This is the regular one
+	    double denom = (lambda - evals[i]);
+
+	    if ( std::abs( denom ) > 1.e-30 )
+	      alpha = numer[i]/denom;
+	    ccdl::axpy( alpha, n, evecs+i*n, dq.data() );
+	  };
+	*/
+
 
 
 	double dq2 = ccdl::v_dot_v(n,dq.data(),dq.data());
@@ -1178,6 +1206,8 @@ void ccdl::gopt::Step::Move( double & mxstep )
 {
   maxstep = mxstep;
 
+  std::vector<double> xc0( xc );
+
   int N = nc;
   double * H = hc.data();
   double * G = gc.data();
@@ -1213,18 +1243,18 @@ void ccdl::gopt::Step::Move( double & mxstep )
     }
   else
     {
-      std::vector<double> t( xc );
-
       double disp_tol = std::max( 1.e-9, std::min( 1.e-6, info.dxc_max/10. ) );
-      dlc->DisplaceByDeltaQ( dxq.data(), t.data(), disp_tol );
+      dlc->DisplaceByDeltaQ( dxq.data(), xc.data(), disp_tol );
 
-      double minsep = ccdl::gopt::MinSeparation(nat,t.data());
-      double maxdx  = ccdl::gopt::MaxDisplacement(nat,t.data(),xc.data());
+      double minsep = ccdl::gopt::MinSeparation(nat,xc.data());
+      double maxdx  = ccdl::gopt::MaxDisplacement(nat,xc.data(),xc0.data());
 
-      if ( minsep < 0.6 * ccdl::AU_PER_ANGSTROM or maxdx > 3. * ccdl::AU_PER_ANGSTROM )
+      bool bad_step =  minsep < 0.6 * ccdl::AU_PER_ANGSTROM or maxdx > 3. * ccdl::AU_PER_ANGSTROM;
+
+      if ( bad_step )
 	{
 	  *(opts->ostr) << "GEOMOPT DLC step failed; performing step in cartesians\n";
-	  t = xc;
+	  xc = xc0;
 	  N = nc;
 	  H = phc.data();
 	  G = pgc.data();
@@ -1233,7 +1263,7 @@ void ccdl::gopt::Step::Move( double & mxstep )
 	    {
 	    case ccdl::gopt::MIN:
 	      //ccdl::gopt::CptDeltaX_TrustRadius( N, H, G, maxstep, DX, eigvals.data() );
-	      ccdl::gopt::FindStepLength( N, H, G, t.data(), maxstep, DX, eigvals.data(), NULL );
+	      ccdl::gopt::FindStepLength( N, H, G, xc.data(), maxstep, DX, eigvals.data(), NULL );
 	      break;
 	    case ccdl::gopt::TS: // need to add following options
 	      ccdl::gopt::CptDeltaX_EigenFollow
@@ -1244,51 +1274,49 @@ void ccdl::gopt::Step::Move( double & mxstep )
 	    }
 
 	  maxdx = ccdl::gopt::MaxDisplacement(nat,dxc.data());
+
 	  double nrm = maxstep / maxdx;
 	  for ( int i=0; i<nc; ++i ) 
 	    {
 	      dxc[i] *= nrm;
-	      t[i] += dxc[i];
-	      //std::printf("%15.10f (%15.10f) [%15.10f]",t[i]/ccdl::AU_PER_ANGSTROM,dxc[i]/ccdl::AU_PER_ANGSTROM,(t[i]-dxc[i])/ccdl::AU_PER_ANGSTROM);
-	      //if ( (i+1)%3 == 0 ) std::printf("\n");
+	      xc[i] += dxc[i];
 	    };
 	  // now re-enforce constraints
 	  dxq.assign(nq,0.);
-	  xc=t;
-	  std::vector<double> x0(xc);
 	  dlc->DisplaceByDeltaQ( dxq.data(), xc.data() );
-	  minsep = ccdl::gopt::MinSeparation( nat, xc.data() );
-	  maxdx = ccdl::gopt::MaxDisplacement( nat, xc.data(), x0.data() );
-	  if ( minsep < 0.6 * ccdl::AU_PER_ANGSTROM or maxdx > 3. * ccdl::AU_PER_ANGSTROM )
-	    {
-	      *(opts->ostr) << "GEOMOPT Warning: constraints are not being enforced at this step\n";
-	      xc=x0;
-	    }
-	  else
-	    xc=t;
-	}
-      else
+	};
+
+      for ( int i=0; i<nc; ++i )
+	dxc[i] = xc[i]-xc0[i];
+
+      double nrm = 1.;
+
+      maxdx = ccdl::gopt::MaxDisplacement( nat, xc.data(), xc0.data() );
+      if ( maxdx > maxstep )
 	{
-	  xc = t;
+	  nrm *= maxstep / maxdx;
+	  for ( int i=0; i<nc; ++i )
+	    {
+	      dxc[i] *= nrm;
+	      xc[i] = xc0[i] + nrm * dxc[i];
+	    };
+	  dxq.assign(nq,0.);
+	  dlc->DisplaceByDeltaQ( dxq.data(), xc.data() );
 	}
-      //std::cout << "SIZE " << dlc->GetNumInternalCrds() << " " << xq.size() << std::endl;
-      //dlc->CptInternalCrds( xc.data(), xq.data() );
 
+      bad_step =  minsep < 0.6 * ccdl::AU_PER_ANGSTROM or maxdx > 3. * ccdl::AU_PER_ANGSTROM;
 
-
-
-      // {
-      // 	std::printf("%i\n",nat);
-      // 	std::printf("MOVE\n");
-      // 	for ( int i=0; i<nat; ++i )
-      // 	  {
-      // 	    std::printf("X ");
-      // 	    for ( int k=0; k<3; ++k )
-      // 	      std::printf("%20.10f",x[k+i*3]/ccdl::AU_PER_ANGSTROM);
-      // 	    std::printf("\n");
-      // 	  }
-      // };
-
+      if ( bad_step )
+	{
+	  *(opts->ostr) << "GEOMOPT Warning: constraints are not being enforced at this step\n";
+	  maxdx = ccdl::gopt::MaxDisplacement( nat, xc.data(), xc0.data() );
+	  nrm *= maxstep / maxdx;
+	  for ( int i=0; i<nc; ++i )
+	    {
+	      dxc[i] *= nrm;
+	      xc[i] = xc0[i] + nrm * dxc[i];
+	    };
+	}
     };
 
   info.CptDeltaCrds( *this, *prevstep );

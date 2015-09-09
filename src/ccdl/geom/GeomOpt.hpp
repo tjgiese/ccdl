@@ -378,7 +378,12 @@ int ccdl::DLCOptMin
 		 << FMTF(14,8) << ogrms << " perform a backtrack" << "\n"; 
 	    redo = true;
 	    backtracking = true;
-	    limstep = std::min(limstep,maxstep*1.5);
+
+	    if ( opts.varmaxstep )
+	      limstep = std::min(limstep,maxstep*1.5);
+	    else
+	      limstep = std::min(limstep,maxstep*1.2);
+
 	    maxstep /= ( 1.5 * 0.8 + std::min(4.,ngrms/ogrms) * 0.2 );
 	  }
 	else if ( ngrms > ogrms and iter and step.info.de > 0. )
@@ -388,14 +393,20 @@ int ccdl::DLCOptMin
 		 << FMTF(14,8) << ogrms << " perform a backtrack" << "\n"; 
 	    redo = true;
 	    backtracking = true;
-	    limstep = std::min(limstep,maxstep*1.5);
+
+	    if ( opts.varmaxstep )
+	      limstep = std::min(limstep,maxstep*1.5);
+	    else
+	      limstep = std::min(limstep,maxstep*1.2);
+
 	    maxstep /= 1.5;
 	  }		 
 	else if ( ogrms > 1.e-8 and ngrms > 1.e-8 and step.info.de <= 0. and ugg > 0. )
 	  {
 	    if ( ! backtracking )
 	      {
-		maxstep *= ( 1. + 0.3*std::exp(-ogrms) * ugg );
+		if ( opts.varmaxstep )
+		  maxstep *= ( 1. + 0.3*std::exp(-ogrms) * ugg );
 	      }
 	    else
 	      {
@@ -404,7 +415,7 @@ int ccdl::DLCOptMin
 	      };
 	    backtracking = false;
 	  }
-	else if ( step.info.de > 0. and iter ) //and de > Wolfe1 ) 
+	else if ( step.info.de > 0. and iter and opts.varmaxstep ) 
 	  {
 	    maxstep /= 1.25;
 	    backtracking = false;
@@ -418,7 +429,7 @@ int ccdl::DLCOptMin
        	maxstep = std::min( 3 * step.info.dxc_max, maxstep );
 
       
-      if ( ! backtracking )
+      if ( ! backtracking and opts.varmaxstep )
 	{
 
 	  if ( step.info.de_ratio < 0.5 and iter > 0 )
@@ -432,16 +443,27 @@ int ccdl::DLCOptMin
 	      maxstep *= 1.2;
 	      limstep  = std::min( opts.limstep, 1.2 * limstep );
 	    }
-	  maxstep = std::max( 0.0001 * step.info.pgc_max, maxstep );
-	};
+	}
+      else if ( ! backtracking and ! opts.varmaxstep )
+	{
+	  if ( step.info.de_ratio < 1.1 and step.info.de_ratio > 0.95 )
+	    {
+	      maxstep *= 1.1;
+	      limstep  = std::min( opts.limstep, 1.1 * limstep );
+	    }
+	}
+
       
+      if ( ! backtracking )
+	maxstep = std::max( 0.0001 * step.info.pgc_max, maxstep );
 
       maxstep = std::min( maxstep, limstep );
+
       if ( redo )
 	{
 	  step = prevstep;
 	}
-      else if ( step.info.pgc_rms < 1. )
+      else if ( step.info.pgc_rms < 1. && opts.varmaxstep )
 	{
 	  // //////////////////////
 	  if ( step.info.dxc_max > 1.e-20 && not backtracking )
@@ -482,77 +504,17 @@ int ccdl::DLCOptMin
 	      update_hessian = true;
 	      step.UpdateHessian();
 	    };
-	  //std::printf("prevstep = step\n");
+
 	  prevstep = step; step.prevstep = &prevstep;
 	}
       else if ( backtracking and not opts.calcall )
 	{
 	  nbacktracks++;
-	  // if ( nbacktracks > 9 and nbacktracks % 10 == 0 )
-	  //   {
-	  //     cout << "GEOMOPT Too many backtracks. Resetting Hessian to diagonal.\n";
-	  //     if ( dlc != NULL )
-	  //     	for ( int i=0; i<step.nq; ++i )
-	  //     	  for ( int j=0; j < step.nq; ++j )
-	  //     	    if ( i != j )
-	  //     	      step.hq[j+i*step.nq] = 0.;
-	  //     	    else
-	  //     	      step.hq[j+i*step.nq] += 1.;
-	  //     int n3 = step.nat*3;
-	  //     for ( int i=0; i<n3; ++i )
-	  //     	for ( int j=0; j < n3; ++j )
-	  //     	  if ( i != j )
-	  //     	    step.h[j+i*n3] = 0.;
-	  //     	  else
-	  //     	    step.h[j+i*n3] += 1.;
-	  //     prevstep = step; step.prevstep = &prevstep;
-	  //   }
 	};
       
 
       step.Move( maxstep );
 
-
-      // double steplen = 0.;
-      // bool posdef_h = step.eigvals[0] > -1.e-8 and iter > 1 and opts.calcfc;
-
-      // while ( true )
-      // 	{
-      // 	  step.Move( maxstep );
-
-
-      // 	  {
-      // 	    double const * t = step.xc.data();
-      // 	    double minsep = 1000000.;
-      // 	    for ( int i=1; i<nat; ++i )
-      // 	      for ( int j=0; j<i; ++j )
-      // 		{
-      // 		  double x = t[0+i*3]-t[0+j*3];
-      // 		  double y = t[1+i*3]-t[1+j*3];
-      // 		  double z = t[2+i*3]-t[2+j*3];
-      // 		  double r = std::sqrt( x*x+y*y+z*z );
-      // 		  minsep = std::min( minsep, r );
-      // 		};
-      // 	    if ( minsep < 0.5 * ccdl::AU_PER_ANGSTROM )
-      // 	      {
-      // 		cout << "GEOMOPT Rescaling step to avoid close contact: " 
-      // 		     << FMTF(14,8) << minsep / ccdl::AU_PER_ANGSTROM << " A";
-      // 		maxstep /= 2.;
-      // 		continue;
-      // 	      };
-      // 	  }
-	 
-      // 	  break; //
-      // 	  if ( ! update_hessian or ! posdef_h ) break;
-      // 	  if ( step.eigvals[0] >= -1.e-8 ) break;
-
-      // 	  posdef_h = false;
-      // 	  update_hessian = false;
-      // 	  cout << "Recomputing Hessian because it is no longer positive definite\n";
-
-      // 	  //std::printf("cpthessian");
-      // 	  step.CptHessian( fcn );
-      // 	};
 
 
       cout << "GEOMOPT Max dx atom " 
