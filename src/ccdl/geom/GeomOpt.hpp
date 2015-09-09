@@ -429,8 +429,8 @@ int ccdl::DLCOptMin
 	    maxstep *= 1.00;
 	  else if ( step.info.de_ratio < 1.1 and step.info.de_ratio > 0.95 )
 	    {
-	      maxstep *= 2.0;
-	      limstep  = std::min( opts.limstep, 1.25 * limstep );
+	      maxstep *= 1.2;
+	      limstep  = std::min( opts.limstep, 1.2 * limstep );
 	    }
 	  maxstep = std::max( 0.0001 * step.info.pgc_max, maxstep );
 	};
