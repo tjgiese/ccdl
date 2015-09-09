@@ -4,6 +4,8 @@
 #include <sstream>
 #include <cstddef>
 #include <iomanip>
+#include <cstdlib>
+#include <cstdio>
 
 void ccdl::ReadXyz
 ( std::istream & cin, 
