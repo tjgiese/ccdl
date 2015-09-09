@@ -32,10 +32,13 @@ namespace ccdl
       double dxc_rms, dxc_max, dxc_len;
       int pgc_max_atm;
       int dxc_max_atm;
-      std::tr1::array<double,3> pgc_max_atm_pgc_uvec;
-      std::tr1::array<double,3> dxc_max_atm_pgc_uvec;
-      std::tr1::array<double,3> pgc_max_atm_dxc_uvec;
-      std::tr1::array<double,3> dxc_max_atm_dxc_uvec;
+      double pgc_max_atm_dxc_pgc_cosangle;
+      double dxc_max_atm_dxc_pgc_cosangle;
+
+      std::tr1::array<double,4> pgc_max_atm_pgc_uvec;
+      std::tr1::array<double,4> dxc_max_atm_pgc_uvec;
+      std::tr1::array<double,4> pgc_max_atm_dxc_uvec;
+      std::tr1::array<double,4> dxc_max_atm_dxc_uvec;
     };
 
 
@@ -144,6 +147,38 @@ namespace ccdl
   int DLCOptMin( int nat, double * crd, ccdl::OptOptions opts, T fcn, ccdl::RedundantIC * dlc = NULL );
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+namespace ccdl
+{
+  namespace gopt
+  {
+
+
+    double MinSeparation( int nat, double const * c );
+    double MaxDisplacement( int nat, double const * newc, double const * oldc );
+    double MaxDisplacement( int nat, double const * dc );
+
+  }
+}
+
+
+
+
 
 
 
@@ -382,14 +417,14 @@ int ccdl::DLCOptMin
       if ( step.info.dxc_max > 1.e-20 )
        	maxstep = std::min( 3 * step.info.dxc_max, maxstep );
 
-
+      
       if ( ! backtracking )
 	{
 
 	  if ( step.info.de_ratio < 0.5 and iter > 0 )
 	    maxstep *= 0.5;
 	  else if ( step.info.de_ratio < 0.9 and iter > 0 )
-	    maxstep *= 0.75;
+	    maxstep *= 0.9;
 	  else if ( step.info.de_ratio < 0.95 and iter > 0 ) 
 	    maxstep *= 1.00;
 	  else if ( step.info.de_ratio < 1.1 and step.info.de_ratio > 0.95 )
@@ -399,7 +434,7 @@ int ccdl::DLCOptMin
 	    }
 	  maxstep = std::max( 0.0001 * step.info.pgc_max, maxstep );
 	};
-
+      
 
       maxstep = std::min( maxstep, limstep );
       if ( redo )
@@ -522,40 +557,145 @@ int ccdl::DLCOptMin
 
       cout << "GEOMOPT Max dx atom " 
 	   << std::setw(4) << step.info.dxc_max_atm+1
-	   << " dx/r " 
+	   << " dx/|dx| " 
 	   << FMTF(8,4) << step.info.dxc_max_atm_dxc_uvec[0]
 	   << FMTF(8,4) << step.info.dxc_max_atm_dxc_uvec[1]
 	   << FMTF(8,4) << step.info.dxc_max_atm_dxc_uvec[2]
+	   << " |dx| "
+	   << FMTF(12,4) << step.info.dxc_max_atm_dxc_uvec[3]
 	   << " proposed for the next iter\n";
 
       cout << "GEOMOPT Max dx atom " 
 	   << std::setw(4) << step.info.dxc_max_atm+1
-	   << " -g/r " 
+	   << " -g/|g|  " 
 	   << FMTF(8,4) << -step.info.dxc_max_atm_pgc_uvec[0]
 	   << FMTF(8,4) << -step.info.dxc_max_atm_pgc_uvec[1]
 	   << FMTF(8,4) << -step.info.dxc_max_atm_pgc_uvec[2]
+	   << " |g|  "
+	   << FMTF(12,4) <<  step.info.dxc_max_atm_pgc_uvec[3]
 	   << " in the current iter\n";
+      
+      cout << "GEOMOPT Max dx atom "
+	   << std::setw(4) << step.info.dxc_max_atm+1
+	   << " steepest descent angle  "
+	   << FMTF(8,2) << std::acos(-step.info.dxc_max_atm_dxc_pgc_cosangle) * 180./ccdl::PI
+	   << " deg\n";
+
 
       cout << "GEOMOPT Max  g atom " 
 	   << std::setw(4) << step.info.pgc_max_atm+1
-	   << " -g/r " 
+	   << " -g/|g|  " 
 	   << FMTF(8,4) << -step.info.pgc_max_atm_pgc_uvec[0]
 	   << FMTF(8,4) << -step.info.pgc_max_atm_pgc_uvec[1]
 	   << FMTF(8,4) << -step.info.pgc_max_atm_pgc_uvec[2]
+	   << " |g|  "
+	   << FMTF(12,4) <<  step.info.pgc_max_atm_pgc_uvec[3]
 	   << " in the current iter\n";
 
       cout << "GEOMOPT Max  g atom " 
 	   << std::setw(4) << step.info.pgc_max_atm+1
-	   << " dx/r " 
+	   << " dx/|dx| " 
 	   << FMTF(8,4) << step.info.pgc_max_atm_dxc_uvec[0]
 	   << FMTF(8,4) << step.info.pgc_max_atm_dxc_uvec[1]
 	   << FMTF(8,4) << step.info.pgc_max_atm_dxc_uvec[2]
+	   << " |dx| "
+	   << FMTF(12,4) << step.info.pgc_max_atm_dxc_uvec[3]
 	   << " proposed for the next iter\n";
 
+      double pgc_angle = std::acos(-step.info.pgc_max_atm_dxc_pgc_cosangle) * 180./ccdl::PI;
+      cout << "GEOMOPT Max  g atom "
+	   << std::setw(4) << step.info.pgc_max_atm+1
+	   << " steepest descent angle  "
+	   << FMTF(8,2) << pgc_angle
+	   << " deg\n";
+
+
       if ( step.info.dxc_max_atm != step.info.pgc_max_atm )
-	cout << "GEOMOPT The atom with the largest force is not the atom moving the most\n";
+	cout << "GEOMOPT The atom with the largest force is not the one with proposed greatest change\n";
 
+      if ( pgc_angle > 90. )
+	cout << "GEOMOPT The atom with the largest force is not moving in a downhill direction\n";
 
+      
+      if ( (pgc_angle > 75.) )
+	{
+	  cout << "GEOMOPT The steepest descent angle of the atom with the largest gradient\n"
+	       << "GEOMOPT is excessive. I will use a steepest descent direction instead.\n";
+	  step.xc = prevstep.xc;
+	  std::vector<double> s( step.pgc );
+	  double maxdisp = 0.;
+	  for ( int a=0; a<step.nat; ++a )
+	    {
+	      double disp = std::sqrt( s[0+a*3]*s[0+a*3]+
+				       s[1+a*3]*s[1+a*3]+
+				       s[2+a*3]*s[2+a*3] );
+	      s[0+a*3] *= -1;
+	      s[1+a*3] *= -1;
+	      s[2+a*3] *= -1;
+	      maxdisp = std::max( maxdisp, disp );
+	    };
+	  if ( step.info.pgc_rms < 10. )
+	    for ( int a=0; a<step.nat; ++a )
+	      {
+		double disp = std::sqrt( s[0+a*3]*s[0+a*3]+
+					 s[1+a*3]*s[1+a*3]+
+					 s[2+a*3]*s[2+a*3] );
+		
+		if ( disp < 0.5 * maxdisp )
+		  {
+		    s[0+a*3] *= 0.5;
+		    s[1+a*3] *= 0.5;
+		    s[2+a*3] *= 0.5;
+		  }
+	      };
+
+	  double scl = std::min( 0.5*maxstep, step.info.pgc_max_atm_dxc_uvec[3]) / maxdisp;
+	  scl = 0.5*maxstep/maxdisp;
+	  for ( int i=0; i<step.nc; ++i ) 
+	    s[i] *= scl;
+	  for ( int i=0; i<step.nc; ++i )
+	    step.xc[i] += s[i];
+
+	  if ( step.dlc != NULL )
+	    {
+	      std::vector<double> xbak( step.xc );
+	      std::vector<double> dq0( step.nq, 0. );
+	      step.dlc->DisplaceByDeltaQ( dq0.data(), step.xc.data() );
+	      double minsep = ccdl::gopt::MinSeparation( step.nat, step.xc.data() );
+	      double maxdx = ccdl::gopt::MaxDisplacement( step.nat, step.xc.data(), xbak.data() );
+	      if ( minsep < 0.6 * ccdl::AU_PER_ANGSTROM or maxdx > 3. * ccdl::AU_PER_ANGSTROM )
+		{
+		  cout << "GEOMOPT Warning: constraints are not being enforced at this step\n";
+		  step.xc=xbak;
+		}
+	    };
+
+	  step.info.CptDeltaCrds( step, prevstep );
+
+	  cout << "GEOMOPT Max  g atom " 
+	       << std::setw(4) << step.info.pgc_max_atm+1
+	       << " dx/|dx| " 
+	       << FMTF(8,4) << step.info.pgc_max_atm_dxc_uvec[0]
+	       << FMTF(8,4) << step.info.pgc_max_atm_dxc_uvec[1]
+	       << FMTF(8,4) << step.info.pgc_max_atm_dxc_uvec[2]
+	       << " |dx| "
+	       << FMTF(12,4) << step.info.pgc_max_atm_dxc_uvec[3]
+	       << " proposed for the next iter\n";
+	  
+	  double pgc_angle = std::acos(-step.info.pgc_max_atm_dxc_pgc_cosangle) * 180./ccdl::PI;
+	  cout << "GEOMOPT Max  g atom "
+	       << std::setw(4) << step.info.pgc_max_atm+1
+	       << " steepest descent angle  "
+	       << FMTF(8,2) << pgc_angle
+	       << " deg\n";
+
+	  // if ( step.dlc != NULL )
+	  //   {
+	  //     std::vector<double> dq( step.nq, 0. );
+	  //     step.dlc->
+	  //   }
+	}
+      
 
       cout << "GEOMOPT Backtrack count " << nbacktracks << "\n";
       cout << "GEOMOPT Eigv";

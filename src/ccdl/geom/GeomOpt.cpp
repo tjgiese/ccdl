@@ -686,7 +686,9 @@ ccdl::gopt::StepInfo::StepInfo()
   : de(0.), de_abs(0.), de_pred(0.), de_ratio(1.0),
     pgc_rms(0.), pgc_max( -1.e+30 ),
     dxc_rms(0.), dxc_max( -1.e+30 ), dxc_len(0.),
-    pgc_max_atm(0), dxc_max_atm(0)
+    pgc_max_atm(0), dxc_max_atm(0),
+    pgc_max_atm_dxc_pgc_cosangle(1.),
+    dxc_max_atm_dxc_pgc_cosangle(1.)
 {}
 
 void ccdl::gopt::StepInfo::CptInfo
@@ -708,7 +710,8 @@ void ccdl::gopt::StepInfo::CptInfo
   std::fill( dxc_max_atm_pgc_uvec.begin(), dxc_max_atm_pgc_uvec.end(), 0. );
   std::fill( pgc_max_atm_dxc_uvec.begin(), pgc_max_atm_dxc_uvec.end(), 0. );
   std::fill( dxc_max_atm_dxc_uvec.begin(), dxc_max_atm_dxc_uvec.end(), 0. );
-
+  pgc_max_atm_dxc_pgc_cosangle=1.;
+  dxc_max_atm_dxc_pgc_cosangle=1.;
 
 
   int nat = step.nat;
@@ -750,6 +753,7 @@ void ccdl::gopt::StepInfo::CptInfo
 	  dxc_max_atm_dxc_uvec[0] = step.dxc[0+a*3] / xcnrm;
 	  dxc_max_atm_dxc_uvec[1] = step.dxc[1+a*3] / xcnrm;
 	  dxc_max_atm_dxc_uvec[2] = step.dxc[2+a*3] / xcnrm;
+	  dxc_max_atm_dxc_uvec[3] = xcnrm;
 	  double tmp = 0.;
 	  tmp = std::sqrt( step.pgc[0+a*3]*step.pgc[0+a*3] +
 			   step.pgc[1+a*3]*step.pgc[1+a*3] +
@@ -757,6 +761,7 @@ void ccdl::gopt::StepInfo::CptInfo
 	  dxc_max_atm_pgc_uvec[0] = step.pgc[0+a*3] / tmp;
 	  dxc_max_atm_pgc_uvec[1] = step.pgc[1+a*3] / tmp;
 	  dxc_max_atm_pgc_uvec[2] = step.pgc[2+a*3] / tmp;
+	  dxc_max_atm_pgc_uvec[3] = tmp;
 	}
       //dxc_max  = std::max( dxc_max, std::sqrt( xcnrm ) );
       gcnrm = std::sqrt( gcnrm );
@@ -767,6 +772,7 @@ void ccdl::gopt::StepInfo::CptInfo
 	  pgc_max_atm_pgc_uvec[0] = step.pgc[0+a*3] / gcnrm;
 	  pgc_max_atm_pgc_uvec[1] = step.pgc[1+a*3] / gcnrm;
 	  pgc_max_atm_pgc_uvec[2] = step.pgc[2+a*3] / gcnrm;
+	  pgc_max_atm_pgc_uvec[3] = gcnrm;
 	  double tmp = 0.;
 	  tmp = std::sqrt( step.dxc[0+a*3]*step.dxc[0+a*3] +
 			   step.dxc[1+a*3]*step.dxc[1+a*3] +
@@ -774,15 +780,29 @@ void ccdl::gopt::StepInfo::CptInfo
 	  pgc_max_atm_dxc_uvec[0] = step.dxc[0+a*3] / tmp;
 	  pgc_max_atm_dxc_uvec[1] = step.dxc[1+a*3] / tmp;
 	  pgc_max_atm_dxc_uvec[2] = step.dxc[2+a*3] / tmp;
+	  pgc_max_atm_dxc_uvec[3] = tmp;
 	};
       //pgc_max  = std::max( pgc_max, std::sqrt( gcnrm ) );
-
-
 
     };
   dxc_rms = std::sqrt( dxc_rms / step.nc );
   dxc_len = std::sqrt( dxc_len );
   pgc_rms = std::sqrt( pgc_rms / step.nc );
+
+  pgc_max_atm_dxc_pgc_cosangle = 
+    pgc_max_atm_dxc_uvec[0]*pgc_max_atm_pgc_uvec[0] +
+    pgc_max_atm_dxc_uvec[1]*pgc_max_atm_pgc_uvec[1] +
+    pgc_max_atm_dxc_uvec[2]*pgc_max_atm_pgc_uvec[2];
+
+  dxc_max_atm_dxc_pgc_cosangle = 
+    dxc_max_atm_dxc_uvec[0]*dxc_max_atm_pgc_uvec[0] +
+    dxc_max_atm_dxc_uvec[1]*dxc_max_atm_pgc_uvec[1] +
+    dxc_max_atm_dxc_uvec[2]*dxc_max_atm_pgc_uvec[2];
+
+
+  pgc_max_atm_dxc_pgc_cosangle = std::min(1.,std::max(-1.,pgc_max_atm_dxc_pgc_cosangle));
+  dxc_max_atm_dxc_pgc_cosangle = std::min(1.,std::max(-1.,dxc_max_atm_dxc_pgc_cosangle));
+
 
   if ( step.dlc != NULL )
     {
@@ -845,6 +865,7 @@ void ccdl::gopt::StepInfo::CptDeltaCrds
 	  dxc_max_atm_dxc_uvec[0] = step.dxc[0+a*3] / xcnrm;
 	  dxc_max_atm_dxc_uvec[1] = step.dxc[1+a*3] / xcnrm;
 	  dxc_max_atm_dxc_uvec[2] = step.dxc[2+a*3] / xcnrm;
+	  dxc_max_atm_dxc_uvec[3] = xcnrm;
 
 	  double tmp = 0.;
 	  tmp = std::sqrt( step.pgc[0+a*3]*step.pgc[0+a*3] +
@@ -853,6 +874,7 @@ void ccdl::gopt::StepInfo::CptDeltaCrds
 	  dxc_max_atm_pgc_uvec[0] = step.pgc[0+a*3] / tmp;
 	  dxc_max_atm_pgc_uvec[1] = step.pgc[1+a*3] / tmp;
 	  dxc_max_atm_pgc_uvec[2] = step.pgc[2+a*3] / tmp;
+	  dxc_max_atm_pgc_uvec[3] = tmp;
 	}
     };
 
@@ -865,10 +887,25 @@ void ccdl::gopt::StepInfo::CptDeltaCrds
     pgc_max_atm_dxc_uvec[0] = step.dxc[0+a*3] / tmp;
     pgc_max_atm_dxc_uvec[1] = step.dxc[1+a*3] / tmp;
     pgc_max_atm_dxc_uvec[2] = step.dxc[2+a*3] / tmp;
+    pgc_max_atm_dxc_uvec[3] = tmp;
   }
 
   dxc_rms = std::sqrt( dxc_rms / step.nc );
   dxc_len = std::sqrt( dxc_len );
+
+  pgc_max_atm_dxc_pgc_cosangle = 
+    pgc_max_atm_dxc_uvec[0]*pgc_max_atm_pgc_uvec[0] +
+    pgc_max_atm_dxc_uvec[1]*pgc_max_atm_pgc_uvec[1] +
+    pgc_max_atm_dxc_uvec[2]*pgc_max_atm_pgc_uvec[2];
+
+  dxc_max_atm_dxc_pgc_cosangle = 
+    dxc_max_atm_dxc_uvec[0]*dxc_max_atm_pgc_uvec[0] +
+    dxc_max_atm_dxc_uvec[1]*dxc_max_atm_pgc_uvec[1] +
+    dxc_max_atm_dxc_uvec[2]*dxc_max_atm_pgc_uvec[2];
+
+  pgc_max_atm_dxc_pgc_cosangle = std::min(1.,std::max(-1.,pgc_max_atm_dxc_pgc_cosangle));
+  dxc_max_atm_dxc_pgc_cosangle = std::min(1.,std::max(-1.,dxc_max_atm_dxc_pgc_cosangle));
+
 
   if ( step.dlc != NULL )
     {
