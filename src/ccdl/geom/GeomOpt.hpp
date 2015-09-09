@@ -2,6 +2,7 @@
 #define _GeomOpt_hpp_
 
 #include <vector>
+#include <tr1/array>
 #include <iostream>
 #include <iomanip>
 #include <cmath>
@@ -24,10 +25,17 @@ namespace ccdl
     {
       StepInfo();
       void CptInfo( ccdl::gopt::Step & step, ccdl::gopt::Step & prevstep );
+      void CptDeltaCrds( ccdl::gopt::Step & step, ccdl::gopt::Step & prevstep );
 
-      double de,de_abs,de_pred;
+      double de,de_abs,de_pred,de_ratio;
       double pgc_rms, pgc_max;
       double dxc_rms, dxc_max, dxc_len;
+      int pgc_max_atm;
+      int dxc_max_atm;
+      std::tr1::array<double,3> pgc_max_atm_pgc_uvec;
+      std::tr1::array<double,3> dxc_max_atm_pgc_uvec;
+      std::tr1::array<double,3> pgc_max_atm_dxc_uvec;
+      std::tr1::array<double,3> dxc_max_atm_dxc_uvec;
     };
 
 
@@ -370,11 +378,27 @@ int ccdl::DLCOptMin
 	  backtracking = false;
       }
 
-
       
       if ( step.info.dxc_max > 1.e-20 )
-	maxstep = std::min( 3 * step.info.dxc_max, maxstep );
+       	maxstep = std::min( 3 * step.info.dxc_max, maxstep );
 
+
+      if ( ! backtracking )
+	{
+
+	  if ( step.info.de_ratio < 0.5 and iter > 0 )
+	    maxstep *= 0.5;
+	  else if ( step.info.de_ratio < 0.9 and iter > 0 )
+	    maxstep *= 0.75;
+	  else if ( step.info.de_ratio < 0.95 and iter > 0 ) 
+	    maxstep *= 1.00;
+	  else if ( step.info.de_ratio < 1.1 and step.info.de_ratio > 0.95 )
+	    {
+	      maxstep *= 2.0;
+	      limstep  = std::min( opts.limstep, 1.25 * limstep );
+	    }
+	  maxstep = std::max( 0.0001 * step.info.pgc_max, maxstep );
+	};
 
 
       maxstep = std::min( maxstep, limstep );
@@ -494,6 +518,43 @@ int ccdl::DLCOptMin
       // 	  //std::printf("cpthessian");
       // 	  step.CptHessian( fcn );
       // 	};
+
+
+      cout << "GEOMOPT Max dx atom " 
+	   << std::setw(4) << step.info.dxc_max_atm+1
+	   << " dx/r " 
+	   << FMTF(8,4) << step.info.dxc_max_atm_dxc_uvec[0]
+	   << FMTF(8,4) << step.info.dxc_max_atm_dxc_uvec[1]
+	   << FMTF(8,4) << step.info.dxc_max_atm_dxc_uvec[2]
+	   << " proposed for the next iter\n";
+
+      cout << "GEOMOPT Max dx atom " 
+	   << std::setw(4) << step.info.dxc_max_atm+1
+	   << " -g/r " 
+	   << FMTF(8,4) << -step.info.dxc_max_atm_pgc_uvec[0]
+	   << FMTF(8,4) << -step.info.dxc_max_atm_pgc_uvec[1]
+	   << FMTF(8,4) << -step.info.dxc_max_atm_pgc_uvec[2]
+	   << " in the current iter\n";
+
+      cout << "GEOMOPT Max  g atom " 
+	   << std::setw(4) << step.info.pgc_max_atm+1
+	   << " -g/r " 
+	   << FMTF(8,4) << -step.info.pgc_max_atm_pgc_uvec[0]
+	   << FMTF(8,4) << -step.info.pgc_max_atm_pgc_uvec[1]
+	   << FMTF(8,4) << -step.info.pgc_max_atm_pgc_uvec[2]
+	   << " in the current iter\n";
+
+      cout << "GEOMOPT Max  g atom " 
+	   << std::setw(4) << step.info.pgc_max_atm+1
+	   << " dx/r " 
+	   << FMTF(8,4) << step.info.pgc_max_atm_dxc_uvec[0]
+	   << FMTF(8,4) << step.info.pgc_max_atm_dxc_uvec[1]
+	   << FMTF(8,4) << step.info.pgc_max_atm_dxc_uvec[2]
+	   << " proposed for the next iter\n";
+
+      if ( step.info.dxc_max_atm != step.info.pgc_max_atm )
+	cout << "GEOMOPT The atom with the largest force is not the atom moving the most\n";
+
 
 
       cout << "GEOMOPT Backtrack count " << nbacktracks << "\n";

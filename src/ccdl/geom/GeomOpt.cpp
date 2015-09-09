@@ -683,9 +683,10 @@ double ccdl::gopt::MaxDisplacement( int nat, double const * dc )
 
 
 ccdl::gopt::StepInfo::StepInfo()
-  : de(0.), de_abs(0.), de_pred(0.),
+  : de(0.), de_abs(0.), de_pred(0.), de_ratio(1.0),
     pgc_rms(0.), pgc_max( -1.e+30 ),
-    dxc_rms(0.), dxc_max( -1.e+30 ), dxc_len(0.)
+    dxc_rms(0.), dxc_max( -1.e+30 ), dxc_len(0.),
+    pgc_max_atm(0), dxc_max_atm(0)
 {}
 
 void ccdl::gopt::StepInfo::CptInfo
@@ -695,11 +696,20 @@ void ccdl::gopt::StepInfo::CptInfo
   de      = 0.; 
   de_abs  = 0.;
   de_pred = 0.;
+  de_ratio = 1.;
   pgc_rms  = 0.; 
   pgc_max  = -1.e+30;
   dxc_rms = 0.; 
   dxc_max = -1.e+30;
   dxc_len = 0.;
+  pgc_max_atm = 0;
+  dxc_max_atm = 0;
+  std::fill( pgc_max_atm_pgc_uvec.begin(), pgc_max_atm_pgc_uvec.end(), 0. );
+  std::fill( dxc_max_atm_pgc_uvec.begin(), dxc_max_atm_pgc_uvec.end(), 0. );
+  std::fill( pgc_max_atm_dxc_uvec.begin(), pgc_max_atm_dxc_uvec.end(), 0. );
+  std::fill( dxc_max_atm_dxc_uvec.begin(), dxc_max_atm_dxc_uvec.end(), 0. );
+
+
 
   int nat = step.nat;
 
@@ -732,8 +742,43 @@ void ccdl::gopt::StepInfo::CptInfo
       dxc_rms += xcnrm;
       pgc_rms += gcnrm;
       //std::printf("max -> %12.8f\n",std::sqrt( xcnrm ) );
-      dxc_max  = std::max( dxc_max, std::sqrt( xcnrm ) );
-      pgc_max  = std::max( pgc_max, std::sqrt( gcnrm ) );
+      xcnrm = std::sqrt( xcnrm );
+      if ( xcnrm > dxc_max )
+	{
+	  dxc_max = xcnrm;
+	  dxc_max_atm = a;
+	  dxc_max_atm_dxc_uvec[0] = step.dxc[0+a*3] / xcnrm;
+	  dxc_max_atm_dxc_uvec[1] = step.dxc[1+a*3] / xcnrm;
+	  dxc_max_atm_dxc_uvec[2] = step.dxc[2+a*3] / xcnrm;
+	  double tmp = 0.;
+	  tmp = std::sqrt( step.pgc[0+a*3]*step.pgc[0+a*3] +
+			   step.pgc[1+a*3]*step.pgc[1+a*3] +
+			   step.pgc[2+a*3]*step.pgc[2+a*3] );
+	  dxc_max_atm_pgc_uvec[0] = step.pgc[0+a*3] / tmp;
+	  dxc_max_atm_pgc_uvec[1] = step.pgc[1+a*3] / tmp;
+	  dxc_max_atm_pgc_uvec[2] = step.pgc[2+a*3] / tmp;
+	}
+      //dxc_max  = std::max( dxc_max, std::sqrt( xcnrm ) );
+      gcnrm = std::sqrt( gcnrm );
+      if ( gcnrm > pgc_max )
+	{
+	  pgc_max = gcnrm;
+	  pgc_max_atm = a;
+	  pgc_max_atm_pgc_uvec[0] = step.pgc[0+a*3] / gcnrm;
+	  pgc_max_atm_pgc_uvec[1] = step.pgc[1+a*3] / gcnrm;
+	  pgc_max_atm_pgc_uvec[2] = step.pgc[2+a*3] / gcnrm;
+	  double tmp = 0.;
+	  tmp = std::sqrt( step.dxc[0+a*3]*step.dxc[0+a*3] +
+			   step.dxc[1+a*3]*step.dxc[1+a*3] +
+			   step.dxc[2+a*3]*step.dxc[2+a*3] );
+	  pgc_max_atm_dxc_uvec[0] = step.dxc[0+a*3] / tmp;
+	  pgc_max_atm_dxc_uvec[1] = step.dxc[1+a*3] / tmp;
+	  pgc_max_atm_dxc_uvec[2] = step.dxc[2+a*3] / tmp;
+	};
+      //pgc_max  = std::max( pgc_max, std::sqrt( gcnrm ) );
+
+
+
     };
   dxc_rms = std::sqrt( dxc_rms / step.nc );
   dxc_len = std::sqrt( dxc_len );
@@ -758,7 +803,84 @@ void ccdl::gopt::StepInfo::CptInfo
       de_pred = ccdl::gopt::PredictEnergyChange
 	( step.nc, step.phc.data(), prevstep.pgc.data(), step.dxc.data() );
     }
+    if ( std::abs( de_pred ) > 1.e-30 )
+      de_ratio = de / de_pred;
+    else
+      de_ratio = 0.;
 }
+
+
+
+void ccdl::gopt::StepInfo::CptDeltaCrds
+( ccdl::gopt::Step & step, 
+  ccdl::gopt::Step & prevstep)
+{
+  dxc_rms = 0.; 
+  dxc_max = -1.e+30;
+  dxc_len = 0.;
+  dxc_max_atm = 0;
+  std::fill( dxc_max_atm_dxc_uvec.begin(), dxc_max_atm_dxc_uvec.end(), 0. );
+  std::fill( dxc_max_atm_pgc_uvec.begin(), dxc_max_atm_pgc_uvec.end(), 0. );
+  std::fill( pgc_max_atm_dxc_uvec.begin(), pgc_max_atm_dxc_uvec.end(), 0. );
+
+  int nat = step.nat;
+  step.dxc.resize( 3*nat );
+
+  for ( int a=0; a<nat; ++a )
+    {
+      double xcnrm = 0.;
+      for ( int k=0; k<3; ++k )
+	{
+	  int i=k+a*3;
+	  step.dxc[i]  = step.xc[i]-prevstep.xc[i];
+	  xcnrm += step.dxc[i]*step.dxc[i];
+	};
+      dxc_len += xcnrm;
+      dxc_rms += xcnrm;
+      xcnrm = std::sqrt( xcnrm );
+      if ( xcnrm > dxc_max )
+	{
+	  dxc_max = xcnrm;
+	  dxc_max_atm = a;
+	  dxc_max_atm_dxc_uvec[0] = step.dxc[0+a*3] / xcnrm;
+	  dxc_max_atm_dxc_uvec[1] = step.dxc[1+a*3] / xcnrm;
+	  dxc_max_atm_dxc_uvec[2] = step.dxc[2+a*3] / xcnrm;
+
+	  double tmp = 0.;
+	  tmp = std::sqrt( step.pgc[0+a*3]*step.pgc[0+a*3] +
+			   step.pgc[1+a*3]*step.pgc[1+a*3] +
+			   step.pgc[2+a*3]*step.pgc[2+a*3] );
+	  dxc_max_atm_pgc_uvec[0] = step.pgc[0+a*3] / tmp;
+	  dxc_max_atm_pgc_uvec[1] = step.pgc[1+a*3] / tmp;
+	  dxc_max_atm_pgc_uvec[2] = step.pgc[2+a*3] / tmp;
+	}
+    };
+
+  {
+    int a = pgc_max_atm;
+    double tmp = 0.;
+    tmp = std::sqrt( step.dxc[0+a*3]*step.dxc[0+a*3] +
+		     step.dxc[1+a*3]*step.dxc[1+a*3] +
+		     step.dxc[2+a*3]*step.dxc[2+a*3] );
+    pgc_max_atm_dxc_uvec[0] = step.dxc[0+a*3] / tmp;
+    pgc_max_atm_dxc_uvec[1] = step.dxc[1+a*3] / tmp;
+    pgc_max_atm_dxc_uvec[2] = step.dxc[2+a*3] / tmp;
+  }
+
+  dxc_rms = std::sqrt( dxc_rms / step.nc );
+  dxc_len = std::sqrt( dxc_len );
+
+  if ( step.dlc != NULL )
+    {
+      step.dxq.resize( step.nq );
+      for ( int i=0; i<step.nq; ++i )
+	{
+	  step.dxq[i] = step.xq[i] - prevstep.xq[i];
+	}
+      step.dlc->CptDifference( step.xq.data(), prevstep.xq.data(), step.dxq.data() );
+    };
+}
+
 
 // ccdl::gopt::Step::Step
 // ( int nat, double const * crd, 
@@ -1131,6 +1253,9 @@ void ccdl::gopt::Step::Move( double & mxstep )
       // };
 
     };
+
+  info.CptDeltaCrds( *this, *prevstep );
+
 }
 
 
