@@ -5,6 +5,13 @@
 #include <algorithm>
 #include <tr1/memory>
 
+
+namespace ccdl
+{
+  enum CRDSYS { CART, CART_AND_BONDS, DLC, DLC_EXCEPT_BENDS };
+}
+
+
 namespace ccdl
 {
   struct BondFragT
@@ -28,10 +35,12 @@ namespace ccdl
   {
     AutoBondFrag
     ( int const nat, int const * z, double const * crd, 
+      ccdl::CRDSYS crdsys,
       bool const merge_fragments );
 
     void reset
     ( int const nat, int const * z, double const * crd, 
+      ccdl::CRDSYS crdsys,
       bool const merge_fragments );
 
     BondFragT & operator[] ( int i ) { return atom[i]; }
@@ -48,6 +57,8 @@ namespace ccdl
     std::vector<int> torsions;
     int nhbonds;
     std::vector<int> hbonds;
+    int ncarts;
+    std::vector<int> carts;
 
     void PrintReport( std::ostream & cout );
   };

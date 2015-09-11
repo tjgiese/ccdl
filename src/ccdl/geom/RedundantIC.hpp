@@ -4,6 +4,7 @@
 #include <tr1/memory>
 #include <vector>
 #include <ostream>
+#include "AutoBondFrag.hpp"
 
 namespace ccdl
 {
@@ -149,9 +150,9 @@ namespace ccdl
   {
   public:
 
-    RedundantIC( int const nat, int const * z, double const * crd, bool cartesian = false,bool merge_fragments = true );
+    RedundantIC( int const nat, int const * z, double const * crd, ccdl::CRDSYS crdsys = ccdl::CART, bool merge_fragments = true );
 
-    void reset( int const nat, int const * z, double const * crd, bool cartesian = false, bool merge_fragments = true );
+    void reset( int const nat, int const * z, double const * crd, ccdl::CRDSYS crdsys = ccdl::CART, bool merge_fragments = true );
 
 
     void FreezeBond( int i, int j, double const v );
@@ -159,6 +160,8 @@ namespace ccdl
     void FreezeDihedral( int i, int j, int k, int l, double const v );
     void FreezeR12( int i, int j, int k, int l, double const v );
     void FreezeR12( int i, int j, int l, double const v );
+    void FreezeAtom( int a, double const * crd );
+    void Freeze( std::tr1::shared_ptr< ccdl::InternalCrd > a );
 
     void PrintReport( std::ostream & cout );
     void PrintReport( std::ostream & cout, double const * crd );

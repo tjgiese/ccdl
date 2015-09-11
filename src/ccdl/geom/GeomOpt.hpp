@@ -268,7 +268,7 @@ namespace ccdl
 {
   namespace gopt
   {
-    double ddot( int n, double const * A, double const * B )
+    inline double ddot( int n, double const * A, double const * B )
     {
       int inc=1;
       return ddot_( &n, A, &inc, B, &inc );
@@ -321,11 +321,6 @@ int ccdl::DLCOptMin
   for ( int iter=0; iter < opts.maxiter; ++iter )
     {
 
-      {
-	std::vector<int> z( nat, 6 );
-	ccdl::WriteXyz( std::cout, nat, z.data(), step.xc.data() );
-      }
-      
       //-----------------------------------------------------
       step.e = fcn( nat, step.xc.data(), step.gc.data() );
       //-----------------------------------------------------

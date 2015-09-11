@@ -559,13 +559,13 @@ double ccdl::R12T::MoveValueToValidRange( double d ) const
 
 
 ccdl::RedundantIC::RedundantIC
-( int const nat, int const * z, double const * crd, bool cartesian, bool merge_fragments )
+( int const nat, int const * z, double const * crd, ccdl::CRDSYS crdsys, bool merge_fragments )
 {
-  reset( nat,z,crd,cartesian,merge_fragments );
+  reset( nat,z,crd,crdsys,merge_fragments );
 }
 
 void ccdl::RedundantIC::reset
-( int const num_atoms, int const * z, double const * crd, bool cartesian, bool merge_fragments )
+( int const num_atoms, int const * z, double const * crd,ccdl::CRDSYS crdsys, bool merge_fragments )
 {
   nat = num_atoms;
   std::vector< ccdl::pIC > frozens;
@@ -574,40 +574,40 @@ void ccdl::RedundantIC::reset
       frozens.push_back( *q );
   qs.resize( 0 );
 
-  if ( cartesian )
+
+  ccdl::AutoBondFrag abf( nat,z,crd, crdsys, merge_fragments );
+
+  for ( int a=0; a<abf.ncarts; ++a )
+    for ( int k=0; k<3; ++k )
+      {
+	pIC t( new ccdl::CartT( abf.carts[a], k ) );
+	qs.push_back( t );
+      };
+  
+
+  for ( int a=0; a<abf.nbonds; ++a )
     {
-      for ( int a=0; a<nat; ++a )
-	for ( int k=0; k<3; ++k )
-	  {
-	    pIC t( new ccdl::CartT( a, k ) );
-	    qs.push_back( t );
-	  };
-    }
-  else
+      pIC t( new ccdl::BondT( abf.bonds[0+a*2], 
+			      abf.bonds[1+a*2] ) );
+      qs.push_back( t );
+    };
+  
+  for ( int a=0; a<abf.nangles; ++a )
     {
-      ccdl::AutoBondFrag abf( nat,z,crd,merge_fragments );
-      for ( int a=0; a<abf.nbonds; ++a )
-	{
-	  pIC t( new ccdl::BondT( abf.bonds[0+a*2], 
-				  abf.bonds[1+a*2] ) );
-	  qs.push_back( t );
-	};
-      for ( int a=0; a<abf.nangles; ++a )
-	{
-	  pIC t( new ccdl::AngleT( abf.angles[0+a*3], 
-				   abf.angles[1+a*3], 
-				   abf.angles[2+a*3] ) );
-	  qs.push_back( t );
-	};
-      for ( int a=0; a<abf.ntorsions; ++a )
-	{
-	  pIC t( new ccdl::DihedralT( abf.torsions[0+a*4], 
-				      abf.torsions[1+a*4], 
-				      abf.torsions[2+a*4],
-				      abf.torsions[3+a*4] ) );
-	  qs.push_back( t );
-	};
-    }
+      pIC t( new ccdl::AngleT( abf.angles[0+a*3], 
+			       abf.angles[1+a*3], 
+			       abf.angles[2+a*3] ) );
+      qs.push_back( t );
+    };
+  for ( int a=0; a<abf.ntorsions; ++a )
+    {
+      pIC t( new ccdl::DihedralT( abf.torsions[0+a*4], 
+				  abf.torsions[1+a*4], 
+				  abf.torsions[2+a*4],
+				  abf.torsions[3+a*4] ) );
+      qs.push_back( t );
+    };
+
 
   for ( std::vector< ccdl::pIC >::iterator 
 	  f=frozens.begin(), fend=frozens.end(); 
@@ -692,6 +692,39 @@ void ccdl::RedundantIC::FreezeR12( int i, int j, int k, int l, double const v )
 void ccdl::RedundantIC::FreezeR12( int i, int j, int l, double const v )
 {
   FreezeR12( i,j, j,l, v );
+}
+
+void ccdl::RedundantIC::FreezeAtom( int a, double const * atom_crd )
+{
+   for ( int k=0; k<3; ++k )
+     {
+        ccdl::pIC f( new ccdl::CartT( a, k ) );
+        f->Freeze( atom_crd[k] );
+        bool ok = false;
+        for ( std::vector< ccdl::pIC >::iterator
+              q=qs.begin(), qend=qs.end();
+              q!=qend; ++q )
+           {
+              ok = (*q)->Freeze( f.get() );
+              if ( ok ) break;
+           }
+        if ( ! ok )
+          qs.push_back( f );
+     };
+}
+
+void ccdl::RedundantIC::Freeze( std::tr1::shared_ptr< ccdl::InternalCrd > f )
+{
+   bool ok = false;
+   for ( std::vector< ccdl::pIC >::iterator
+         q=qs.begin(), qend=qs.end();
+         q!=qend; ++q )
+       {
+          ok = (*q)->Freeze( f.get() );
+          if ( ok ) break;
+       }
+   if ( ! ok )
+      qs.push_back( f );
 }
 
 

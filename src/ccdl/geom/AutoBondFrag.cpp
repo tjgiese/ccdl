@@ -51,23 +51,49 @@ namespace ccdl
 
 ccdl::AutoBondFrag::AutoBondFrag
 ( int const natom, int const * z, double const * crd, 
+  ccdl::CRDSYS crdsys,
   bool const merge_fragments )
 {
-  reset( natom,z,crd,merge_fragments );
+  reset( natom,z,crd,crdsys,merge_fragments );
 }
 
 void ccdl::AutoBondFrag::reset
 ( int const natom, int const * z, double const * crd, 
+  ccdl::CRDSYS crdsys,
   bool const merge_fragments )
 {
   nbonds=0;
   nangles=0;
   ntorsions=0;
   nhbonds=0;
+  ncarts=0;
   nfrag = 0;
   nat = natom;
   atom.resize(0);
   atom.resize(nat);
+
+  bonds.resize(0);
+  angles.resize(0);
+  torsions.resize(0);
+  hbonds.resize(0);
+  carts.resize(0);
+
+  if ( crdsys == ccdl::CART or crdsys == ccdl::CART_AND_BONDS )
+    {
+      ncarts = nat;
+      carts.resize( ncarts );
+      for ( int a=0; a<nat; ++a )
+	carts[a] = a;
+    }
+
+  if ( crdsys == ccdl::CART )
+    {
+      nfrag = 1;
+      for ( int a=0; a<nat; ++a )
+	atom[a].frag = 0;
+      return;
+    }
+
   for ( int a=0; a<nat; ++a )
     {
       atom[a].idx  = a;
@@ -213,7 +239,7 @@ void ccdl::AutoBondFrag::reset
   else
     { // -- hack -- delete the hbonds because we're going to use
       // com displacement and orientation to move the fragments around
-      // relative to each other
+      // relative to each other... well, that's the plan, at least
       for ( int a=0; a<nat; ++a )
 	if ( atom[a].HasHBond() )
 	  {
@@ -323,14 +349,33 @@ void ccdl::AutoBondFrag::reset
 	  nbonds++;
 	};
 
+  if ( crdsys == ccdl::CART_AND_BONDS ) return;
+
   nangles = angs.size();
   angles.resize(0);
   for ( int a=0; a<nangs; ++a )
     {
-      angles.push_back( angs[a][0] );
-      angles.push_back( angs[a][1] );
-      angles.push_back( angs[a][2] );
+      bool ok = true;
+      if ( crdsys == ccdl::DLC_EXCEPT_BENDS )
+	{
+	  double val = ccdl::Angle( crd+3*angs[a][0], crd+3*angs[a][1], crd+3*angs[a][2] );
+	  //std::printf("angle %20.4f\n",val * 180./ccdl::PI);
+	  if ( val * 180./ccdl::PI > 174. )
+	    {
+	      ncarts += 2;
+	      carts.push_back( angs[a][0] );
+	      carts.push_back( angs[a][2] );
+	      ok = false;
+	    }
+	};
+      if ( ok )
+	{
+	  angles.push_back( angs[a][0] );
+	  angles.push_back( angs[a][1] );
+	  angles.push_back( angs[a][2] );
+	};
     }
+  nangles = angles.size() / 3;
 
   ntorsions = tors.size();
   torsions.resize(0);
@@ -358,17 +403,20 @@ void ccdl::AutoBondFrag::reset
 void ccdl::AutoBondFrag::PrintReport( std::ostream & cout )
 {
 #define fmt std::setw(5)
+
   for ( int a=0; a<nbonds; ++a )
     cout << "B " 
 	 << fmt << bonds[0+a*2]+1
 	 << fmt << bonds[1+a*2]+1
 	 << "\n";
+
   for ( int a=0; a<nangles; ++a )
     cout << "A " 
 	 << fmt << angles[0+a*3]+1
 	 << fmt << angles[1+a*3]+1
 	 << fmt << angles[2+a*3]+1
 	 << "\n";
+
   for ( int a=0; a<ntorsions; ++a )
     cout << "D " 
 	 << fmt << torsions[0+a*4]+1
@@ -376,11 +424,26 @@ void ccdl::AutoBondFrag::PrintReport( std::ostream & cout )
 	 << fmt << torsions[2+a*4]+1
 	 << fmt << torsions[3+a*4]+1
 	 << "\n";
+
   for ( int a=0; a<nhbonds; ++a )
     cout << "H " 
 	 << fmt << hbonds[0+a*3]+1
 	 << fmt << hbonds[1+a*3]+1
 	 << fmt << hbonds[2+a*3]+1
 	 << "\n";
+
+  for ( int a=0; a<ncarts; ++a )
+    {
+      cout << "X " 
+	   << fmt << carts[a]+1
+	   << "\n";
+      cout << "Y " 
+	   << fmt << carts[a]+1
+	   << "\n";
+      cout << "Z " 
+	   << fmt << carts[a]+1
+	   << "\n";
+    };
+
 #undef fmt
 }
