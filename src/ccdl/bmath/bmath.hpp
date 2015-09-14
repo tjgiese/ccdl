@@ -84,6 +84,12 @@ namespace ccdl
   int dsyevr( int const N, double const * symat, 
 	      double * E, double * U, int const nscr, double * scr );
 
+
+  int query_dsysv( int const N );
+  int dsysv( int const N, double const * symat, double const * b, double * x,
+	     int const nscr, double * scr );
+  int dsysv( int const N, double const * symat, double const * b, double * x );
+
 }
 
 

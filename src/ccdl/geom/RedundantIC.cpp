@@ -191,7 +191,7 @@ double ccdl::AngleT::CptDifference( double const x1, double const x0 ) const
 {
   double d = x1-x0;
   double dold = d;
-  while ( true )
+  for ( int loop = 0; loop < 100; ++loop )
     {
       if ( d >  ccdl::PI ) d = ccdl::TWO_PI-d;
       if ( d < -ccdl::PI ) d = ccdl::TWO_PI+d;
@@ -203,7 +203,7 @@ double ccdl::AngleT::CptDifference( double const x1, double const x0 ) const
 double ccdl::AngleT::MoveValueToValidRange( double d ) const
 {
   double dold = d;
-  while ( true )
+  for ( int loop = 0; loop < 100; ++loop )
     {
       if ( d > ccdl::PI ) d = ccdl::TWO_PI-d;
       if ( d < 0. ) d = ccdl::TWO_PI+d;
@@ -301,7 +301,7 @@ double ccdl::DihedralT::CptDifference( double const x1, double const x0 ) const
 {
   double d = x1-x0;
   double dold = d;
-  while ( true )
+  for ( int loop = 0; loop < 100; ++loop )
     {
       //if ( d >  ccdl::PI ) d = ccdl::TWO_PI - d;
       //if ( d < -ccdl::PI ) d = ccdl::TWO_PI + d;
@@ -315,7 +315,7 @@ double ccdl::DihedralT::CptDifference( double const x1, double const x0 ) const
 double ccdl::DihedralT::MoveValueToValidRange( double d ) const
 {
   double dold = d;
-  while ( true )
+  for ( int loop = 0; loop < 100; ++loop )
     {
       if ( d >  ccdl::PI ) d -= ccdl::TWO_PI;
       if ( d < -ccdl::PI ) d += ccdl::TWO_PI;

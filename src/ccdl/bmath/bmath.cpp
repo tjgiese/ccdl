@@ -524,3 +524,49 @@ int ccdl::eigen
 #undef EVMAX
 #undef EVRMAX
 
+
+int ccdl::query_dsysv
+( int const n )
+{
+  double a;
+  int info = 0;
+  int ipiv = 0;
+  double work = 0.;
+  int lwork = -1;
+  int one = 1;
+  FORTRAN_NAME(dsysv)( "U", &n, &one, 
+		       &a, &n, 
+		       &ipiv, 
+		       &a, &n, 
+		       &work, &lwork, &info );
+  return ((int)work) + n*n;
+}
+
+int ccdl::dsysv
+( int const n, double const * a, double const * b, double * x, 
+  int const nscr, double * scr )
+{
+  std::fill(scr,scr+nscr,0.);
+  std::copy( a, a+n*n, scr );
+  std::copy( b, b+n, x );
+  double * work = scr + n*n;
+  int lwork = nscr - n*n;
+  std::vector<int> ipiv(n,0);
+  int info = 0;
+  int one = 1;
+  FORTRAN_NAME(dsysv)( "U", &n, &one, 
+		       scr, &n, 
+		       ipiv.data(), 
+		       x, &n, 
+		       work, &lwork, &info );
+
+  return info;
+}
+
+
+int ccdl::dsysv
+( int const n, double const * a, double const * b, double * x )
+{
+  std::vector<double> scr( ccdl::query_dsysv( n ), 0. );
+  return dsysv( n,a,b,x, scr.size(), scr.data() );
+}
