@@ -2,6 +2,8 @@
 #define _ccdl_linalg_h_
 
 
+#include "lsfit.hpp"
+
 namespace ccdl
 {
 

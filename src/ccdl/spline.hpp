@@ -7,4 +7,6 @@
 
 #include "spline/bspline.hpp"
 
+#include "spline/polynomial.hpp"
+
 #endif
