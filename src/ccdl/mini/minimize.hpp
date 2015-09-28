@@ -123,8 +123,8 @@ int ccdl::minimize( int const n, double * x, FCNVAL fcn, ccdl::mini::options opt
 	  step.bfgs_direction();
 	}
 
-      double sdir = ccdl::v_dot_v( n, step.s.data(), step.g.data() );
-      cout << FMTE(sdir) << "\n";
+      //double sdir = ccdl::v_dot_v( n, step.s.data(), step.g.data() );
+      //cout << FMTE(sdir) << "\n";
 
       prev = step;
 

@@ -19,7 +19,7 @@ namespace ccdl
       OneDPoint( double X, double Y ) : x(X),y(Y),g(0),wy(1.),wg(0.) {}
       OneDPoint( double X, double Y, double G ) : x(X),y(Y),g(G),wy(1.),wg(1.) {}
       OneDPoint( double X, double Y, int N, double const * S, double const * GRD );
-      void SetBoltzmannWeight( double y0, double beta );
+      void SetBoltzmannWeight( double y0, double beta, bool with_g = true );
       double x,y,g,wy,wg;
       std::vector<double> grd;
     };
@@ -44,12 +44,14 @@ namespace ccdl
       ccdl::mini::OneDPoint & operator[] ( int i ) { return data[i]; }
       ccdl::mini::OneDPoint const & operator[] ( int i ) const { return data[i]; }
       
-      void SetBoltzmannWeight( double beta );
+      void SetBoltzmannWeight( double beta, bool with_g = true );
       
       ccdl::polynomial fit( int npoly, int icon = -1, double conval = 0. ) const;
       
       ccdl::mini::OneDCurve get_bracketing_curve() const;
-      
+      ccdl::mini::OneDCurve get_y_bracketing_curve() const;
+
+      bool y_is_bracketed();
       bool g_is_bracketed();
       
       void print( std::ostream & cout ) const;

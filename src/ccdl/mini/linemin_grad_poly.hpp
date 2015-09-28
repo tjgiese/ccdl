@@ -6,6 +6,8 @@
 #include <cstdio>
 #include "../bmath.hpp"
 
+#include "linemin_nograd_nopoly.hpp"
+
 namespace ccdl
 {
   namespace mini
@@ -37,8 +39,18 @@ namespace ccdl
       curve.push_back( alo, flo, n, s, g0 );
 
 
+      //std::printf("s.g = %20.10e\n", glo );
+
+      double s2 = ccdl::v_dot_v(n,s,s);
+      //std::printf("s2 = %20.10e alp*s2 %20.10e\n",s2,alpha0*s2);
+
       // Initial upper bound
       double ahi = alpha0;
+      if ( alpha0 * s2 > 2.*n )
+	{
+	  ahi = 2.*n / s2;
+	  //std::printf("s2 = %20.10e alp*s2 %20.10e\n",s2,ahi*s2);
+	};
       //if ( glo > 0. ) ahi *= -1.;
       double fhi = fcn( x0, ahi, s, g.data() );
       curve.push_back( ahi, fhi, n, s, g.data() );
@@ -54,19 +66,37 @@ namespace ccdl
       if ( curve[0].g * curve[1].g < 0. )
 	bracket = true;
  
+      if ( bracket )
+	{
+	  while ( curve[1].g > -10 * curve[0].g )
+	    {
+	      //double w = std::abs(curve[1].g) / ( std::abs(curve[0].g) + std::abs(curve[1].g) );
+	      double w = 0.5;
+	      ahi = alo*w + ahi*(1.-w);
+	      fhi = fcn( x0, ahi, s, g.data() );
+	      curve.resize(1);
+	      curve.push_back( ahi, fhi, n, s, g.data() );
+	      if ( fhi < flo )
+		return curve;
+	    };
+	}
+
       //for ( int i=0; i<curve.size(); ++i )
       //std::printf("%4i %20.10e %20.10e %20.10e\n",i,curve[i].x,curve[i].y,curve[i].g);
 
       double aold = curve[ curve.size() - 1 ].x;
       double scl = 2.;
+      int iter = 0;
       while ( ! bracket )
 	{
+	  ++iter;
 	  curve.SetBoltzmannWeight( 1.e-5 );
 	  ccdl::polynomial poly;
 	  if ( curve.size() == 2 )
 	    poly = curve.fit( 5, 3, 0. );
 	  else
 	    poly = curve.fit( std::min(5,curve.size()+2) );
+
 	  double acp = 0.;
 	  curve.sort_by_x();
 	  alo = curve[ curve.size()-2 ].x;
@@ -81,30 +111,58 @@ namespace ccdl
 		  poly = curve.fit( 3 );
 		  if ( ! poly.minimum_loc( acp ) )
 		    {
-		      acp = (alo-ahi)*scl;
-		      scl *= 2.;
+		      acp = ahi + (ahi-alo)*scl;
+		      scl *= 1.5;
 		    }
 		  else
 		    {
-		      acp += std::min( (acp-aold)*0.1, 2. );
+		      acp *= 1.1;
+		      //acp = 1.5*ahi;
+		      //curve.print( std::cerr );
+		      //acp += std::min( std::min( (acp-aold)*0.1, 2. ) * scl, acp );
+		      //scl *= 1.5;
 		    }
 		}
 	      else
 		{
-		  acp += std::min( (acp-aold)*0.1, 1.5 );
+		  acp *= 1.1;
+		  //acp = 1.5*ahi;
+		  //curve.print( std::cerr );
+		  //acp += std::min( std::min( (acp-aold)*0.1, 1.5 ) * scl, acp );
+		  //scl *= 1.25;
 		}
 	    }
 	  else
 	    {
-	      acp += std::min( (acp-aold)*0.1, 1. );
+	      acp *= 1.1;
+	      //acp = 1.5*ahi;
+	      //curve.print( std::cerr );
+	      //acp += std::min( std::min( (acp-aold)*0.1, 1. ) * scl, acp );
+	      //scl *= 1.125;
 	    }
+
+	  if ( acp < alo or iter > 4 )
+	    {
+	      if ( acp < 1.5*ahi )
+		acp = 1.5*ahi;
+	    }
+	  else if ( acp < ahi ) 
+	    {
+	      acp = 1.5*ahi;
+	      //scl *= 1.5;
+	    };	  
+
+	  //std::printf("acp = %20.10e %20.10e %20.10e\n",acp,alo,ahi);
 	  aold = acp;
 	  double fcp = fcn( x0, acp, s, g.data() );
 	  curve.push_back( acp, fcp, n, s, g.data() );
 
-	  curve.sort_by_x();
-	  for ( int i=0; i<curve.size(); ++i )
-	    std::printf("%4i %20.10e %20.10e %20.10e\n",i,curve[i].x,curve[i].y,curve[i].g);
+
+	  //std::printf("eee %20.10e\n",(fcp-f0) / std::abs(f0) );
+	  if ( (fcp-f0) / std::abs(f0) < -2./3. ) return curve; 
+	   // curve.sort_by_x();
+	   // for ( int i=0; i<curve.size(); ++i )
+	   //   std::printf("%4i %20.10e %20.10e %20.10e\n",i,curve[i].x,curve[i].y,curve[i].g);
 
 	  bracket = curve.g_is_bracketed();
 	};
@@ -115,8 +173,10 @@ namespace ccdl
       curve.sort_by_y();
       fhi = curve[0].y;
       flo = curve.back().y; 
+      iter = 0;
       while ( flo > fhi )
 	{
+	  iter++;
 	  ccdl::mini::OneDCurve bc( curve.get_bracketing_curve() );
 	  bc.sort_by_x();
 	  double acp = 0.;
@@ -160,11 +220,60 @@ namespace ccdl
 	      */
 	    };
 
-	  std::cout << "checking " << flo << " " << acp << " " << bc[0].x << " " << bc[1].x << " " << curve.size() << "\n";
+	  //std::cout << "checking " << flo << " " << acp << " " << bc[0].x << " " << bc[1].x << " " << curve.size() << "\n";
 	  
+
+	  if ( acp > bc[1].x or acp < bc[0].x or 
+	       iter > 1 or 
+	       (bc[1].g > -100.*bc[0].g) or
+	       std::abs(bc[0].g) > 500. )
+	    {
+	      //std::printf("out of bounds\n");
+	      double w = std::abs( bc[1].g ) / ( std::abs(bc[0].g) + std::abs(bc[1].g) );
+	      acp = bc[0].x * w + bc[1].x * ( 1.-w );
+	      /*
+	      poly = bc.fit( 3, false );
+	      bool ok = poly.minimum_loc( acp );
+	      if ( (! ok) or ( acp > bc[1].x or acp < bc[0].x ) )
+		acp = 0.5 * ( bc[1].x + bc[0].x );
+	      */
+	    };
+
 	  flo = fcn( x0, acp, s, g.data() );
-	  curve.push_back( acp, flo, n, s, g.data() );
-	  
+
+	  double sval = ccdl::v_dot_v( n, s, g.data() );
+
+
+	   // std::printf("checking acp %22.16f  bc[0] %22.16f  bc[1] %22.16f\n",
+	   // 	      acp, bc[0].x, bc[1].x );
+	   // std::printf("checking flo %22.16f  bc[0] %22.16f  bc[1] %22.16f\n",
+	   // 	      flo, bc[0].y, bc[1].y );
+	   // std::printf("checking glo %22.16f  bc[0] %22.16f  bc[1] %22.16f\n",
+	   // 	      sval, bc[0].g, bc[1].g );
+
+
+	  if ( sval > bc[1].g or flo > bc[1].y )
+	    {
+	      curve.sort_by_y();
+	      //std::printf("sval > bc[1].g %20.10e\n",curve[0].x);
+	      if ( curve[0].x > 1.e-13 and sval < 0. ) break;
+	      curve.push_back( acp, flo, n, s, g.data() );
+	      if ( curve.y_is_bracketed() )
+		curve = curve.get_y_bracketing_curve();
+	    }
+	  else
+	    curve.push_back( acp, flo, n, s, g.data() );
+
+
+	  if ( iter > 4 )
+	    {
+	      acp = ccdl::mini::linemin_nograd_nopoly_given_bracket
+		( n, f0, x0, g0, curve, s, fcn, 1.e-4 );
+	      flo = fcn( x0, acp, s, g.data() );
+	      curve.push_back( acp, flo, n, s, g.data() );
+	      break;
+	    }
+
 	  //if ( flo > fhi )
 	  //curve = curve.get_bracketing_curve();
 	}

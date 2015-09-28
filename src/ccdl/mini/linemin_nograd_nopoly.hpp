@@ -147,7 +147,96 @@ namespace ccdl
 
 
 
+    template <class FCNVAL>
+    double linemin_nograd_nopoly_given_bracket
+    ( int const n, 
+      double const f0, 
+      double const * x0, 
+      double const *, // g0
+      ccdl::mini::OneDCurve const & BracketedCurve,
+      double const * s,
+      FCNVAL fcn,
+      double const TOL = 1.e-8 )
+    {
+      double const big_gap = 0.5*(std::sqrt(5.)-1.);
+      double const sml_gap = 1. - big_gap;
 
+      OneDCurve bcurve( BracketedCurve.get_y_bracketing_curve() );
+      bcurve.sort_by_y();
+
+      //std::cout << "the bracketing curve\n";
+      //bcurve.print( std::cout );
+
+
+      double flo = bcurve[0].y;
+      double fcp = bcurve[1].y;
+      double fhi = bcurve[2].y;
+
+      double alo = bcurve[0].x;
+      double acp = bcurve[1].x;
+      double ahi = bcurve[2].x;
+
+      // If we were given the line y(x) = const.
+      // Then the bisection failed and there's nothing more to do
+      if ( flo == fhi ) return acp;
+
+      // std::printf("bracket %20.10f %20.10f %20.10f  (%20.10f %20.10f %20.10f)\n",
+      // 	      alo,acp,ahi,flo,fcp,fhi);
+
+
+
+      // we can now to the gold bisection
+      double amin = alo;
+      while ( true )
+	{
+	  double atrial = 0;
+	  double ftrial = 0;
+	  if ( (acp-alo) >= (ahi-acp) )
+	    {
+	      atrial = alo + big_gap * ( acp-alo );
+	      ftrial = fcn( x0, atrial, s );
+	      bcurve.push_back( atrial, ftrial );
+	      if ( ftrial < fcp )
+		{
+		  fhi = fcp;
+		  ahi = acp;
+		  fcp = ftrial;
+		  acp = atrial;
+		}
+	      else if ( ftrial >= fcp )
+		{
+		  flo = ftrial;
+		  alo = atrial;
+		}
+	    }
+	  else
+	    {
+	      atrial = acp + sml_gap * ( ahi-acp );
+	      ftrial = fcn( x0, atrial, s );
+	      bcurve.push_back( atrial, ftrial );
+	      if ( ftrial < fcp )
+		{
+		  flo = fcp;
+		  alo = acp;
+		  fcp = ftrial;
+		  acp = atrial;
+		}
+	      else if ( ftrial >= fcp )
+		{
+		  fhi = ftrial;
+		  ahi = atrial;
+		}
+	    }
+
+	  if ( ahi-alo <= std::sqrt( TOL ) * ( std::abs(acp) + std::abs(atrial) ) )
+	    break;
+
+	  amin = bcurve[0].x;
+	};
+
+      amin = bcurve[0].x;
+      return amin;
+    }
 
 
 
