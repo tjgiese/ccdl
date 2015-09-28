@@ -102,9 +102,9 @@ namespace ccdl
 	  double fcp = fcn( x0, acp, s, g.data() );
 	  curve.push_back( acp, fcp, n, s, g.data() );
 
-	  // curve.sort_by_x();
-	  // for ( int i=0; i<curve.size(); ++i )
-	  //   std::printf("%4i %20.10e %20.10e %20.10e\n",i,curve[i].x,curve[i].y,curve[i].g);
+	  curve.sort_by_x();
+	  for ( int i=0; i<curve.size(); ++i )
+	    std::printf("%4i %20.10e %20.10e %20.10e\n",i,curve[i].x,curve[i].y,curve[i].g);
 
 	  bracket = curve.g_is_bracketed();
 	};
@@ -117,20 +117,59 @@ namespace ccdl
       flo = curve.back().y; 
       while ( flo > fhi )
 	{
+	  ccdl::mini::OneDCurve bc( curve.get_bracketing_curve() );
+	  bc.sort_by_x();
 	  double acp = 0.;
-	  ccdl::polynomial poly( curve.fit( 5 ) );
+	  ccdl::polynomial poly;
+	  poly = curve.fit( 5 );
+
+	  //if ( curve.size() == 2 )
+	  //poly = curve.fit( 5, 3, 0. );
+	  //else
+	  //poly = curve.fit( std::min(5,curve.size()+2) );
 	  if ( ! poly.minimum_loc( acp ) )
 	    {
 	      poly = curve.fit( 4 );
 	      if ( ! poly.minimum_loc( acp ) )
-		poly = curve.fit( 3 );
+		{
+		  poly = curve.fit( 3 );
+		  poly.minimum_loc( acp );
+		  /*
+		  std::vector<double> ms( poly.minima_loc() );
+		  for ( std::size_t i=0; i<ms.size(); ++i )
+		    if ( ms[i] > bc[0].x and ms[i] < bc[1].x )
+		      {
+			acp = ms[i];
+			break;
+		      }
+		  */
+		}
 	      else
 		break;
+	    }
+	  else
+	    {
+	      /*
+	      std::vector<double> ms( poly.minima_loc() );
+	      for ( std::size_t i=0; i<ms.size(); ++i )
+		if ( ms[i] > bc[0].x and ms[i] < bc[1].x )
+		  {
+		    acp = ms[i];
+		    break;
+		  }
+	      */
 	    };
+
+	  std::cout << "checking " << flo << " " << acp << " " << bc[0].x << " " << bc[1].x << " " << curve.size() << "\n";
+	  
 	  flo = fcn( x0, acp, s, g.data() );
 	  curve.push_back( acp, flo, n, s, g.data() );
-	};
+	  
+	  //if ( flo > fhi )
+	  //curve = curve.get_bracketing_curve();
+	}
 
+      curve.sort_by_y();
       return curve;
     }
 

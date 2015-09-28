@@ -146,7 +146,7 @@ void ccdl::mini::SteepDescStep::cpt_fg( double const alp, T fcn )
 template <class FCNVAL>
 double ccdl::mini::SteepDescStep::linemin( double alp0, FCNVAL fcn )
 {
-  ccdl::mini::LINET type = ccdl::mini::GRAD_POLY;
+  ccdl::mini::LINET type = ccdl::mini::NOGRAD_NOPOLY;
   ccdl::mini::OneDPoint pt = ccdl::mini::linemin
     ( type, n, f, x.data(), g.data(), alp0, s.data(), fcn );
   set_fg( pt );
