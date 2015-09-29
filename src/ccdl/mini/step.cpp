@@ -1,6 +1,6 @@
 #include "step.hpp"
 #include "../bmath.hpp"
-
+#include "linemin.hpp"
 
 inline double vdot( std::vector<double> const & a, std::vector<double> const & b )
 {
@@ -9,12 +9,61 @@ inline double vdot( std::vector<double> const & a, std::vector<double> const & b
 
 
 
-ccdl::mini::SteepDescStep::SteepDescStep( int n ) 
-  : n(n), f(0.), 
+ccdl::mini::SteepDescStep::SteepDescStep( ccdl::minifcn * pfcn ) 
+  : pfcn(pfcn), n(pfcn->size()), f(0.), 
     grms(0.), gmax(0.), 
     s(n,0.), p(n,0.), 
     x(n,0.), g(n,0.) 
 {}
+
+
+
+void ccdl::mini::SteepDescStep::cpt_f( double const alp ) 
+{ 
+  ccdl::minifcn & fcn = *pfcn;
+  f = fcn( alp, s.data() );
+  for ( int i=0;i<n;++i )
+    { 
+      p[i]  = alp*s[i];
+      x[i] += p[i];
+    };
+}
+
+
+void ccdl::mini::SteepDescStep::cpt_fg( double const alp ) 
+{ 
+  ccdl::minifcn & fcn = *pfcn;
+
+  std::fill(g.data(),g.data()+n,0.); 
+  f = fcn( alp, s.data(), g.data() );
+  for ( int i=0;i<n;++i )
+    { 
+      p[i]  = alp*s[i];
+      x[i] += p[i];
+    };
+  grms = 0.;
+  gmax = 0.;
+  for ( int i=0; i<n; ++i )
+    {
+      grms += g[i]*g[i];
+      gmax = std::max( gmax, std::abs(g[i]) );
+    }
+  grms = std::sqrt( grms / n );
+}
+
+
+double ccdl::mini::SteepDescStep::linemin( double alp0 )
+{
+  ccdl::mini::LINET type = ccdl::mini::GRAD_POLY;
+  ccdl::mini::OneDPoint pt = ccdl::mini::linemin
+    ( type, n, f, g.data(), alp0, s.data(), pfcn );
+  pfcn->SetNewReferencePt( pt.x, s.data() );
+  set_fg( pt );
+  return pt.x;
+}
+
+
+
 
 
 void ccdl::mini::SteepDescStep::set_s( double const * u ) 
@@ -111,8 +160,8 @@ void ccdl::mini::ConjGradStep::fletcher_reeves_direction
 }
 
 
-ccdl::mini::BfgsStep::BfgsStep( int n ) 
-  : ccdl::mini::ConjGradStep( n ), h( n*n, 0. )
+ccdl::mini::BfgsStep::BfgsStep( ccdl::minifcn * pfcn ) 
+  : ccdl::mini::ConjGradStep( pfcn ), h( pfcn->size() * pfcn->size(), 0. )
 {
   for ( int i=0; i<n; ++i )
     h[i+i*n] = 1.;

@@ -1,7 +1,9 @@
 #ifndef _mini_step_hpp_
 #define _mini_step_hpp_
 
-#include "linemin.hpp"
+//#include "linemin.hpp"
+#include "minifcn.hpp"
+#include "OneDCurve.hpp"
 
 namespace ccdl
 {
@@ -10,23 +12,21 @@ namespace ccdl
 
     struct SteepDescStep
     {
-      SteepDescStep( int n );
+      SteepDescStep( ccdl::minifcn * pfcn );
 
       void set_s( double const * u );
 
-      template <class T>
-      void cpt_f( double const alp, T fcn );
+      void cpt_f( double const alp );
 
-      template <class T>
-      void cpt_fg( double const alp, T fcn );
+      void cpt_fg( double const alp );
 
       void set_fg( ccdl::mini::OneDPoint const & best );
 
-      template <class FCNVAL>
-      double linemin( double alp0, FCNVAL fcn );
+      double linemin( double alp0 );
 
       void steepdesc_direction();
 
+      ccdl::minifcn * pfcn;
       int n;
       double f,grms,gmax;
       std::vector<double> s,p,x,g;
@@ -36,7 +36,7 @@ namespace ccdl
 
     struct ConjGradStep : public ccdl::mini::SteepDescStep
     {
-      ConjGradStep( int n ) : SteepDescStep(n) {}
+      ConjGradStep( ccdl::minifcn * pfcn ) : SteepDescStep(pfcn) {}
       void hestenes_stiefel_direction( ConjGradStep const * prev, double alp0 );
       void polak_ribiere_direction( ConjGradStep const * prev, double alp0 );
       void fletcher_reeves_direction( ConjGradStep const * prev, double alp0 );
@@ -97,7 +97,7 @@ namespace ccdl
 
     struct BfgsStep : public ccdl::mini::ConjGradStep
     {
-      BfgsStep( int n );
+      BfgsStep( ccdl::minifcn * pfcn );
 
       void update_hessian( ccdl::mini::BfgsStep const & prev );
 
@@ -109,49 +109,6 @@ namespace ccdl
   }
 }
 
-
-template <class T>
-void ccdl::mini::SteepDescStep::cpt_f( double const alp, T fcn ) 
-{ 
-  f = fcn( x.data(), alp, s.data() );
-  for ( int i=0;i<n;++i )
-    { 
-      p[i]  = alp*s[i];
-      x[i] += p[i];
-    };
-}
-
-
-template <class T>
-void ccdl::mini::SteepDescStep::cpt_fg( double const alp, T fcn ) 
-{ 
-  std::fill(g.data(),g.data()+n,0.); 
-  f = fcn( x.data(), alp, s.data(), g.data() );
-  for ( int i=0;i<n;++i )
-    { 
-      p[i]  = alp*s[i];
-      x[i] += p[i];
-    };
-  grms = 0.;
-  gmax = 0.;
-  for ( int i=0; i<n; ++i )
-    {
-      grms += g[i]*g[i];
-      gmax = std::max( gmax, std::abs(g[i]) );
-    }
-  grms = std::sqrt( grms / n );
-}
-
-
-template <class FCNVAL>
-double ccdl::mini::SteepDescStep::linemin( double alp0, FCNVAL fcn )
-{
-  ccdl::mini::LINET type = ccdl::mini::GRAD_POLY;
-  ccdl::mini::OneDPoint pt = ccdl::mini::linemin
-    ( type, n, f, x.data(), g.data(), alp0, s.data(), fcn );
-  set_fg( pt );
-  return pt.x;
-}
 
 
 #endif
