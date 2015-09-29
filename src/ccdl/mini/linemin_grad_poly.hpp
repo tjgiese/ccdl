@@ -85,6 +85,7 @@ namespace ccdl
       //std::printf("%4i %20.10e %20.10e %20.10e\n",i,curve[i].x,curve[i].y,curve[i].g);
 
       double aold = curve[ curve.size() - 1 ].x;
+      double fold = fhi;
       double scl = 2.;
       int iter = 0;
       while ( ! bracket )
@@ -102,6 +103,9 @@ namespace ccdl
 	  alo = curve[ curve.size()-2 ].x;
 	  ahi = curve[ curve.size()-1 ].x;
 	  curve.sort_by_y();
+	  
+	  double minf  = curve[0].y;
+	  double predf = curve.back().y;
 
 	  if ( ! poly.minimum_loc( acp ) )
 	    {
@@ -121,6 +125,7 @@ namespace ccdl
 		      //curve.print( std::cerr );
 		      //acp += std::min( std::min( (acp-aold)*0.1, 2. ) * scl, acp );
 		      //scl *= 1.5;
+		      predf = poly( acp );
 		    }
 		}
 	      else
@@ -130,6 +135,7 @@ namespace ccdl
 		  //curve.print( std::cerr );
 		  //acp += std::min( std::min( (acp-aold)*0.1, 1.5 ) * scl, acp );
 		  //scl *= 1.25;
+		  predf = poly( acp );
 		}
 	    }
 	  else
@@ -139,6 +145,7 @@ namespace ccdl
 	      //curve.print( std::cerr );
 	      //acp += std::min( std::min( (acp-aold)*0.1, 1. ) * scl, acp );
 	      //scl *= 1.125;
+	      predf = poly( acp );
 	    }
 
 	  if ( acp < alo or iter > 4 )
@@ -152,11 +159,17 @@ namespace ccdl
 	      //scl *= 1.5;
 	    };	  
 
+	  //std::printf("predf %24.12f  predf-f0 < 1.25 * (minf-f0) : %24.12f < %24.12f\n",
+	  //predf,predf-f0,1.25 * (minf-f0));
+
+	  // IF INEXACT LINE SEARCH
+	  if ( ( f0-predf < 1.25 * (f0-minf) ) and fold == fhi ) return curve;
+	    
 	  //std::printf("acp = %20.10e %20.10e %20.10e\n",acp,alo,ahi);
 	  aold = acp;
 	  double fcp = fcn( x0, acp, s, g.data() );
+	  fold = fcp;
 	  curve.push_back( acp, fcp, n, s, g.data() );
-
 
 	  //std::printf("eee %20.10e\n",(fcp-f0) / std::abs(f0) );
 	  if ( (fcp-f0) / std::abs(f0) < -2./3. ) return curve; 
@@ -178,6 +191,11 @@ namespace ccdl
 	{
 	  iter++;
 	  ccdl::mini::OneDCurve bc( curve.get_bracketing_curve() );
+	  bc.sort_by_y();
+
+	  double minf  = bc[0].y;
+	  double predf = bc.back().y;
+
 	  bc.sort_by_x();
 	  double acp = 0.;
 	  ccdl::polynomial poly;
@@ -223,6 +241,8 @@ namespace ccdl
 	  //std::cout << "checking " << flo << " " << acp << " " << bc[0].x << " " << bc[1].x << " " << curve.size() << "\n";
 	  
 
+
+
 	  if ( acp > bc[1].x or acp < bc[0].x or 
 	       iter > 1 or 
 	       (bc[1].g > -100.*bc[0].g) or
@@ -239,7 +259,16 @@ namespace ccdl
 	      */
 	    };
 
+	  predf = poly( acp );
+	  //std::printf("predf %24.12f  predf-f0 < 1.25 * (minf-f0) : %24.12f < %24.12f\n",
+	  //predf,predf-f0,1.25 * (minf-f0));
+
+	  // IF INEXACT LINE SEARCH
+	  if ( ( f0-predf < 1.25 * (f0-minf) ) and fold == fhi ) return curve;
+
+
 	  flo = fcn( x0, acp, s, g.data() );
+	  fold = flo;
 
 	  double sval = ccdl::v_dot_v( n, s, g.data() );
 
