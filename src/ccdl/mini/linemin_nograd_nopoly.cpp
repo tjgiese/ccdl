@@ -1,5 +1,6 @@
 #include "linemin_nograd_nopoly.hpp"
 #include <cmath>
+#include <cstdio>
 
 ccdl::mini::OneDCurve
 ccdl::mini::FindBracket_NoGrad_NoPoly
@@ -245,7 +246,6 @@ double ccdl::mini::linemin_nograd_nopoly
 
   //double const big_gap = 0.5*(std::sqrt(5.)-1.);
   //double const sml_gap = 1. - big_gap;
-
   OneDCurve curve( ccdl::mini::FindBracket_NoGrad_NoPoly( n, f0, NULL, alpha0, s, pfcn ) );
   // we now should be bracketed by (alo,acp,ahi)
 

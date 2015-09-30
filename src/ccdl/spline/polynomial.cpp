@@ -121,7 +121,7 @@ ccdl::polynomial ccdl::polynomial::deriv( int const nder ) const
 
 std::vector<double> ccdl::polynomial::roots() const
 {
-  int m = n-1;
+  int m = 0;
   // exclude zero-values high-order monomials
   // to avoid divide-by-zero in the companion matrix
   for ( int i=1; i<n; ++i )
@@ -139,7 +139,9 @@ std::vector<double> ccdl::polynomial::roots() const
   for ( int i=0; i<m-1; ++i )
     A[(i+1) + i*m] = 1.;
   for ( int i=0; i<m; ++i )
-    A[i + (m-1)*m] = - c[i] / c[m];
+    {
+      A[i + (m-1)*m] = - c[i] / c[m];
+    };
 
   std::vector<double> xc(m,0.);
   std::vector<double> xs(m,0.);
@@ -155,12 +157,19 @@ std::vector<double> ccdl::polynomial::roots() const
 	  work.data(), &lwork, &info);
   lwork = 1 + (int)work[0];
   work.resize( lwork );
+
+
   dgeev_( "N", "N",
 	  &m, A.data(), &m,
 	  xc.data(), xs.data(), 
 	  &dummy, &m,
 	  &dummy, &m,
 	  work.data(), &lwork, &info);
+
+  if ( info != 0 )
+    throw ccdl::SingularMatrixException("ccdl::polynomial::roots");
+
+
 
   // discard the ccdl::polynomial's imaginary roots
   std::vector<double> x_real_roots(0);

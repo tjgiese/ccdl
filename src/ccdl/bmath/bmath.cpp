@@ -8,6 +8,9 @@
 #include "LAPACK.hpp"
 
 
+#undef PDBG
+
+
 double ccdl::v_dot_v( int n, double const * A, double const * B )
 {
   int inc=1;
@@ -225,12 +228,21 @@ int ccdl::sdd_decomp
   std::vector<double> work( lwork, 0. );
   std::vector<int> iwork( 8*std::min(nf,ns) );
 
+#ifdef PDBG
+  std::printf("sdd_decomp\n");
+#endif
+
   int info = 0;
   FORTRAN_NAME(dgesdd)("A",&nf,&ns,T.data(),
 		       &nf,w,U,
 		       &nf,VT,
 		       &ns,work.data(),
 		       &lwork,iwork.data(),&info);
+
+#ifdef PDBG
+  std::printf("return %i\n",info);
+#endif
+
   return info;
 
   // if ( info < 0 )
@@ -301,11 +313,19 @@ int ccdl::sdd_sym_power
 
 int ccdl::sym_inverse( int const nf, int const , double * A )
 {
+#ifdef PDBG
+  std::printf("sym_inverse\n");
+#endif
   int info;
   FORTRAN_NAME(dpotrf)( "U", &nf, A, &nf, &info );
 
   if ( info == 0 )
     FORTRAN_NAME(dpotri)( "U", &nf, A, &nf, &info );
+
+#ifdef PDBG
+  std::printf("return %i\n",info);
+#endif
+
   if ( info == 0 )
     for ( int j=1; j < nf; ++j )
       for ( int i=0; i < j; ++i )
@@ -422,9 +442,18 @@ int ccdl::dsyev
   int const nf = N;
   std::copy( symat, symat+nf*nf, U );
   int info = 0;
+
+#ifdef PDBG
+  std::printf("dsyev_\n");
+#endif
   dsyev_("V","U", &nf, U,
 	 &nf, E,
 	 scr, &nscr, &info );
+
+#ifdef PDBG
+  std::printf("return %i\n",info);
+#endif
+
   return info;
 }
 
@@ -437,12 +466,20 @@ int ccdl::dsyevd
   int info = 0;
   int liwork= ccdl::iquery_dsyevd(nf);
   std::vector<int> iwork(liwork);
+
+#ifdef PDBG
+  std::printf("dsyevd_\n");
+#endif
   dsyevd_("V","U",
 	  &nf,U,
 	  &nf,E,
 	  scr, &nscr,
 	  iwork.data(), &liwork,
 	  &info );
+
+#ifdef PDBG
+  std::printf("return %i\n",info);
+#endif
   return info;
 }
 
@@ -464,6 +501,10 @@ int ccdl::dsyevr
   const double VL = 0., VU = 0.;
   const int IL = 1, IU = nf;
   const double ABSTOL = dlamch_("Safe minimum");
+
+#ifdef PDBG
+  std::printf("dsyevr_\n");
+#endif
   dsyevr_("V","A","U",
 	  &nf,T,&nf,
 	  &VL,&VU,
@@ -474,6 +515,10 @@ int ccdl::dsyevr
 	  work,&lwork,
 	  iwork,&liwork,
 	  &info );
+
+#ifdef PDBG
+  std::printf("return %i\n",info);
+#endif
   return info;
 }
 
@@ -555,13 +600,18 @@ int ccdl::dsysv
   int info = 0;
   int one = 1;
 
+#ifdef PDBG
+  std::printf("ccdl::dsysv\n");
+#endif
   FORTRAN_NAME(dsysv)( "U", &n, &one, 
 		       scr, &n, 
 		       ipiv.data(), 
 		       x, &n, 
 		       work, &lwork, &info );
 
-
+#ifdef PDBG
+  std::printf("return %i\n",info);
+#endif
   return info;
 }
 

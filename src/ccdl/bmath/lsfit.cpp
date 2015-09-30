@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <cmath>
 
-
+#undef PDBG
 
 extern "C"
 {
@@ -62,10 +62,16 @@ int ccdl::LeastSquaresFit
     {
       LWORK = twork+1;
       std::vector<double> WORK( LWORK, 0. );
+#ifdef PDBG
+      std::printf("dgelsy_\n");
+#endif
       dgelsy_( &nobs, &nparam, &nrhs, 
 	       A.data(), &nobs, X.data(), &nmax, 
 	       jpvt.data(), &relative_accuracy_of_the_obs, &rank,
 	       WORK.data(), &LWORK, &INFO );
+#ifdef PDBG
+      std::printf("return %i\n",INFO);
+#endif
       std::copy( X.data(), X.data() + nparam, x_param );
     }
   else
@@ -113,8 +119,14 @@ int ccdl::WeightedLeastSquaresFit
 	   &nparam,WA.data(),&LWORK,&INFO);
     LWORK = WA[0]+1;
     WA.resize( LWORK );
+#ifdef PDBG
+    std::printf("dsysv_\n");
+#endif
     dsysv_("U",&nparam,&inc,AtWtA.data(),&nparam,ipiv.data(),AtWtb.data(),
 	   &nparam,WA.data(),&LWORK,&INFO);
+#ifdef PDBG
+    std::printf("return %i\n",INFO);
+#endif
     if ( INFO > 0 )
       throw ccdl::SingularMatrixException("ccdl::WeightedLeastSquaresFit");
     std::copy( AtWtb.data(), AtWtb.data()+nparam, x_param );
@@ -157,6 +169,9 @@ int ccdl::ConstrainedLeastSquaresFit
     {
       LWORK = twork+1;
       std::vector<double> WORK( LWORK, 0. );
+#ifdef PDBG
+      std::printf("dgglse_\n");
+#endif
       dgglse_( &nobs, &nparam, &ncon,
 	       A.data(), &nobs,
 	       D.data(), &ncon,
@@ -164,6 +179,9 @@ int ccdl::ConstrainedLeastSquaresFit
 	       c.data(), 
 	       x_param,
 	       WORK.data(), &LWORK, &INFO );
+#ifdef PDBG
+      std::printf("return %i\n",INFO);
+#endif
       if ( INFO > 0 )
 	throw ccdl::SingularMatrixException("ccdl::ConstrainedLeastSquaredFit");
     }

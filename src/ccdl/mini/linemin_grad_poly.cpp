@@ -60,14 +60,30 @@ ccdl::mini::linemin_grad_poly
  
   if ( bracket )
     {
-      while ( curve[1].g > -10 * curve[0].g )
+      ccdl::mini::OneDPoint plo = curve[0];
+      while ( curve[1].g > -10 * curve[0].g and std::abs(curve[0].g) > 0.001 )
 	{
 	  //double w = std::abs(curve[1].g) / ( std::abs(curve[0].g) + std::abs(curve[1].g) );
 	  double w = 0.5;
-	  ahi = alo*w + ahi*(1.-w);
+	  double ahi0 = ahi;
+
+	  ahi = alo*w + ahi0*(1.-w);
+	      
+
 	  fhi = fcn( ahi, s, g.data() );
-	  curve.resize(1);
+	      
+	  double sdot = ccdl::v_dot_v( n, s, g.data() );
+	  
+	  if ( curve[0].g * sdot > 0. ) // we went too far
+	    {
+	      ahi = ahi0;
+	      break;
+	    }
+	  
+	  curve.resize(0);
+	  curve.data.push_back( plo );
 	  curve.push_back( ahi, fhi, n, s, g.data() );
+
 	  if ( fhi < flo )
 	    return curve;
 	};
