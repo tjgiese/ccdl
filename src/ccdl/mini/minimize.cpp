@@ -264,7 +264,7 @@ int ccdl::minimize( ccdl::minifcn * pfcn, ccdl::mini::options opts )
   
 #define FMTE(a) std::setw(11) << std::setprecision(2) << std::scientific << (a) << " "
 #define FMTF(a) std::setw(22) << std::setprecision(12) << std::fixed << (a) << " "
-#define PRT cout << "GEOMOPT " << std::setw(5) << iter++ << FMTF(step.f) << FMTE(step.gmax) << FMTE(step.grms) << "\n";
+#define PRT if ( opts.verbosity ) cout << "GEOMOPT " << std::setw(5) << iter++ << FMTF(step.f) << FMTE(step.gmax) << FMTE(step.grms) << "\n";
 
   std::ostream & cout = *(opts.ostr);
   int iter=0;
@@ -278,16 +278,17 @@ int ccdl::minimize( ccdl::minifcn * pfcn, ccdl::mini::options opts )
   prev = step;
   if ( step.gmax < 1.e-15 )
     {
+      //return 0;
+      
       prev.s[0] += 5.e-5;
       prev.cpt_fg( 1. );
       PRT;
-
-
       if ( prev.f >= step.f )
 	{ // the user gave us a minimum as the starting point -- return
 	  return 0;
 	};
       step = prev;
+      
     };
   
   double alp0 = 0.;
@@ -297,7 +298,7 @@ int ccdl::minimize( ccdl::minifcn * pfcn, ccdl::mini::options opts )
   for ( int iloop = 0; iter < opts.maxiter; ++iloop )
     {
       
-      if ( iloop < opts.nsd )
+      if ( iloop < opts.nsd  )
 	{
 	  step.steepdesc_direction();
 	  alp0 = 1. / ( 1. + std::sqrt( ccdl::v_dot_v( n, step.s.data(), step.s.data() ) ) );
@@ -325,13 +326,21 @@ int ccdl::minimize( ccdl::minifcn * pfcn, ccdl::mini::options opts )
 	  step.steepdesc_direction();
 	  alp0 = 1. / ( 1. + std::sqrt( ccdl::v_dot_v( n, step.s.data(), step.s.data() ) ) );
 	}
-
       alp = step.linemin( alp0 );
       PRT;
 
       //std::printf("GREP %5i %20.10f %11.2e %11.2e (alp0=%15.5f alp=%15.5f)\n\n\n\n\n\n\n",iter,step.f,step.gmax,step.grms,alp0,alp);
 
-      if ( step.gmax < opts.gmax_tol and step.grms < opts.grms_tol ) break;
+      if ( (step.gmax < opts.gmax_tol and 
+	    step.grms < opts.grms_tol) ) break;
+
+      if ( step.f-prev.f == 0 )
+	{
+	  step.steepdesc_direction();
+	  alp0 = 1. / ( 1. + std::sqrt( ccdl::v_dot_v( n, step.s.data(), step.s.data() ) ) );
+	  alp = step.linemin( alp0 );
+	  if ( step.f-prev.f == 0 ) break;
+	}
 
       step.update_hessian( prev );
 

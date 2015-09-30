@@ -234,7 +234,6 @@ ccdl::mini::linemin_grad_poly
 	  
 
 
-
       if ( acp > bc[1].x or acp < bc[0].x or 
 				  iter > 1 or 
 	(bc[1].g > -100.*bc[0].g) or
@@ -250,6 +249,7 @@ ccdl::mini::linemin_grad_poly
 	    acp = 0.5 * ( bc[1].x + bc[0].x );
 	  */
 	};
+
 
       predf = poly( acp );
       //std::printf("predf %24.12f  predf-f0 < 1.25 * (minf-f0) : %24.12f < %24.12f\n",
@@ -288,12 +288,17 @@ ccdl::mini::linemin_grad_poly
 
       if ( iter > 4 )
 	{
-	  acp = ccdl::mini::linemin_nograd_nopoly_given_bracket
-	    ( n, f0, g0, curve, s, pfcn, 1.e-4 );
-	  flo = fcn( acp, s, g.data() );
-	  curve.push_back( acp, flo, n, s, g.data() );
-	  break;
+	  if ( bc[0].x > 1.e-4 ) break;
+	  else
+	    {
+	      acp = ccdl::mini::linemin_nograd_nopoly_given_bracket
+		( n, f0, g0, curve, s, pfcn, 1.e-4 );
+	      flo = fcn( acp, s, g.data() );
+	      curve.push_back( acp, flo, n, s, g.data() );
+	      break;
+	    }
 	}
+      if ( iter > 20 ) break;
 
       //if ( flo > fhi )
       //curve = curve.get_bracketing_curve();

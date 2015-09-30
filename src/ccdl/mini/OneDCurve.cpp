@@ -98,21 +98,51 @@ ccdl::polynomial ccdl::mini::OneDCurve::fit( int npoly, int icon, double conval 
     };
   ccdl::polynomial poly( npoly );
   if ( icon > -1 )
-    poly.wfit( x.size(), x.data(), y.data(), g.data(),
-	       wy.data(), wg.data(),
-	       icon, conval );
+    {
+
+      for ( int ipoly = npoly+1; ipoly --> 1; )
+	{
+
+	  poly.reset( ipoly );
+	  try
+	    {
+	      poly.wfit( x.size(), x.data(), y.data(), g.data(),
+			 wy.data(), wg.data(),
+			 icon, conval );
+	      break;
+	    }
+	  catch( ccdl::SingularMatrixException const & e2 )
+	    {
+	      continue;
+	    }
+	};
+      
+    }
   else
-    poly.wfit( x.size(), x.data(), y.data(), g.data(),
-	       wy.data(), wg.data() );
+    {
+      for ( int ipoly = npoly+1; ipoly --> 1; )
+	{
+	  poly.reset( ipoly );
+	  try
+	    {
+	      poly.wfit( x.size(), x.data(), y.data(), g.data(),
+			 wy.data(), wg.data() );
+	      break;
+	    }
+	  catch( ccdl::SingularMatrixException const & e2 )
+	    {
+	      continue;
+	    }
+	};
+    }
 
-
+  /*
   std::sort( x.begin(), x.end() );
 
   double mloc = 0.;
 
   poly.minimum_loc( mloc );
 
-  /*
   bool has_min = poly.minimum_loc( mloc );
   if ( has_min )
     {

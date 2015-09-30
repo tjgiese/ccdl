@@ -115,6 +115,8 @@ int ccdl::WeightedLeastSquaresFit
     WA.resize( LWORK );
     dsysv_("U",&nparam,&inc,AtWtA.data(),&nparam,ipiv.data(),AtWtb.data(),
 	   &nparam,WA.data(),&LWORK,&INFO);
+    if ( INFO > 0 )
+      throw ccdl::SingularMatrixException("ccdl::WeightedLeastSquaresFit");
     std::copy( AtWtb.data(), AtWtb.data()+nparam, x_param );
   }
   return INFO; 
@@ -162,6 +164,8 @@ int ccdl::ConstrainedLeastSquaresFit
 	       c.data(), 
 	       x_param,
 	       WORK.data(), &LWORK, &INFO );
+      if ( INFO > 0 )
+	throw ccdl::SingularMatrixException("ccdl::ConstrainedLeastSquaredFit");
     }
   else
     {

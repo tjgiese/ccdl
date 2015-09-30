@@ -494,12 +494,20 @@ void ccdl::polynomial::wfit( int npts, double const * x, double const * y, doubl
     }
 
   std::vector<double> cvec( n, 0. ), cval( n, 0. );
-  cvec[ck] = 1.;
-  cval[ck] = conval;
-
-  ccdl::ConstrainedWeightedLeastSquaresFit
-    ( 2*npts, n, A.data(), c.data(), obs.data(), w.data(), 
-      1, cvec.data(), cval.data() );
+  if ( ck < n )
+    {
+      cvec[ck] = 1.;
+      cval[ck] = conval;
+      
+      ccdl::ConstrainedWeightedLeastSquaresFit
+	( 2*npts, n, A.data(), c.data(), obs.data(), w.data(), 
+	  1, cvec.data(), cval.data() );
+    }
+  else
+    {
+      ccdl::WeightedLeastSquaresFit
+	( 2*npts, n, A.data(), c.data(), obs.data(), w.data() );
+    };
 }
 
 

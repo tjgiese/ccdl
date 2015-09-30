@@ -20,11 +20,13 @@ namespace ccdl
 	  ncg(3),
 	  gmax_tol( 1.e-4 ),
 	  grms_tol( 5.e-5 ),
+	  verbosity( 1 ),
 	  ostr( &std::cout )
       {}
 
       int maxiter,nsd,ncg;
       double gmax_tol,grms_tol;
+      int verbosity;
       std::ostream * ostr;
     };
   }

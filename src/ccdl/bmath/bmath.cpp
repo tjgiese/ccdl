@@ -554,11 +554,13 @@ int ccdl::dsysv
   std::vector<int> ipiv(n,0);
   int info = 0;
   int one = 1;
+
   FORTRAN_NAME(dsysv)( "U", &n, &one, 
 		       scr, &n, 
 		       ipiv.data(), 
 		       x, &n, 
 		       work, &lwork, &info );
+
 
   return info;
 }

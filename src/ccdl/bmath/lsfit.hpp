@@ -1,6 +1,7 @@
 #ifndef _ccdl_lsfit_hpp_
 #define _ccdl_lsfit_hpp_
 
+#include "exceptions.hpp"
 
 namespace ccdl
 {
