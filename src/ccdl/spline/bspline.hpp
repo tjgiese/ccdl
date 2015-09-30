@@ -55,6 +55,7 @@ namespace ccdl
   void bspline_fourier_half( int const N, int const order, double * fc );
 
   void bspline_renormalize( double const lx, int const nx, int const order, double * data );
+  void bspline_renormalize( double const lx, double const ly, int const nx, int const ny, int const order, double * data );
 
 }
 

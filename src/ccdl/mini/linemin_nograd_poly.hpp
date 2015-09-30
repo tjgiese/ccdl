@@ -2,6 +2,7 @@
 #define _linemin_nograd_poly_hpp_
 
 #include "OneDCurve.hpp"
+#include <cmath>
 
 namespace ccdl
 {

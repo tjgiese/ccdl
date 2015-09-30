@@ -1,6 +1,7 @@
 #include "step.hpp"
 #include "../bmath.hpp"
 #include "linemin.hpp"
+#include <cmath>
 
 inline double vdot( std::vector<double> const & a, std::vector<double> const & b )
 {
