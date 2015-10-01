@@ -1,6 +1,8 @@
 #ifndef _OrthogonalPolynomials_hpp_
 #define _OrthogonalPolynomials_hpp_
 
+#include <cmath>
+
 namespace ccdl
 {
 
@@ -19,6 +21,42 @@ namespace ccdl
   ( double const x, 
     int const n, 
     double * val );
+
+  void LegendrePolynomial
+  ( double const x, 
+    int const n,
+    double * val,
+    double * der );
+
+  void LegendrePolynomial
+  ( double const x0, 
+    double const x1, 
+    double const x, 
+    int const n, 
+    double * p );
+
+  void LegendrePolynomial
+  ( double const x0, 
+    double const x1, 
+    double const x, 
+    int const n, 
+    double * p, 
+    double * dp );
+
+  void OrthonormalLegendreBasis
+  ( double const x0, 
+    double const x1, 
+    double const x, 
+    int const n, 
+    double * p );
+
+  void OrthonormalLegendreBasis
+  ( double const x0, 
+    double const x1, 
+    double const x, 
+    int const n, 
+    double * p, 
+    double * dp );
 
   void ChebyshevPolynomialFirstKind
   ( double const x,
@@ -81,6 +119,89 @@ inline void ccdl::LegendrePolynomial
       for ( int i=2; i < n; ++i )
 	val[i] = ( (i+i-1) * x * val[i-1] - (i-1) * val[i-2] ) / i;
     };
+}
+
+
+inline
+void ccdl::LegendrePolynomial
+( double const x, 
+  int const n, // number of elements, not max order.  max_order = n-1
+  double * val,
+  double * der )
+{
+  val[0] = 1.0;
+  der[0] = 0.0;
+  if ( n > 1 )
+    {
+      val[1] = x;
+      der[1] = 1.;
+      for ( int i=2; i < n; ++i )
+	{
+	  val[i] = ( (i+i-1) * x * val[i-1] - (i-1) * val[i-2] ) / i;
+	  der[i] = ( (i+i-1) * (x * der[i-1] + val[i-1]) - (i-1) * der[i-2] ) / i;
+	}
+    };
+}
+
+inline
+void ccdl::LegendrePolynomial( double const x0, double const x1, double const x, 
+			       int const n, double * p )
+{
+  double u = 2. * (x-x0)/(x1-x0) - 1.;
+  // du/dx = 2./(x1-x0);
+  ccdl::LegendrePolynomial( u, n, p );
+}
+
+
+inline
+void ccdl::LegendrePolynomial( double const x0, double const x1, double const x, 
+			       int const n, double * p, double * dp )
+{
+  double u = 2. * (x-x0)/(x1-x0) - 1.;
+  // du/dx = 2./(x1-x0);
+  ccdl::LegendrePolynomial( u, n, p, dp );
+  double const dudx = 2./(x1-x0);
+  for ( int k=0; k<n; ++k )
+    p[k] *= dudx;
+}
+
+
+
+inline
+void ccdl::OrthonormalLegendreBasis
+( double const x0, double const x1, 
+  double const x, int const n, double * p )
+{
+  //
+  // Pn(x;x0,x1) = sqrt( ( 2*n+1 ) / (x1-x0) ) Pn( 2*(x-x0)/(x1-x0) )
+  // \int_x0^x1 Pn(x;x0,x1) Pm(x;x0,x1) dx = \delta_n,m
+  //
+  double u = 2. * (x-x0)/(x1-x0) - 1.;
+  // du/dx = 2./(x1-x0);
+  ccdl::LegendrePolynomial( u, n, p );
+  for ( int k=0; k<n; ++k )
+    p[k] *= std::sqrt((2*k+1)/(x1-x0));
+}
+
+
+inline
+void ccdl::OrthonormalLegendreBasis
+( double const x0, double const x1, 
+  double const x, int const n, double * p, double * dp )
+{
+  //
+  // Pn(x;x0,x1) = sqrt( ( 2*n+1 ) / (x1-x0) ) Pn( 2*(x-x0)/(x1-x0) )
+  // \int_x0^x1 Pn(x;x0,x1) Pm(x;x0,x1) dx = \delta_n,m
+  //
+  double const u = 2. * (x-x0)/(x1-x0) - 1.;
+  double const dudx = 2./(x1-x0);
+  ccdl::LegendrePolynomial( u, n, p, dp );
+  for ( int k=0; k<n; ++k )
+    {
+      double nrm = std::sqrt((2*k+1)/(x1-x0));
+      p[k] *= nrm;
+      dp[k] *= nrm * dudx;
+    }
 }
 
 
