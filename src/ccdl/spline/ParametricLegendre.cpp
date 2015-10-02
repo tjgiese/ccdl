@@ -170,6 +170,22 @@ double ccdl::ParametricLegendre::PerpForceProj( double const t, double & dfdx, d
   return fperp_mag;
 }
 
+
+
+double ccdl::ParametricLegendre::ParaForceProj( double const t, double & dfdx, double & dfdy )
+{
+  double x,y,dxdt,dydt;
+  GetXY( t,x,y,dxdt,dydt );
+  double den = std::sqrt( dxdt*dxdt + dydt*dydt );
+  double vx =  dxdt / den;
+  double vy =  dydt / den;
+  double fperp_mag = dfdx * vx + dfdy * vy;
+  dfdx = fperp_mag * vx;
+  dfdy = fperp_mag * vy;
+  return fperp_mag;
+}
+
+
 // naux
 double ccdl::ParametricLegendre::PerpForceSumSq( double const * dfdx, double const * dfdy )
 {
@@ -204,10 +220,10 @@ double ccdl::ParametricLegendre::ParaForceSumSq( double const * dfdx, double con
   return df2;
 }
 
-double ccdl::ParametricLegendre::TotalForceSumSq( double const * dfdx, double const * dfdy )
-{
-  return PerpForceSumSq( dfdx, dfdy ) + ParaForceSumSq( dfdx, dfdy );
-}
+// double ccdl::ParametricLegendre::TotalForceSumSq( double const * dfdx, double const * dfdy )
+// {
+//   return PerpForceSumSq( dfdx, dfdy ) + ParaForceSumSq( dfdx, dfdy );
+// }
 
 
 double ccdl::ParametricLegendre::PerpForceSumSqCoefDer
@@ -428,17 +444,17 @@ double ccdl::ParametricLegendre::ParaForceSumSqPtDer
 }
 
 
-double ccdl::ParametricLegendre::TotalForceSumSqPtDer
-( double const * dfdx, double const * dfdy, 
-  double * dndX, double * dndY )
-{
-  std::vector<double> dx( npts, 0. ), dy( npts, 0. );
-  double f = PerpForceSumSqPtDer( dfdx, dfdy, dndX, dndY );
-  f += ParaForceSumSqPtDer( dfdx, dfdy, dx.data(), dy.data() );
-  for ( int i=0; i<npts; ++i )
-    {
-      dndX[i] += dx[i];
-      dndY[i] += dy[i];
-    };
-  return f;
-}
+// double ccdl::ParametricLegendre::TotalForceSumSqPtDer
+// ( double const * dfdx, double const * dfdy, 
+//   double * dndX, double * dndY )
+// {
+//   std::vector<double> dx( npts, 0. ), dy( npts, 0. );
+//   double f = PerpForceSumSqPtDer( dfdx, dfdy, dndX, dndY );
+//   f += ParaForceSumSqPtDer( dfdx, dfdy, dx.data(), dy.data() );
+//   for ( int i=0; i<npts; ++i )
+//     {
+//       dndX[i] += dx[i];
+//       dndY[i] += dy[i];
+//     };
+//   return f;
+// }

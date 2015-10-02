@@ -10,5 +10,6 @@
 #include "spline/polynomial.hpp"
 #include "spline/ParametricLegendre.hpp"
 
+#include "spline/Mesh2d.hpp"
 
 #endif

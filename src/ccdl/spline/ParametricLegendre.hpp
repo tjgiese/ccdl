@@ -33,6 +33,7 @@ namespace ccdl
     void GetXY( double const t, double & x, double & y, double & dxdt, double & dydt, double & d2xt2, double & d2ydt2 ) const;
 
     double PerpForceProj( double const t, double & dfdx, double & dfdy );
+    double ParaForceProj( double const t, double & dfdx, double & dfdy );
 
     // the inputs are size naux, the outputs are size npts
     double PerpForceSumSq( double const * dfdx, double const * dfdy );
@@ -47,11 +48,11 @@ namespace ccdl
     double ParaForceSumSqPtDer( double const * dfdx, double const * dfdy, 
 				double * dSqdX, double * dSqdY );
 
-    double TotalForceSumSq( double const * dfdx, double const * dfdy );
-    double TotalForceSumSqCoefDer( double const * dfdx, double const * dfdy, 
-				   double * dSqdcx, double * dSqdcy );
-    double TotalForceSumSqPtDer( double const * dfdx, double const * dfdy, 
-				 double * dSqdX, double * dSqdY );
+    // double TotalForceSumSq( double const * dfdx, double const * dfdy );
+    // double TotalForceSumSqCoefDer( double const * dfdx, double const * dfdy, 
+    // 				   double * dSqdcx, double * dSqdcy );
+    // double TotalForceSumSqPtDer( double const * dfdx, double const * dfdy, 
+    // 				 double * dSqdX, double * dSqdY );
 
     int nbas,npts,naux;
     std::vector<double> ws,ts,xws,xts;
