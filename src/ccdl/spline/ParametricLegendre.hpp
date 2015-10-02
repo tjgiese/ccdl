@@ -22,6 +22,7 @@ namespace ccdl
     double const * GetXpts() const { return xpts.data(); }
     double const * GetYpts() const { return ypts.data(); }
 
+    double GetArcLength( double const x0, double const x1 ) const;
 
     void SetEndptValues( double const x0, double const y0, double const x1, double const y1 );
     void SetEndptValues();

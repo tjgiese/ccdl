@@ -458,3 +458,23 @@ double ccdl::ParametricLegendre::ParaForceSumSqPtDer
 //     };
 //   return f;
 // }
+
+
+
+double ccdl::ParametricLegendre::GetArcLength( double const tlo, double const thi ) const
+{
+  int nquad = naux;
+  std::vector<double> tarc(nquad,0), warc(nquad,0);
+  ccdl::GaussLegendreRule( tlo, thi, nquad,  tarc.data(),  warc.data() );
+  double arclen = 0.;
+  for ( int it = 0; it < nquad; ++it )
+    {
+      double t = tarc[it];
+      double w = warc[it];
+      double x,y,dxdt,dydt;
+      GetXY( t, x,y,dxdt,dydt );
+      arclen += w * std::sqrt( dxdt*dxdt + dydt*dydt );
+    }
+  return arclen;
+}
+

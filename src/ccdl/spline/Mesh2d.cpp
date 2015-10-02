@@ -610,6 +610,30 @@ double ccdl::Mesh2d::GetLowestFreq( double x, double y ) const
 
 
 
+ccdl::Mesh2dHessian ccdl::Mesh2d::GetHessian( double x, double y ) const
+{
+  double DEL = 5.e-5;
+
+  ccdl::Mesh2dHessian v( GetValue(x,y) );
+  ccdl::Mesh2dValue xh = GetValue( x+DEL, y );
+  ccdl::Mesh2dValue xl = GetValue( x-DEL, y );
+  ccdl::Mesh2dValue yh = GetValue( x, y+DEL );
+  ccdl::Mesh2dValue yl = GetValue( x, y-DEL );
+
+  v.h[0] = (xh.dfdx-xl.dfdx) / ( 2.*DEL );
+  v.h[1] = (xh.dfdy-xl.dfdy + yh.dfdx-yl.dfdx) / ( 4.*DEL );
+  v.h[2] = v.h[1];
+  v.h[3] = (yh.dfdy-yl.dfdy) / ( 2.*DEL );
+  ccdl::eigen( 2, v.h.data(), v.eval.data(), v.evec.data() );
+
+  return v;
+}
+
+
+
+
+
+
 void ccdl::Mesh2d::FiniteDifferenceDebug( double x, double y ) const
 {
   double DEL = 2.5e-5;

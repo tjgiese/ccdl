@@ -2,6 +2,7 @@
 #define _ccdl_mesh2d_hpp_
 
 #include <vector>
+#include <tr1/array>
 #include <algorithm>
 #include <iostream>
 #include <cmath>
@@ -16,6 +17,20 @@ namespace ccdl
     double f;
     double dfdx;
     double dfdy;
+  };
+
+  struct Mesh2dHessian : public ccdl::Mesh2dValue
+  {
+    Mesh2dHessian() : Mesh2dValue() {}
+    Mesh2dHessian( ccdl::Mesh2dValue v ) : Mesh2dValue(v) 
+    {
+      std::fill(h.begin(),h.end(),0.);
+      std::fill(eval.begin(),eval.end(),0.);
+      std::fill(evec.begin(),evec.end(),0.);
+    }
+    std::tr1::array<double,4> h;
+    std::tr1::array<double,2> eval;
+    std::tr1::array<double,4> evec;
   };
 
   bool sort_by_position( ccdl::Mesh2dValue const & a, ccdl::Mesh2dValue const & b );
@@ -76,6 +91,7 @@ namespace ccdl
     void BsplineTransform( int order = 4 );
 
     ccdl::Mesh2dValue GetValue( double x, double y ) const;
+    ccdl::Mesh2dHessian GetHessian( double x, double y ) const;
 
     std::vector< ccdl::Mesh2dValue > GetMinima( double const TOL=1.e-7 );
     std::vector< ccdl::Mesh2dValue > GetMaxima( double const TOL=1.e-7 );
