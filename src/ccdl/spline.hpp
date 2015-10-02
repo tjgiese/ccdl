@@ -8,5 +8,7 @@
 #include "spline/bspline.hpp"
 
 #include "spline/polynomial.hpp"
+#include "spline/ParametricLegendre.hpp"
+
 
 #endif

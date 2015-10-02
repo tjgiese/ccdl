@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 
+#undef DPRT
 
 ccdl::mini::OneDCurve
 ccdl::mini::linemin_grad_poly
@@ -60,9 +61,16 @@ ccdl::mini::linemin_grad_poly
  
   if ( bracket )
     {
+#ifdef DPRT
+      std::printf("bracketed\n");
+#endif
+
       ccdl::mini::OneDPoint plo = curve[0];
       while ( curve[1].g > -10 * curve[0].g and std::abs(curve[0].g) > 0.001 )
 	{
+#ifdef DPRT
+	  std::printf("trying to bisect big difference in gradients\n");
+#endif
 	  //double w = std::abs(curve[1].g) / ( std::abs(curve[0].g) + std::abs(curve[1].g) );
 	  double w = 0.5;
 	  double ahi0 = ahi;
@@ -76,6 +84,9 @@ ccdl::mini::linemin_grad_poly
 	  
 	  if ( curve[0].g * sdot > 0. ) // we went too far
 	    {
+#ifdef DPRT
+	      std::printf("we went too far\n");
+#endif
 	      ahi = ahi0;
 	      break;
 	    }
@@ -85,7 +96,12 @@ ccdl::mini::linemin_grad_poly
 	  curve.push_back( ahi, fhi, n, s, g.data() );
 
 	  if ( fhi < flo )
-	    return curve;
+	    {
+#ifdef DPRT
+	      std::printf("we lowered the value on our first attempt\n");
+#endif
+	      return curve;
+	    };
 	};
     }
 
@@ -99,6 +115,10 @@ ccdl::mini::linemin_grad_poly
   while ( ! bracket )
     {
       ++iter;
+#ifdef DPRT
+      std::printf("search for bracket attempt %i\n",iter);
+#endif
+
       curve.SetBoltzmannWeight( 1.e-5 );
       ccdl::polynomial poly;
       if ( curve.size() == 2 )
@@ -194,10 +214,22 @@ ccdl::mini::linemin_grad_poly
   curve.sort_by_y();
   fhi = curve[0].y;
   flo = curve.back().y; 
+
+#ifdef DPRT
+  std::printf("bracket found between %20.10f %20.10f\n",curve[0].x,curve.back().x);
+#endif
+
+  double aold = curve.back().x;
   iter = 0;
   while ( flo > fhi )
     {
       iter++;
+
+#ifdef DPRT
+      std::printf("poly bisection attempt %i\n",iter);
+#endif
+
+
       ccdl::mini::OneDCurve bc( curve.get_bracketing_curve() );
       bc.sort_by_y();
 
@@ -274,9 +306,25 @@ ccdl::mini::linemin_grad_poly
       // IF INEXACT LINE SEARCH
       if ( ( f0-predf < 1.25 * (f0-minf) ) and fold == fhi ) return curve;
 
+      if ( acp == aold )
+	{
 
+#ifdef DPRT
+	  std::printf("alpha is the same as the previous, do a golden search\n");
+#endif
+	  acp = ccdl::mini::linemin_nograd_nopoly
+	    ( n, f0, g0, bc[1].x, s, pfcn, 1.e-4 );
+	  flo = fcn( acp, s, g.data() );
+	  curve.push_back( acp, flo, n, s, g.data() );
+	  break;
+	};
+
+#ifdef DPRT
+      std::printf("alpha attempt %20.10f  (%20.10f .. %20.10f)\n",acp,bc[0].x,bc[1].x);
+#endif
       flo = fcn( acp, s, g.data() );
       fold = flo;
+      aold = acp;
 
       double sval = ccdl::v_dot_v( n, s, g.data() );
 
@@ -307,6 +355,9 @@ ccdl::mini::linemin_grad_poly
 	  if ( bc[0].x > 1.e-4 ) break;
 	  else
 	    {
+#ifdef DPRT
+	      std::printf("do a golden search\n");
+#endif
 	      acp = ccdl::mini::linemin_nograd_nopoly_given_bracket
 		( n, f0, g0, curve, s, pfcn, 1.e-4 );
 	      flo = fcn( acp, s, g.data() );
@@ -314,12 +365,21 @@ ccdl::mini::linemin_grad_poly
 	      break;
 	    }
 	}
-      if ( iter > 20 ) break;
+      
+      if ( iter > 20 ) 
+	{
+#ifdef DPRT
+	  std::printf("exit failure\n");
+#endif
+	  break;
+	};
 
       //if ( flo > fhi )
       //curve = curve.get_bracketing_curve();
     }
-
+#ifdef DPRT
+  std::printf("end of line search\n");
+#endif
   curve.sort_by_y();
   return curve;
 }
