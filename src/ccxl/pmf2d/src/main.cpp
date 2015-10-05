@@ -1363,11 +1363,17 @@ std::string main_points( char const * meshname, bool periodic, bool rezero )
     cout << "  'contours.dat' w l lt -1 lw 0.5,\\" << "\n";
     cout << "  'minpts.dat'   w p ls 2,\\" << "\n";
     cout << "  'maxpts.dat'   w p ls 3,\\" << "\n";
-    cout << "  'tspts.dat'    w p ls 4,\\" << "\n";
-    cout << "#  'min1_ts1.dat' w l ls 5" << "\n";
+    cout << "  'tspts.dat'    w p ls 4" << "\n";
+    //cout << "#  'min1_ts1.dat' w l ls 5" << "\n";
     //cout << "pause -1\n";
     cout << "EOF" << "\n";
+
+    std::cout << "Now  run: /bin/sh \"" << gnuplot << "\"; evince \"" << fname << ".eps\"" << " &\n";
+    std::cout << "Then run: pmf2d --con min=1,ts=1,min=2 \"" << fname << "\"" << "\n";
+    std::cout << "(or something analogous)\n";
+
   }
+
 
   return fname;
 }
@@ -1503,24 +1509,24 @@ int main( int argc, char ** argv)
 	// cout << "set style line 5 lc rgb 'red' pt 7 ps 0.7 lw 3" << "\n";
 
 	cout << "# minpts" << "\n";
-	cout << "set style line 2 lc rgb 'black' pt 7 ps 1.2" << "\n";
-	cout << "set style line 12 lc rgb 'white' pt 7 ps 0.7" << "\n";
+	cout << "set style line 2 lc rgb 'black' pt 7 ps 1.5" << "\n";
+	cout << "set style line 12 lc rgb 'white' pt 7 ps 0.8" << "\n";
 	cout << "# maxpts" << "\n";
-	cout << "set style line 3 lc rgb 'black' pt 12 ps 1. lw 3" << "\n";
-	cout << "set style line 13 lc rgb 'white' pt 12 ps 0.75 lw 1" << "\n";
+	cout << "set style line 3 lc rgb 'black' pt 12 ps 1. lw 8" << "\n";
+	cout << "set style line 13 lc rgb 'white' pt 12 ps 0.7 lw 3" << "\n";
 	cout << "# tspts" << "\n";
-	cout << "set style line 4 lc rgb 'black' pt 2 ps 1.  lw 6" << "\n";
-	cout << "set style line 14 lc rgb 'white' pt 2 ps 0.75  lw 1.5" << "\n";
+	cout << "set style line 4 lc rgb 'black' pt 2 ps 1.3  lw 9" << "\n";
+	cout << "set style line 14 lc rgb 'white' pt 2 ps 0.85  lw 3" << "\n";
 	cout << "# paths" << "\n";
-	cout << "set style line 100 lc rgb 'red' pt 7 ps 0.7 lw 2.5" << "\n";
-	cout << "set style line 110 lc rgb 'white' pt 7 ps 0.7 lw 5.5" << "\n";
+	cout << "set style line 100 lc rgb 'red' lw 5" << "\n";
+	cout << "set style line 110 lc rgb 'white' lw 8" << "\n";
 
 	cout << "" << "\n\n\n";
 
 
 
 	cout << "" << "\n\n\n";
-	cout << "set terminal postscript eps enhanced solid color 'Helvetica' 14" << "\n";
+	cout << "set terminal postscript eps enhanced solid color 'Helvetica' 18 size 6,5.4" << "\n";
 	cout << "set output '" << cli.meshfile << ".eps'" << "\n";
 	cout << "" << "\n";
 
@@ -1535,8 +1541,9 @@ int main( int argc, char ** argv)
 	cout << "set ylabel 'Y-axis label'\n";
 	cout << "set xlabel 'X-axis label'\n";
 	cout << "p '" << cli.meshfile << "' using 1:2:3 with image,\\" << "\n";
-	cout << "  'contours.dat' w l lt -1 lw 0.5,\\" << "\n";
+	cout << "  'contours.dat' w l lt -1 lw 1,\\" << "\n";
 	int icolor = 0;
+	std::vector<std::string> xmgrace_cmds;
 	std::stringstream xmgrace;
 	for ( std::vector< connection >::iterator 
 		p=cli.connections.begin(), pend=cli.connections.end();
@@ -1546,30 +1553,38 @@ int main( int argc, char ** argv)
 	      { 
 		icolor = 0;
 		if ( xmgrace.str().size() > 0 )
-		  std::cout << xmgrace.str() << "\n";
+		  {
+		    //std::cout << xmgrace.str() << "\n";
+		    xmgrace_cmds.push_back( xmgrace.str() );
+		  };
 		xmgrace.str("");
 		xmgrace.clear();
-		xmgrace << "xmgrace " << p->GetName() << ".1d.dat";
+		xmgrace << "xmgrace";
 	      }
 	    else 
-	      { 
-		icolor = icolor % (int)(colors.size());
-		xmgrace << " " << p->GetName() << ".1d.dat";
-	      }
+	      icolor = icolor % (int)(colors.size());
+
+	    xmgrace << " \\\"" << p->GetName() << ".1d.dat\\\" -pexec \\\"g0.s" << icolor << " line linewidth 2.5\\\"";
+
 	    cout << "  '" << p->GetName() << ".2d.dat' w l ls 110,\\" << "\n";
 	    cout << "  '" << p->GetName() << ".2d.dat' w l ls 100 lc rgb '" << colors[icolor] << "',\\" << "\n";
 	  }
-	std::cout << xmgrace.str() << "\n";
+	//std::cout << xmgrace.str() << "\n";
+	xmgrace_cmds.push_back( xmgrace.str() );
 	cout << "  'minpts.dat'   w p ls 2,\\" << "\n";
 	cout << "  'minpts.dat'   w p ls 12,\\" << "\n";
 	cout << "  'maxpts.dat'   w p ls 3,\\" << "\n";
 	cout << "  'maxpts.dat'   w p ls 13,\\" << "\n";
 	cout << "  'tspts.dat'    w p ls 4,\\" << "\n";
-	cout << "  'tspts.dat'    w p ls 14,\\" << "\n";
-	cout << "#\n";
-	cout << "EOF" << "\n";
-      }
+	cout << "  'tspts.dat'    w p ls 14" << "\n";
+	cout << "EOF" << "\n\n";
+	for ( std::vector<std::string>::iterator 
+		p=xmgrace_cmds.begin(), pend=xmgrace_cmds.end(); p!=pend; ++p )
+	  cout << "echo Now run: " << *p << " -pexec \\\"page size 612, 612\\\" -pexec \\\"view 0.12, 0.12, 0.92, 0.92\\\" -autoscale xy" << " -pexec \\\'xaxis label \\\"Arc Length\\\"\\\' -pexec \\\"xaxis label char size 1.30\\\" -pexec \\\"xaxis ticklabel char size 1.30\\\" -pexec \\\'yaxis label \\\"E \\(kcal/mol\\)\\\"\\\' -pexec \\\"yaxis label char size 1.30\\\" -pexec \\\"yaxis ticklabel char size 1.30\\\"" << "\n";
 
+	std::cout << "Now run: /bin/sh \"" << gnuplot << "\"; evince \"" << cli.meshfile << ".eps\" &" << "\n";
+
+      }
 
     }
   
