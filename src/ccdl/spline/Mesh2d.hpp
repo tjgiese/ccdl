@@ -33,7 +33,8 @@ namespace ccdl
     std::tr1::array<double,4> evec;
   };
 
-  bool sort_by_position( ccdl::Mesh2dValue const & a, ccdl::Mesh2dValue const & b );
+  bool sort_value_by_position( ccdl::Mesh2dValue const & a, ccdl::Mesh2dValue const & b );
+  bool sort_hessian_by_position( ccdl::Mesh2dHessian const & a, ccdl::Mesh2dHessian const & b );
 
 
   class Mesh2d
@@ -93,8 +94,12 @@ namespace ccdl
     ccdl::Mesh2dValue GetValue( double x, double y ) const;
     ccdl::Mesh2dHessian GetHessian( double x, double y ) const;
 
-    std::vector< ccdl::Mesh2dValue > GetMinima( double const TOL=1.e-7 );
-    std::vector< ccdl::Mesh2dValue > GetMaxima( double const TOL=1.e-7 );
+    void Add( double f );
+    void Write( std::ostream & cout ) const;
+
+    // std::vector< ccdl::Mesh2dValue > GetMinima( double const TOL=1.e-7 );
+    // std::vector< ccdl::Mesh2dValue > GetMaxima( double const TOL=1.e-7 );
+    // std::vector< ccdl::Mesh2dHessian > GetStationaryPts( double const TOL=1.e-7 );
 
     double GetLowestFreq( double x, double y ) const;
 
@@ -166,13 +171,20 @@ inline int ccdl::Mesh2d::GetIndex( int i, int n )
   return ((i%n)+n)%n;
 }
 
-inline bool ccdl::sort_by_position( ccdl::Mesh2dValue const & a, ccdl::Mesh2dValue const & b )
+inline bool ccdl::sort_value_by_position( ccdl::Mesh2dValue const & a, ccdl::Mesh2dValue const & b )
 {
   double dx = std::abs(a.x-b.x);
   bool xlt = dx < 1.e-4;
   return (!xlt) ? a.x < b.x : a.y < b.y;
 }
 
+
+inline bool ccdl::sort_hessian_by_position( ccdl::Mesh2dHessian const & a, ccdl::Mesh2dHessian const & b )
+{
+  double dx = std::abs(a.x-b.x);
+  bool xlt = dx < 1.e-4;
+  return (!xlt) ? a.x < b.x : a.y < b.y;
+}
 
 
 

@@ -32,12 +32,47 @@ double ccdl::Mesh2dOpt::operator() ( double const alp, double const * s )
 double ccdl::Mesh2dOpt::operator() ( double const alp, double const * s, double * g )
 {
   ccdl::Mesh2dValue v = mesh->GetValue( refx[0] + alp*s[0], refx[1] + alp*s[1] );
-  //std::printf("EVAL   %20.10f %20.10f %20.10f %20.10f %20.10f\n",
-  //	      v.x,v.y,v.f,v.dfdx,v.dfdy);
   g[0] = v.dfdx;
   g[1] = v.dfdy;
   return v.f;
 }
+
+
+
+
+namespace ccdl
+{
+  struct Mesh2dStationaryOpt : public ccdl::minifcn
+  {
+    Mesh2dStationaryOpt( ccdl::Mesh2d * m );
+    
+    double operator() ( double const alp, double const * s );
+    double operator() ( double const alp, double const * s, double * g );
+    
+    ccdl::Mesh2d * mesh;
+  };
+}
+
+
+ccdl::Mesh2dStationaryOpt::Mesh2dStationaryOpt( ccdl::Mesh2d * m )
+  : ccdl::minifcn(2), mesh(m)
+{}
+
+
+double ccdl::Mesh2dStationaryOpt::operator() ( double const alp, double const * s )
+{
+  ccdl::Mesh2dValue v( mesh->GetValue( refx[0] + alp*s[0], refx[1] + alp*s[1] ) );
+  return v.dfdx*v.dfdx + v.dfdy*v.dfdy;
+}
+
+double ccdl::Mesh2dStationaryOpt::operator() ( double const alp, double const * s, double * g )
+{
+  ccdl::Mesh2dHessian v = mesh->GetHessian( refx[0] + alp*s[0], refx[1] + alp*s[1] );
+  g[0] = 2. * v.dfdx * v.h[0] + 2. * v.dfdy * v.h[1];
+  g[1] = 2. * v.dfdx * v.h[2] + 2. * v.dfdy * v.h[3];
+  return v.dfdx*v.dfdx + v.dfdy*v.dfdy;
+}
+
 
 
 
@@ -156,7 +191,7 @@ ccdl::Mesh2d::Mesh2d
   refdata.resize( n );
   data.resize( n );
   for ( int i=0; i<nx; ++i )
-    for ( int j=0; j<ny; ++j)
+    for ( int j=0; j<ny; ++j )
       refdata[j+i*ny] = d[2+(i+j*nx)*3]; // gnuplot uses transpose
   
 
@@ -167,7 +202,7 @@ ccdl::Mesh2d::Mesh2d
 	int k = i+j*nx; // gnuplot uses transpose
 	double x = GetX(i);
 	double y = GetY(j);
-	if ( std::abs( x - d[0+k*3] ) > 1.e-8 )
+	if ( std::abs( x - d[0+k*3] ) > 1.e-7 )
 	  {
 	    std::cerr << "ccdl::Mesh2d data point " << k+1
 		      << " x-value is " 
@@ -181,7 +216,7 @@ ccdl::Mesh2d::Mesh2d
 		      << std::endl;
 	    std::abort(); // lazy -- I could potentially figure this out
 	  };
-	if ( std::abs( y - d[1+k*3] ) > 1.e-8 )
+	if ( std::abs( y - d[1+k*3] ) > 1.e-7 )
 	  {
 	    std::cerr << "ccdl::Mesh2d data point " << k+1
 		      << " y-value is " 
@@ -199,6 +234,29 @@ ccdl::Mesh2d::Mesh2d
       }
   BsplineTransform();
 
+}
+
+
+void ccdl::Mesh2d::Add( double shift )
+{
+  for ( std::size_t i=0; i < refdata.size(); ++i )
+    refdata[i] += shift;
+  BsplineTransform();
+}
+
+void ccdl::Mesh2d::Write( std::ostream & cout ) const
+{
+
+#define FF(a) std::scientific << std::setprecision(15) << std::setw(24) << (a)
+
+  for ( int j=0; j<ny; ++j )
+    {
+      for ( int i=0; i<nx; ++i )
+	cout << FF(GetX(i)) << FF(GetY(j)) << FF(refdata[j+i*ny]) << "\n";
+      cout << "\n";
+    }
+
+#undef FF
 }
 
 
@@ -221,6 +279,8 @@ void ccdl::Mesh2d::SetPeriodic( bool logical )
     };
   delx = maxx/nx;
   dely = maxy/ny;
+  //delx = lx/nx;
+  //dely = ly/ny;
 }
 
 void ccdl::Mesh2d::SetWalled( bool logical )
@@ -379,66 +439,6 @@ ccdl::Mesh2dValue ccdl::Mesh2d::GetValue( double x, double y ) const
 
 
 /*
-std::vector< ccdl::Mesh2dValue > ccdl::Mesh2d::GetMinima( int const n, double const TOL )
-{
-  int n2 = n*n;
-  std::vector< ccdl::Mesh2dValue > balls(n2);
-  ccdl::Mesh2dOpt o( this );
-  ccdl::mini::options options;
-  options.grms_tol = TOL;
-  options.verbosity = 0;
-
-  for ( int i=0; i<n; ++i )
-    for ( int j=0; j<n; ++j )
-      {
-	o[0] = xlow + (i+1.)*(xlow+lx)/(nx+1.);
-	o[1] = ylow + (i+1.)*(ylow+ly)/(ny+1.);
-	ccdl::minimize( &o, options );
-	balls[j+i*n] = GetValue( o[0], o[1] );
-      }
-
-  typedef std::vector< ccdl::Mesh2dValue >::iterator iter;
-  for ( iter p = balls.begin(); p != balls.end(); ++p )
-    for ( iter q = p+1; q != balls.end(); )
-      {
-	double dx = std::abs(p->x - q->x);
-	double dy = std::abs(p->y - q->y);
-	if ( dx < 0.01 * lx and
-	     dy < 0.01 * ly )
-	  q = balls.erase( q );
-	else
-	  ++q;
-      }
-
-  return balls;
-}
-
-
-
-
-
-std::vector< ccdl::Mesh2dValue > ccdl::Mesh2d::GetMaxima( int const n, double const TOL )
-{
-  int nxy = nx*ny;
-  for ( int k=0; k<nxy; ++k )
-    refdata[k] *= -1;
-  BsplineTransform();
-  std::vector< ccdl::Mesh2dValue > balls( GetMinima(n,TOL) );
-  for ( int k=0; k<nxy; ++k )
-    refdata[k] *= -1;
-  BsplineTransform();
-  typedef std::vector< ccdl::Mesh2dValue >::iterator iter;
-  for ( iter p = balls.begin(); p != balls.end(); ++p )
-    {
-      p->f *= -1;
-      p->dfdx *= -1;
-      p->dfdy *= -1;
-    }
-  return balls;
-}
-*/
-
-
 
 std::vector< ccdl::Mesh2dValue > ccdl::Mesh2d::GetMinima( double const TOL )
 {
@@ -527,7 +527,7 @@ std::vector< ccdl::Mesh2dValue > ccdl::Mesh2d::GetMinima( double const TOL )
       }
 
 
-  std::sort( balls.begin(), balls.end(), ccdl::sort_by_position );
+  std::sort( balls.begin(), balls.end(), ccdl::sort_value_by_position );
 
   typedef std::vector< ccdl::Mesh2dValue >::iterator iter;
   for ( iter p = balls.begin(); p != balls.end(); ++p )
@@ -588,6 +588,157 @@ std::vector< ccdl::Mesh2dValue > ccdl::Mesh2d::GetMaxima( double const TOL )
     }
   return balls;
 }
+
+
+
+
+
+
+
+
+
+std::vector< ccdl::Mesh2dHessian > ccdl::Mesh2d::GetStationaryPts( double const TOL )
+{
+  std::vector< ccdl::Mesh2dHessian > balls;
+  ccdl::Mesh2dStationaryOpt o( this );
+  ccdl::mini::options options;
+  options.grms_tol = TOL;
+  options.verbosity = 0;
+
+
+  std::vector< ccdl::Mesh2dValue > vals(nx*ny);
+  for ( int i=0; i<nx; ++i )
+    for ( int j=0; j<ny; ++j )
+      vals[j+i*ny] = GetValue( GetX(i), GetY(j) );
+	
+  int const nxn = periodic ? nx : nx-1;
+  int const nyn = periodic ? ny : ny-1;
+  int const nx0 = periodic ? 0 : 1;
+  int const ny0 = periodic ? 0 : 1;
+
+  for ( int i=nx0; i<nxn; ++i )
+    for ( int j=ny0; j<nyn; ++j )
+      {
+	int i1 = GetIndex( i+1, nx );
+	int j1 = GetIndex( j+1, ny );
+
+	ccdl::Mesh2dValue & ll = vals[j +i *ny];
+	ccdl::Mesh2dValue & lr = vals[j +i1*ny];
+	ccdl::Mesh2dValue & ul = vals[j1+i *ny];
+	ccdl::Mesh2dValue & ur = vals[j1+i1*ny];
+
+	double l2r[2] = { delx, 0. };
+	double u2l[2] = { 0., dely };
+	double ul2lr[2] = { delx, -dely };
+	double ll2ur[2] = { delx,  dely };
+
+	double g1 = ( l2r[0]*ll.dfdx + l2r[1]*ll.dfdy ) * ( l2r[0]*lr.dfdx + l2r[1]*lr.dfdy );
+	double g2 = ( u2l[0]*ul.dfdx + u2l[1]*ul.dfdy ) * ( u2l[0]*ll.dfdx + u2l[1]*ll.dfdy );
+	double g3 = ( ll2ur[0]*ll.dfdx + ll2ur[1]*ll.dfdy ) * ( ll2ur[0]*ur.dfdx + ll2ur[1]*ur.dfdy );
+	double g4 = ( ul2lr[0]*ul.dfdx + ul2lr[1]*ul.dfdy ) * ( ul2lr[0]*lr.dfdx + ul2lr[1]*lr.dfdy );
+
+
+	// if ( ll.x > -2.05 and ll.x < -1.9 and 
+	//      ll.y > -0.6 and ll.y < -0.4 )
+	//   {
+	//     std::printf("KK  %18.10f %18.10f  %11.2e %11.2e %11.2e %11.2e\n",
+	// 		ll.x,
+	// 		ll.y,
+	// 		g1,g2,g3,g4 );
+	//     std::printf("ll  %18.10f %18.10f  %11.2e %11.2e\n",
+	// 		ll.x, ll.y, ll.dfdx, ll.dfdy );
+	//     std::printf("lr  %18.10f %18.10f  %11.2e %11.2e\n",
+	// 		lr.x, lr.y, lr.dfdx, lr.dfdy );
+	//     std::printf("ul  %18.10f %18.10f  %11.2e %11.2e\n",
+	// 		ul.x, ul.y, ul.dfdx, ul.dfdy );
+	//     std::printf("ur  %18.10f %18.10f  %11.2e %11.2e\n",
+	// 		ur.x, ur.y, ur.dfdx, ur.dfdy );
+	//     std::printf("\n");
+	//   }
+
+	int nsatisfied = (g1<=0) + (g2<=0) + (g3<=0) + (g4<=0);
+
+	if ( nsatisfied > 2 )
+	  {
+	     // std::printf("exr %18.10f %18.10f  %13.4e %13.4e\n",
+	     // 		ll.x + 0.5 * delx,
+	     // 		ll.y + 0.5 * dely,
+	     // 		ll.dfdx, ll.dfdy );
+	    // there is an extremum in this quadrant
+	    //if ( (ll.dfdx < 0 and ll.dfdy < 0) or (  )
+	      {
+
+		o[0] = ll.x + 0.5 * delx;
+		o[1] = ll.y + 0.5 * dely;
+		ccdl::minimize( &o, options );
+		balls.push_back( GetHessian( o[0], o[1] ) );
+
+		// o[0] = ll.x;
+		// o[1] = ll.y;
+		// ccdl::minimize( &o, options );
+		// balls.push_back( GetHessian( o[0], o[1] ) );
+
+	      }
+	  }
+      }
+
+
+  std::sort( balls.begin(), balls.end(), ccdl::sort_hessian_by_position );
+
+  typedef std::vector< ccdl::Mesh2dHessian >::iterator iter;
+
+  for ( iter p = balls.begin(); p != balls.end(); )
+    {
+      double gnrm = std::sqrt( p->dfdx*p->dfdx + p->dfdy*p->dfdy );
+      if ( gnrm > 1.e-4 )
+	p = balls.erase( p );
+      else
+	++p;
+    }
+
+  for ( iter p = balls.begin(); p != balls.end(); ++p )
+    for ( iter q = p+1; q != balls.end(); )
+      {
+	double dx = std::abs(p->x - q->x);
+	double dy = std::abs(p->y - q->y);
+	if ( (dx < 0.01 * lx and dy < 0.01 * ly) )
+	  q = balls.erase( q );
+	else
+	  ++q;
+      }
+
+  
+  if ( ! periodic )
+    for ( iter p = balls.begin(); p != balls.end(); )
+      if ( std::abs( p->x - xlow ) / lx < 0.03 or
+	   std::abs( p->y - ylow ) / lx < 0.03 or
+	   std::abs( p->x - (xlow+lx) ) / lx < 0.03 or
+	   std::abs( p->y - (ylow+ly) ) / ly < 0.03 )
+	p = balls.erase( p );
+      else
+	++p;
+  
+
+  // for ( iter p = balls.begin(); p != balls.end(); )
+  //   if ( GetLowestFreq( p->x, p->y ) < 0.001 )
+  //     p = balls.erase( p );
+  //   else
+  //     ++p;
+
+
+  return balls;
+}
+
+
+
+*/
+
+
+
+
+
+
+
 
 
 double ccdl::Mesh2d::GetLowestFreq( double x, double y ) const
