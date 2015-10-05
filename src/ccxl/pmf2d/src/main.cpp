@@ -17,10 +17,13 @@
 
 struct endpt
 {
-  endpt() : x(0), y(0), i(0), minimum(false) {}
+  endpt() : x(0), y(0), i(0), minimum(false), arclen(0.),value(0.) {}
   double x,y;
   int i;
+  std::string label;
   bool minimum;
+  double arclen;
+  double value;
   std::string GetName() const;
 };
 
@@ -294,11 +297,13 @@ cli_options read_options( int argc, char ** argv )
 	      }
 	    else
 	      {
+		int iprev = -1;
 		for ( std::size_t i=1; i<ts.size(); ++i )
 		  {
 		    connection c( ts[i-1],ts[i] );
 		    c.method = method;
-		    c.prev = (int)(cli.connections.size())-1;
+		    c.prev = iprev;
+		    iprev = cli.connections.size();
 		    cli.connections.push_back( c );
 		  };
 	      }
@@ -335,6 +340,114 @@ cli_options read_options( int argc, char ** argv )
   else
     {
       cli.meshfile = argv[optind++];
+    }
+
+
+  int imin = 0;
+  for ( std::vector<connection>::iterator 
+	  p = cli.connections.begin(), pend=cli.connections.end();
+	p != pend; ++p )
+    {
+      if ( p->t0.minimum )
+	{
+	  int i = p->t0.i - 1;
+	  //std::printf("%s %i %i\n",p->t0.GetName().c_str(),i,(int)(cli.minima.size()));
+	  if ( cli.minima[i].label.size() == 0 )
+	    {
+	      ++imin;
+	      std::stringstream str;
+	      str << imin;
+	      cli.minima[i].label = str.str();
+	    }
+	}
+      if ( p->t1.minimum )
+	{
+	  int i = p->t1.i - 1;
+	  if ( cli.minima[i].label.size() == 0 )
+	    {
+	      ++imin;
+	      std::stringstream str;
+	      str << imin;
+	      cli.minima[i].label = str.str();
+	    }
+	}
+    };
+  for ( std::vector<connection>::iterator 
+	  p = cli.connections.begin(), pend=cli.connections.end();
+	p != pend; ++p )
+    {
+      if ( p->t0.minimum )
+	p->t0.label = cli.minima[ p->t0.i - 1 ].label;
+      if ( p->t1.minimum )
+	p->t1.label = cli.minima[ p->t1.i - 1 ].label;
+    }
+
+  endpt prevmin;
+  prevmin.label = "?";
+  for ( std::vector<connection>::iterator 
+	  p = cli.connections.begin(), pend=cli.connections.end();
+	p != pend; ++p )
+    {
+      endpt nextmin;
+      nextmin.label = "?";
+      
+      if ( p->t0.minimum and ! p->t1.minimum )
+	prevmin = p->t0;
+
+      if ( ! p->t0.minimum )
+	{
+	  if ( p->t1.minimum )
+	    nextmin = p->t1;
+	  int i = p->t0.i - 1;
+	  if ( cli.saddle[i].label.size() == 0 )
+	    {
+	      std::stringstream str;
+	      str << prevmin.label << "-" << nextmin.label;
+	      cli.saddle[i].label = str.str();
+	    }
+	}
+      else if ( ! p->t1.minimum )
+	{
+	  if ( p != pend )
+	    {
+	      std::vector<connection>::iterator q = p+1;
+	      if ( q->t0.minimum )
+		nextmin = q->t0;
+	      else if ( q->t0.i == p->t1.i and q->t1.minimum )
+		nextmin = q->t1;
+	    };
+	  int i = p->t1.i - 1;
+	  if ( cli.saddle[i].label.size() == 0 )
+	    {
+	      std::stringstream str;
+	      str << prevmin.label << "-" << nextmin.label;
+	      cli.saddle[i].label = str.str();
+	    }
+	}
+      prevmin = nextmin;
+    }
+
+  for ( std::vector<connection>::iterator 
+	  p = cli.connections.begin(), pend=cli.connections.end();
+	p != pend; ++p )
+    {
+      if ( ! p->t0.minimum )
+	p->t0.label = cli.saddle[ p->t0.i - 1 ].label;
+      if ( ! p->t1.minimum )
+	p->t1.label = cli.saddle[ p->t1.i - 1 ].label;
+    }
+
+  for ( std::vector<connection>::iterator 
+	  p = cli.connections.begin(), pend=cli.connections.end();
+	p != pend; ++p )
+    {
+      std::printf("%2i %8s %8s %8s %8s\n",
+		  p->prev,
+		  p->t0.GetName().c_str(),
+		  p->t1.GetName().c_str(),
+		  p->t0.label.c_str(),
+		  p->t1.label.c_str() );
+
     }
 
   return cli;
@@ -1356,7 +1469,7 @@ std::string main_points( char const * meshname, bool periodic, bool rezero )
     else if ( saddle.size() ) cbhi << FF( saddle.back().f );
 
     cout << "set cbrange[" << cblo.str() << ":" << cbhi.str() << "]" << "\n";
-    cout << "set cblabel 'kcal/mol'\n";
+    cout << "set cblabel 'E (kcal/mol)'\n";
     cout << "set ylabel 'Y-axis label'\n";
     cout << "set xlabel 'X-axis label'\n";
     cout << "p '" << fname << "' using 1:2:3 with image,\\" << "\n";
@@ -1381,7 +1494,83 @@ std::string main_points( char const * meshname, bool periodic, bool rezero )
 
 
 
+void GetValidPosition( ccdl::Mesh2d const & mesh, endpt & pt, std::vector<double> & offlimits )
+{
+  bool ok = false;
+  double xlo = mesh.GetLowX();
+  double ylo = mesh.GetLowY();
+  double xhi = mesh.GetHighX();
+  double yhi = mesh.GetHighY();
 
+  double buf = 0.033;
+  if ( ! pt.minimum ) buf = 0.038;
+  double bufx = (xhi-xlo)*buf;
+  double bufy = (yhi-ylo)*buf;
+
+  int n = offlimits.size() / 2;
+
+  int orders[18*2] = { 0, 1, 
+		   1, 0,
+		   0, -1,
+		   -1, 0,
+		   1, 1,
+		   -1, 1,
+		   1, -1,
+		   -1, -1,
+		   0, 2,
+		   2, 0,
+		   1, 2,
+		   2, 1,
+		   -1, 2,
+		   2, -1,
+		   1, -2,
+		   -2, 1,
+		   -1, -2,
+		   -2, -1 };
+
+  double scales[10] = { 0.66, 0.8, 1.0, 1.25, 
+		       1.33, 1.50, 1.66, 1.75, 
+		       1.9, 2.0 };
+  
+  for ( int iscale = 0; iscale < 11; ++iscale )
+    for ( int ij=0; ij<19; ++ij )
+      {
+	int i = orders[0+ij*2];
+	int j = orders[1+ij*2];
+	
+	if ( i == 0 and j == 0 ) continue;
+	double x = pt.x + bufx * i * scales[iscale];
+	double y = pt.y + bufy * j * scales[iscale];
+	if ( x < xlo + bufx ) continue;
+	if ( x > xhi - bufx ) continue;
+	if ( y < ylo + bufy ) continue;
+	if ( y > yhi - bufy ) continue;
+	
+	
+	ok = true;
+	for ( int k=0; k<n; ++k )
+	  {
+	    double dx = x - offlimits[0+k*2];
+	    double dy = y - offlimits[1+k*2];
+	    if ( std::abs(dx) < bufx and std::abs(dy) < bufy )
+	      {
+		//std::printf("too close %12.3f %12.3f %12.3f %12.3f (%12.3f %12.3f)\n",
+		//	      x,y,offlimits[0+k*2],offlimits[1+k*2],bufx,bufy);
+		ok = false;
+		break;
+	      }
+	  }
+	if ( ok )
+	  {
+	    //std::printf("ok\n");
+	    offlimits.push_back( x );
+	    offlimits.push_back( y );
+	    pt.x = x;
+	    pt.y = y;
+	    return;
+	  };
+      }
+}
 
 
 
@@ -1389,6 +1578,9 @@ int main( int argc, char ** argv)
 {
 
   cli_options cli( read_options( argc, argv ) );
+
+
+  //std::printf("ncon %i\n",(int)cli.connections.size());
 
   if ( (! cli.connections.size()) or cli.rezero )
     cli.meshfile = main_points( cli.meshfile.c_str(), cli.perx or cli.pery, cli.rezero );
@@ -1405,9 +1597,12 @@ int main( int argc, char ** argv)
 
       ccdl::Mesh2d mesh( cin, cli.perx or cli.pery );
 
+      std::vector<double> offlimits;
+
       int icon = 0;
       int ncon = cli.connections.size();
       double arcsum = 0.;
+      std::vector<double> arclens;
       for ( std::vector< connection >::iterator 
 	      p=cli.connections.begin(), pend=cli.connections.end();
 	    p != pend; ++p, ++icon )
@@ -1431,34 +1626,80 @@ int main( int argc, char ** argv)
 	  std::stringstream str;
 	  str << p->GetName() << ".2d.dat";
 	  xyfile.open( str.str().c_str() );
-	  for ( int i=0; i<501; ++i )
+	  for ( int i=0; i<201; ++i )
 	    {
-	      double t = i / 500.;
+	      double t = i / 200.;
 	      double x,y;
 	      neb.GetXY( t, x, y );
 	      ccdl::Mesh2dValue val( mesh.GetValue( x,y ) );
 	      xyfile << FF(x) << FF(y) 
 		     << " # " << FF(val.f) <<  "\n";
 	    }
+
+	  for ( int i=0; i<51; ++i )
+	    {
+	      double t = i / 50.;
+	      double x,y;
+	      neb.GetXY( t, x, y );
+	      offlimits.push_back( x );
+	      offlimits.push_back( y );
+	    }
+
 	  str.str("");
 	  str.clear();
 	  str << p->GetName() << ".1d.dat";
 
-	  if ( p->prev < 0 ) arcsum = 0.;
+	  if ( p->prev < 0 ) 
+	    {
+	      if ( p != cli.connections.begin() )
+		arclens.push_back( arcsum );
+	      arcsum = 0.;
+	    }
 
 	  tfile.open( str.str().c_str() );
-	  for ( int i=0; i<501; ++i )
+	  for ( int i=0; i<201; ++i )
 	    {
-	      double t = i / 500.;
+	      double t = i / 200.;
 	      double x,y;
 	      neb.GetXY( t, x, y );
 	      double arclen = neb.GetArcLength( 0, t );
 	      ccdl::Mesh2dValue val( mesh.GetValue( x,y ) );
+	      if ( i == 0 )
+		p->t0.value = val.f;
+	      else if ( i == 200 )
+		p->t1.value = val.f;
 	      tfile << FF(arclen+arcsum) << FF(val.f) 
 		    << " # " << FF(val.x) << FF(val.y) << "\n";
 	    }
+	  p->t0.arclen = arcsum;
 	  arcsum += neb.GetArcLength( 0., 1. );
+	  p->t1.arclen = arcsum;
 	};
+      arclens.push_back( arcsum );
+
+
+      for ( std::vector<endpt>::iterator 
+	      p=cli.minima.begin(), pend=cli.minima.end(); 
+	    p!=pend; ++p )
+	{
+	  offlimits.push_back( p->x );
+	  offlimits.push_back( p->y );
+	}
+      for ( std::vector<endpt>::iterator 
+	      p=cli.saddle.begin(), pend=cli.saddle.end(); 
+	    p!=pend; ++p )
+	{
+	  offlimits.push_back( p->x );
+	  offlimits.push_back( p->y );
+	}
+      for ( std::vector<endpt>::iterator 
+	      p=cli.maxima.begin(), pend=cli.maxima.end(); 
+	    p!=pend; ++p )
+	{
+	  offlimits.push_back( p->x );
+	  offlimits.push_back( p->y );
+	}
+
 
 
 
@@ -1488,7 +1729,7 @@ int main( int argc, char ** argv)
 	cout << "cat <<EOF | gnuplot" << "\n";
 	cout << "# make contours" << "\n";
 	cout << "set contour base" << "\n";
-	cout << "set cntrparam level incremental 0, 1, 50" << "\n";
+	cout << "set cntrparam level incremental 0, 2.5, 50" << "\n";
 	cout << "unset surface" << "\n";
 	cout << "set table 'contours.dat'" << "\n";
 	cout << "splot '" << cli.meshfile << "' using 1:2:3" << "\n";
@@ -1509,39 +1750,90 @@ int main( int argc, char ** argv)
 	// cout << "set style line 5 lc rgb 'red' pt 7 ps 0.7 lw 3" << "\n";
 
 	cout << "# minpts" << "\n";
-	cout << "set style line 2 lc rgb 'black' pt 7 ps 1.5" << "\n";
-	cout << "set style line 12 lc rgb 'white' pt 7 ps 0.8" << "\n";
+	cout << "set style line 2 lc rgb 'black' pt 7 ps 2.2" << "\n";
+	cout << "set style line 12 lc rgb 'white' pt 7 ps 1.4" << "\n";
 	cout << "# maxpts" << "\n";
-	cout << "set style line 3 lc rgb 'black' pt 12 ps 1. lw 8" << "\n";
-	cout << "set style line 13 lc rgb 'white' pt 12 ps 0.7 lw 3" << "\n";
+	cout << "set style line 3 lc rgb 'black' pt 12 ps 1.8 lw 9" << "\n";
+	cout << "set style line 13 lc rgb 'white' pt 12 ps 1.2 lw 4" << "\n";
 	cout << "# tspts" << "\n";
-	cout << "set style line 4 lc rgb 'black' pt 2 ps 1.3  lw 9" << "\n";
-	cout << "set style line 14 lc rgb 'white' pt 2 ps 0.85  lw 3" << "\n";
+	cout << "set style line 4 lc rgb 'black' pt 2 ps 2.  lw 12" << "\n";
+	cout << "set style line 14 lc rgb 'white' pt 2 ps 1.4  lw 4" << "\n";
 	cout << "# paths" << "\n";
-	cout << "set style line 100 lc rgb 'red' lw 5" << "\n";
-	cout << "set style line 110 lc rgb 'white' lw 8" << "\n";
+	cout << "set style line 100 lc rgb 'red' lw 8" << "\n";
+	cout << "set style line 110 lc rgb 'white' lw 16" << "\n";
 
 	cout << "" << "\n\n\n";
 
+	//cout << "labelMacro(i,x,y,l) = sprintf('set obj %d rect at %f,%f size char strlen(\"%s\"), char 1 fs solid noborder 01 front fc rgb \"black\" ; set label %d at %f,%f \"%s\" front center tc rgb \"white\" font \"Helvetica-Bold,18\"', i, x, y, l, i, x, y, l)\n\n";
+
+	cout << "labelMacro(i,x,y,l) = sprintf('set obj %d rect at %f,%f size char 1*(strlen(\"%s\")>2?2.425:strlen(\"%s\")), char 0.9 fs solid noborder 01 front fc rgb \"black\"; set label %d at %f,%f \"%s\" front center tc rgb \"white\" font \"Helvetica-Bold,24\"', i, x, y, l, l, i, x, y, l)\n\n";
+
+
+	int ilabel = 0;
+	for ( std::vector<endpt>::iterator it = cli.minima.begin(), itend = cli.minima.end();
+	      it != itend; ++it )
+	  {
+	    if ( it->label.size() == 0 ) continue;
+	    endpt pt( *it );
+	    //std::printf("pre %12.4f %12.4f\n",pt.x,pt.y);
+	    GetValidPosition( mesh, pt, offlimits );
+	    //std::printf("post %12.4f %12.4f\n",pt.x,pt.y);
+	    ilabel++;
+	    cout << "eval labelMacro(" << ilabel << ", "
+		 << FF(pt.x) << ", " << FF(pt.y) << ", \"" 
+		 << pt.label << "\")\n";
+	  }
+
+	for ( std::vector<endpt>::iterator it = cli.saddle.begin(), itend = cli.saddle.end();
+	      it != itend; ++it )
+	  {
+	    if ( it->label.size() == 0 ) continue;
+	    endpt pt( *it );
+	    //std::printf("pre %12.4f %12.4f\n",pt.x,pt.y);
+	    GetValidPosition( mesh, pt, offlimits );
+	    //std::printf("post %12.4f %12.4f\n",pt.x,pt.y);
+	    ilabel++;
+	    cout << "eval labelMacro(" << ilabel << ", "
+		 << FF(pt.x) << ", " << FF(pt.y) << ", \"" 
+		 << pt.label << "\")\n";
+	  }
 
 
 	cout << "" << "\n\n\n";
-	cout << "set terminal postscript eps enhanced solid color 'Helvetica' 18 size 6,5.4" << "\n";
+	cout << "set terminal postscript eps enhanced solid color 'Helvetica' 26 size 6,5.4" << "\n";
 	cout << "set output '" << cli.meshfile << ".eps'" << "\n";
 	cout << "" << "\n";
 
 	std::stringstream cblo;
 	std::stringstream cbhi;
-	if ( cli.minima.size() ) cblo << FF( mesh.GetValue( cli.minima[0].x, cli.minima[0].y ).f );
-	if ( cli.maxima.size() ) cbhi << FF( mesh.GetValue( cli.maxima.back().x, cli.maxima.back().y ).f );
-	else if ( cli.saddle.size() ) cbhi << FF( mesh.GetValue( cli.saddle.back().x, cli.saddle.back().y ).f );
+
+	double flo = 0.;
+	double fhi = 0.;
+
+
+	if ( cli.minima.size() )
+	  {
+	    flo = mesh.GetValue( cli.minima[0].x, cli.minima[0].y ).f;
+	    cblo << FF( flo );
+	  }
+	if ( cli.maxima.size() ) 
+	  {
+	    fhi = mesh.GetValue( cli.maxima.back().x, cli.maxima.back().y ).f;
+	    cbhi << FF( fhi );
+	  }
+	else if ( cli.saddle.size() ) 
+	  {
+	    fhi = mesh.GetValue( cli.saddle.back().x, cli.saddle.back().y ).f;
+	    cbhi << FF( fhi );
+	  }
+
 
 	cout << "set cbrange[" << cblo.str() << ":" << cbhi.str() << "]" << "\n";
-	cout << "set cblabel 'kcal/mol'\n";
+	cout << "set cblabel 'E (kcal/mol)'\n";
 	cout << "set ylabel 'Y-axis label'\n";
 	cout << "set xlabel 'X-axis label'\n";
 	cout << "p '" << cli.meshfile << "' using 1:2:3 with image,\\" << "\n";
-	cout << "  'contours.dat' w l lt -1 lw 1,\\" << "\n";
+	cout << "  'contours.dat' w l lt -1 lw 1.3,\\" << "\n";
 	int icolor = 0;
 	std::vector<std::string> xmgrace_cmds;
 	std::stringstream xmgrace;
@@ -1564,7 +1856,57 @@ int main( int argc, char ** argv)
 	    else 
 	      icolor = icolor % (int)(colors.size());
 
-	    xmgrace << " \\\"" << p->GetName() << ".1d.dat\\\" -pexec \\\"g0.s" << icolor << " line linewidth 2.5\\\"";
+	    xmgrace << " \"" << p->GetName() << ".1d.dat\"";
+
+	    int nep = 1;
+	    if ( p+1 == pend )
+	      nep = 2;
+	    else
+	      {
+		std::vector< connection >::iterator q = p+1;
+		if ( q->prev < 0 )
+		  nep = 2;
+	      }
+
+	    for ( int iep = 0; iep < nep; ++iep )
+	      {
+		endpt pt = p->t0;
+		if ( iep == 1 ) pt = p->t1;
+
+		double fperc = (pt.value - flo) / ( fhi-flo );
+		double buf = 0.05;
+		std::stringstream xline;
+		if ( fperc < 0.5 and ! pt.minimum ) 
+		  {
+		    if ( fperc > 0.3 )
+		      buf += 0.2;
+		    else
+		      buf += 0.25;
+		    xline << " -pexec 'with line; line on; line loctype world; line "
+			  << FF(pt.arclen) << ","
+			  << FF(pt.value) << ","
+			  << FF(pt.arclen) << ","
+			  << FF(pt.value + (buf-0.01)*(fhi-flo)) << ";"
+			  << " line linewidth 2.0; line linestyle 2; line color 1;"
+			  << " line arrow 0; line arrow type 0; line arrow length 1.000000;"
+			  << " line arrow layout 1.000000, 1.000000; line def'";
+		  }
+		if ( fperc > 0.5 and ! pt.minimum ) buf -= 0.45;
+		buf *= (fhi-flo);
+		
+		xmgrace << " -pexec \"g0.s" << icolor << " line linewidth 3\""
+			<< " -pexec \'with string; string on; string loctype world; string g0; string " 
+			<< FF(pt.arclen)
+			<< "," 
+			<< FF(pt.value + buf)
+			<< "; string color 1; string rot 90; string font 4; string just 6;"
+			<< " string char size 1.120000; string def \"" 
+			<< std::fixed << std::setprecision(2) << pt.x
+			<< "," 
+			<< std::fixed << std::setprecision(2) << pt.y
+			<< " (\\6" << pt.label << "\\0)\"\'";
+		xmgrace << xline.str();
+	      };
 
 	    cout << "  '" << p->GetName() << ".2d.dat' w l ls 110,\\" << "\n";
 	    cout << "  '" << p->GetName() << ".2d.dat' w l ls 100 lc rgb '" << colors[icolor] << "',\\" << "\n";
@@ -1578,11 +1920,100 @@ int main( int argc, char ** argv)
 	cout << "  'tspts.dat'    w p ls 4,\\" << "\n";
 	cout << "  'tspts.dat'    w p ls 14" << "\n";
 	cout << "EOF" << "\n\n";
+	icon = 0;
 	for ( std::vector<std::string>::iterator 
-		p=xmgrace_cmds.begin(), pend=xmgrace_cmds.end(); p!=pend; ++p )
-	  cout << "echo Now run: " << *p << " -pexec \\\"page size 612, 612\\\" -pexec \\\"view 0.12, 0.12, 0.92, 0.92\\\" -autoscale xy" << " -pexec \\\'xaxis label \\\"Arc Length\\\"\\\' -pexec \\\"xaxis label char size 1.30\\\" -pexec \\\"xaxis ticklabel char size 1.30\\\" -pexec \\\'yaxis label \\\"E \\(kcal/mol\\)\\\"\\\' -pexec \\\"yaxis label char size 1.30\\\" -pexec \\\"yaxis ticklabel char size 1.30\\\"" << "\n";
+		p=xmgrace_cmds.begin(), pend=xmgrace_cmds.end(); p!=pend; ++p, ++icon )
+	  {
+	    cout << *p 
+		 << " -pexec \"page size 612, 612\" -pexec \"view 0.12, 0.12, 0.92, 0.92\""
+		 << " -world -1 " << cblo.str() << " " << arclens[icon]+1 << " " << cbhi.str()
+		 << " -autoscale x" 
+		 << " -pexec \'xaxis label font 4\'"
+		 << " -pexec \'xaxis ticklabel font 4\'"
+		 << " -pexec \'xaxis label \"Arc Length\"\'"
+		 << " -pexec \"xaxis label char size 1.20\""
+		 << " -pexec \"xaxis ticklabel char size 1.20\""
+		 << " -pexec \'yaxis label font 4\'"
+		 << " -pexec \'yaxis ticklabel font 4\'"
+		 << " -pexec \'yaxis label \"E \\(kcal/mol\\)\"\'"
+		 << " -pexec \"yaxis label char size 1.20\""
+		 << " -pexec \"yaxis ticklabel char size 1.20\""
+		 << " -hardcopy -noprint -saveall path." << icon+1 << ".agr\n\n";
+	    cout << "xmgrace -hardcopy -printfile path." << icon+1 << ".eps path." << icon+1 << ".agr &> /dev/null\n\n";
+	    
+	    cout << "echo \"Now run: xmgrace path." << icon+1 << ".agr &\"\n\n";
+	  }
+	    //cout << "echo Now run: " << *p << " -pexec \\\"page size 612, 612\\\" -pexec \\\"view 0.12, 0.12, 0.92, 0.92\\\" -autoscale xy" << " -pexec \\\'xaxis label \\\"Arc Length\\\"\\\' -pexec \\\"xaxis label char size 1.30\\\" -pexec \\\"xaxis ticklabel char size 1.30\\\" -pexec \\\'yaxis label \\\"E \\(kcal/mol\\)\\\"\\\' -pexec \\\"yaxis label char size 1.30\\\" -pexec \\\"yaxis ticklabel char size 1.30\\\"" << "\n";
 
 	std::cout << "Now run: /bin/sh \"" << gnuplot << "\"; evince \"" << cli.meshfile << ".eps\" &" << "\n";
+
+
+
+
+	cout << "\n\n\n";
+	cout << "cat <<EOF > figure.tex\n";
+
+cout << "\\makeatletter\n";
+cout << "\\newcommand{\\dontusepackage}[2][]{%\n";
+cout << "\\@namedef{ver@#2.sty}{9999/12/31}%\n";
+cout << "\\@namedef{opt@#2.sty}{#1}}\n";
+cout << "\\makeatother\n";
+cout << "\\dontusepackage{mciteplus}\n";
+cout << "\\documentclass[journal=jctcce,manuscript=article,layout=twocolumn]{achemso}\n";
+cout << "\\makeatletter\n";
+cout << "\\renewcommand*\\acs@etal@firstonly{\\acs@etal@truncatetrue}\n";
+cout << "\\renewcommand*\\acs@maxauthors{0}\n";
+cout << "\\makeatother\n";
+cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n";
+cout << "\\usepackage{amsmath}\n";
+cout << "\\usepackage{graphicx}\n";
+cout << "\\usepackage{multirow}\n";
+cout << "\\usepackage{bm}\n";
+cout << "\\usepackage{wasysym}\n";
+cout << "\\usepackage{placeins}\n";
+cout << "\\usepackage{framed}\n";
+cout << "\\usepackage{comment}\n";
+cout << "\\usepackage{color}\n";
+cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n";
+cout << "\\title{Title}\n";
+cout << "\\author{Author}\n";
+cout << "\\email{Email}\n";
+cout << "\\affiliation{Center for Integrative Proteomics Research, \n";
+cout << "BioMaPS Institute for Quantitative Biology and Department of \n";
+cout << "Chemistry and Chemical Biology, \n";
+cout << "Rutgers University, Piscataway, NJ 08854-8087 USA}\n";
+cout << "\\begin{document}\n";
+cout << "\\begin{abstract}\n";
+cout << "\\end{abstract}\n";
+cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n";
+cout << "\\begin{figure*}[tb]\n";
+
+	cout << "\\includegraphics[clip,width=3.75in]{" << cli.meshfile << ".eps}\n";
+	cout << "\\hspace{-0.375in}\n";
+	icon=0;
+	for ( std::vector< connection >::iterator 
+		p=cli.connections.begin(), pend=cli.connections.end();
+	      p != pend; ++p )
+	  {
+	    if ( p->prev < 0 ) 
+	      {
+		icon++;
+		cout << "\\includegraphics[clip,width=3.35in]{path." << icon << ".eps}\n";
+	      };
+	  }
+	cout << "\\caption{Caption}\n";
+	cout << "\\end{figure*}\n";
+	cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n";
+	cout << "\\end{document}\n";
+
+	cout << "EOF\n\n";
+
+	cout << "latex figure.tex &>/dev/null; latex figure.tex &>/dev/null; \n";
+	cout << "dvips -j0 -Ppdf -G0 -tletter -D 1200 -Z  figure.dvi &>/dev/null\n";
+	cout << "ps2pdf -dCompatibilityLevel=1.3 -sPAPERSIZE=letter -dMAxSubsetPct=100 -dSubsetFonts=true -dEmbedAllFonts=true -dDetectBlends=true -dOptimize=true -dDownsampleColorImages=true -dColorImageResolution=1200 -dColorImageDownsampleType=/Average -dColorImageFilter=/FlateEncode -dAutoFilterColorImages=false -dAntiAliasColorImages=false -dColorImageDownsampleThreshold=1.50000 -dDownsampleGrayImages=true -dGrayImageResolution=1200 -dGrayImageDownsampleType=/Average -dGrayImageFilter=/FlateEncode -dAutoFilterGrayImages=false -dAntiAliasGrayImages=false -dGrayImageDownsampleThreshold=1.50000 -dDownsampleMonoImages=true -dMonoImageResolution=1200 -dMonoImageDownsampleType=/Average -dMonoImageFilter=/FlateEncode -dAutoFilterMonoImages=false -dAntiAliasMonoImages=false -dMonoImageDownsampleThreshold=1.50000 figure.ps &>/dev/null\n";
+
+	cout << "echo \"Now run: evince figure.pdf &\"\n\n";
+
 
       }
 
