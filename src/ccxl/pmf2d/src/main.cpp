@@ -1725,11 +1725,11 @@ int main( int argc, char ** argv)
       colors.push_back( std::string("magenta") );
       colors.push_back( std::string("orange") );
       std::vector<int> outline(colors.size(),110);
-      outline[2]  = 120;
-      outline[4]  = 120;
-      outline[6]  = 120;
-      outline[8]  = 120;
-      outline[10] = 120;
+      // outline[2]  = 120;
+      // outline[4]  = 120;
+      // outline[6]  = 120;
+      // outline[8]  = 120;
+      // outline[10] = 120;
 
 
       typedef std::vector< connection >::iterator conit;
@@ -2015,15 +2015,15 @@ int main( int argc, char ** argv)
 		   << " -hardcopy -noprint -saveall path1d." << icon+1 << ".agr\n\n";
 	      cout << "xmgrace -hardcopy -printfile path1d." << icon+1 << ".eps path1d." << icon+1 << ".agr &> /dev/null\n\n";
 	      
+	      cout << "echo \"Now run: evince  path2d." << icon+1 << ".eps &\"\n\n";
 	      cout << "echo \"Now run: xmgrace path1d." << icon+1 << ".agr &\"\n\n";
+
 	    }
 	}
 	int ncon = xmgrace_cmds.size();
 
-	std::cout << "Now run: /bin/sh \"" << gnuplot << "\";";
-	for ( int icon = 0; icon < ncon; ++icon )
-	  std::cout << " evince \"plot2d." << icon+1 << ".eps\" &";
-	std::cout << "\n";
+	std::cout << "Now run: /bin/sh \"" << gnuplot << "\"\n";
+
 
 	// now we can print all the tex file
 
@@ -2067,6 +2067,32 @@ int main( int argc, char ** argv)
 
 	for ( int icon=0; icon < ncon; ++icon )
 	  {
+	    conit path_begin = paths[icon].first;
+	    conit path_end = paths[icon].second;
+
+	    double emin = 1.e+30;
+	    std::vector< std::pair<double,double> > fwdrev;
+	    std::vector< endpt > pts;
+	    pts.push_back( path_begin->t0 );
+	    for ( conit p=path_begin; p!=path_end; ++p )
+	      {
+		emin = std::min(emin, p->t0.value);
+		emin = std::min(emin, p->t1.value);
+		pts.push_back( p->t1 );
+		if ( ! p->t0.minimum )
+		  {
+		    double eprev = 1.e+10;
+		    double enext = 1.e+10;
+		    if ( p != path_begin )
+		      {
+			conit q = p-1;
+			if ( q->t0.minimum ) eprev = q->t0.value;
+		      }
+		    if ( p->t1.minimum ) enext = p->t1.value;
+		    fwdrev.push_back( std::make_pair( p->t0.value - eprev,  p->t0.value - enext ) );
+		  }
+	      };
+
 	    cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n";
 	    cout << "\\begin{figure*}[tb]\n";
 	    cout << "\\includegraphics[clip,width=3.75in]{path2d." << icon+1 << ".eps}\n";
@@ -2075,6 +2101,48 @@ int main( int argc, char ** argv)
 	    cout << "\\caption{Path " << icon+1 << "}\n";
 	    cout << "\\end{figure*}\n";
 	    cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n";
+
+	    cout << "\\begin{table*}" << "\n";
+	    cout << "\\begin{tabular}{c r r r r r r}" << "\n";
+	    cout << "\\hline" << "\n";
+	    cout << "Step & x & y & \\$E$ & $\\Delta E_{\\text{path}}$ & $\\Delta E_{\\text{fwd}}$ & $\\Delta E_{\\text{rev}}$ \\\\\\\\" << "\n";
+	    cout << "& Unit & Unit & kcal/mol & kcal/mol & kcal/mol & kcal/mol  \\\\\\\\" << "\n";
+	    cout << "\\hline" << "\n";
+	    int tscnt = 0;
+	    for ( std::vector<endpt>::iterator p=pts.begin(), pend=pts.end(); p!=pend; ++p )
+	      {
+		cout << "({\\bf " << p->label << "}) & "
+		     << std::fixed << std::setprecision(2) << p->x << " & " 
+		     << std::fixed << std::setprecision(2) << p->y << " & " 
+		     << std::fixed << std::setprecision(2) << p->value << " & " 
+		     << std::fixed << std::setprecision(2) << p->value - emin << " & " ;
+		if ( p->minimum )
+		  cout << " $\\cdots$ & $\\cdots$";
+		else
+		  {
+		    double fwd = fwdrev[tscnt].first;
+		    double rev = fwdrev[tscnt].second;
+		    ++tscnt;
+		    if ( std::abs( fwd ) > 1.e+5 )
+		      cout << " $\\cdots$ &";
+		    else
+		      cout << std::fixed << std::setprecision(2) << fwd << " & ";
+		    if ( std::abs( rev ) > 1.e+5 )
+		      cout << " $\\cdots$";
+		    else
+		      cout << std::fixed << std::setprecision(2) << rev ;
+		  }
+		cout << " \\\\\\\\" << "\n";
+	      }
+
+	    cout << "\\hline" << "\n";
+	    cout << "\\end{tabular}" << "\n";
+	    cout << "\\caption{Path 1}" << "\n";
+	    cout << "\\end{table*}" << "\n";
+	    cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n";
+	    cout << "\\clearpage\n";
+	    cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n";
+
 	  }
 	cout << "\\end{document}\n";
 
@@ -2083,6 +2151,7 @@ int main( int argc, char ** argv)
 	cout << "latex figure.tex &>/dev/null; latex figure.tex &>/dev/null; \n";
 	cout << "dvips -j0 -Ppdf -G0 -tletter -D 1200 -Z  figure.dvi &>/dev/null\n";
 	cout << "ps2pdf -dCompatibilityLevel=1.3 -sPAPERSIZE=letter -dMAxSubsetPct=100 -dSubsetFonts=true -dEmbedAllFonts=true -dDetectBlends=true -dOptimize=true -dDownsampleColorImages=true -dColorImageResolution=1200 -dColorImageDownsampleType=/Average -dColorImageFilter=/FlateEncode -dAutoFilterColorImages=false -dAntiAliasColorImages=false -dColorImageDownsampleThreshold=1.50000 -dDownsampleGrayImages=true -dGrayImageResolution=1200 -dGrayImageDownsampleType=/Average -dGrayImageFilter=/FlateEncode -dAutoFilterGrayImages=false -dAntiAliasGrayImages=false -dGrayImageDownsampleThreshold=1.50000 -dDownsampleMonoImages=true -dMonoImageResolution=1200 -dMonoImageDownsampleType=/Average -dMonoImageFilter=/FlateEncode -dAutoFilterMonoImages=false -dAntiAliasMonoImages=false -dMonoImageDownsampleThreshold=1.50000 figure.ps &>/dev/null\n";
+
 
 	cout << "echo \"Now run: evince figure.pdf &\"\n\n";
 
