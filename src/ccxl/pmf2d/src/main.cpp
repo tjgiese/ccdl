@@ -2007,7 +2007,7 @@ int main( int argc, char ** argv)
 		   << " -pexec \"yaxis ticklabel char size 1.20\" \\\n"
 		   << " -pexec \"yaxis label place 0.000000, 0.095000\" \\\n"
 		   << " -hardcopy -noprint -saveall path1d." << icon+1 << ".agr\n\n";
-	      cout << "xmgrace -hardcopy -printfile path1d." << icon+1 << ".eps path." << icon+1 << ".agr &> /dev/null\n\n";
+	      cout << "xmgrace -hardcopy -printfile path1d." << icon+1 << ".eps path1d." << icon+1 << ".agr &> /dev/null\n\n";
 	      
 	      cout << "echo \"Now run: xmgrace path1d." << icon+1 << ".agr &\"\n\n";
 	    }
