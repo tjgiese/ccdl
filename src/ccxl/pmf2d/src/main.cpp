@@ -1737,7 +1737,9 @@ int main( int argc, char ** argv)
 	cout << "reset" << "\n";
 	cout << "unset key" << "\n";
 	cout << "#set palette rgbformulae 33,13,10" << "\n";
-	cout << "set palette defined ( 0 '#0034a9', 1 '#1c61ff', 2 '#3371ff', 3 '#009cff', 4 '#00d8ff', 5 '#00ffba', 6 '#00ff6c', 7 '#00ff0c', 8 '#aeff00', 9 '#fff600', 10 '#ffc000', 11 '#ff9600', 12 '#ff6c00', 13 '#ff3c00', 14 '#ff0000', 15 '#7f0000', 16 '#530000')" << "\n";
+	cout << "#set palette defined ( 0 '#0034a9', 1 '#1c61ff', 2 '#3371ff', 3 '#009cff', 4 '#00d8ff', 5 '#00ffba', 6 '#00ff6c', 7 '#00ff0c', 8 '#aeff00', 9 '#fff600', 10 '#ffc000', 11 '#ff9600', 12 '#ff6c00', 13 '#ff3c00', 14 '#ff0000', 15 '#7f0000', 16 '#530000')" << "\n";
+	cout << "set palette defined ( 0 '#0034a9', 1 '#6695ff', 2 '#96e8ff', 3 '#96ffe0', 4 '#60ff73', 5 '#fcff24', 6 '#feffce', 7 '#ffdc99', 8 '#ffa07b', 9 '#ff5353', 10 '#bd0009' )" << "\n";
+
 
 	cout << "" << "\n";
 	// cout << "# minpts" << "\n";
@@ -1856,7 +1858,7 @@ int main( int argc, char ** argv)
 	    else 
 	      icolor = icolor % (int)(colors.size());
 
-	    xmgrace << " \"" << p->GetName() << ".1d.dat\"";
+	    xmgrace << " \"" << p->GetName() << ".1d.dat\" \\\n";
 
 	    int nep = 1;
 	    if ( p+1 == pend )
@@ -1894,7 +1896,7 @@ int main( int argc, char ** argv)
 		if ( fperc > 0.5 and ! pt.minimum ) buf -= 0.45;
 		buf *= (fhi-flo);
 		
-		xmgrace << " -pexec \"g0.s" << icolor << " line linewidth 3\""
+		xmgrace << " -pexec \"g0.s" << icolor << " line linewidth 4\" \\\n"
 			<< " -pexec \'with string; string on; string loctype world; string g0; string " 
 			<< FF(pt.arclen)
 			<< "," 
@@ -1904,7 +1906,7 @@ int main( int argc, char ** argv)
 			<< std::fixed << std::setprecision(2) << pt.x
 			<< "," 
 			<< std::fixed << std::setprecision(2) << pt.y
-			<< " (\\6" << pt.label << "\\0)\"\'";
+			<< " (\\6" << pt.label << "\\0)\"\' \\\n";
 		xmgrace << xline.str();
 	      };
 
@@ -1925,19 +1927,20 @@ int main( int argc, char ** argv)
 		p=xmgrace_cmds.begin(), pend=xmgrace_cmds.end(); p!=pend; ++p, ++icon )
 	  {
 	    cout << *p 
-		 << " -pexec \"page size 612, 612\" -pexec \"view 0.12, 0.12, 0.92, 0.92\""
-		 << " -world -1 " << cblo.str() << " " << arclens[icon]+1 << " " << cbhi.str()
-		 << " -autoscale x" 
-		 << " -pexec \'xaxis label font 4\'"
-		 << " -pexec \'xaxis ticklabel font 4\'"
-		 << " -pexec \'xaxis label \"Arc Length\"\'"
-		 << " -pexec \"xaxis label char size 1.20\""
-		 << " -pexec \"xaxis ticklabel char size 1.20\""
-		 << " -pexec \'yaxis label font 4\'"
-		 << " -pexec \'yaxis ticklabel font 4\'"
-		 << " -pexec \'yaxis label \"E \\(kcal/mol\\)\"\'"
-		 << " -pexec \"yaxis label char size 1.20\""
-		 << " -pexec \"yaxis ticklabel char size 1.20\""
+		 << " -pexec \"page size 612, 612\" -pexec \"view 0.12, 0.11, 0.94, 0.96\" \\\n"
+		 << " -world -1 " << cblo.str() << " " << arclens[icon]+1 << " " << cbhi.str() << " \\\n"
+		 << " -autoscale x \\\n" 
+		 << " -pexec \'xaxis label font 4\' \\\n"
+		 << " -pexec \'xaxis ticklabel font 4\' \\\n"
+		 << " -pexec \'xaxis label \"Arc Length\"\' \\\n"
+		 << " -pexec \"xaxis label char size 1.20\" \\\n"
+		 << " -pexec \"xaxis ticklabel char size 1.20\" \\\n"
+		 << " -pexec \'yaxis label font 4\' \\\n"
+		 << " -pexec \'yaxis ticklabel font 4\' \\\n"
+		 << " -pexec \'yaxis label \"E \\(kcal/mol\\)\"\' \\\n"
+		 << " -pexec \"yaxis label char size 1.20\" \\\n"
+		 << " -pexec \"yaxis ticklabel char size 1.20\" \\\n"
+		 << " -pexec \"yaxis label place 0.000000, 0.095000\" \\\n"
 		 << " -hardcopy -noprint -saveall path." << icon+1 << ".agr\n\n";
 	    cout << "xmgrace -hardcopy -printfile path." << icon+1 << ".eps path." << icon+1 << ".agr &> /dev/null\n\n";
 	    
