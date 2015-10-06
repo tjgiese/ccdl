@@ -1712,7 +1712,6 @@ int main( int argc, char ** argv)
 
 
 
-
       std::vector<std::string> colors;
       colors.push_back( std::string("black") );
       colors.push_back( std::string("red") );
@@ -1725,6 +1724,12 @@ int main( int argc, char ** argv)
       colors.push_back( std::string("cyan") );
       colors.push_back( std::string("magenta") );
       colors.push_back( std::string("orange") );
+      std::vector<int> outline(colors.size(),110);
+      outline[2]  = 120;
+      outline[4]  = 120;
+      outline[6]  = 120;
+      outline[8]  = 120;
+      outline[10] = 120;
 
 
       typedef std::vector< connection >::iterator conit;
@@ -1833,7 +1838,8 @@ int main( int argc, char ** argv)
 	    cout << "# paths" << "\n";
 	    cout << "set style line 100 lc rgb 'red' lw 8" << "\n";
 	    cout << "set style line 110 lc rgb 'white' lw 16" << "\n";
-	    
+	    cout << "set style line 120 lc rgb 'black' lw 16" << "\n";
+
 	    cout << "" << "\n\n\n";
 
 	    //cout << "labelMacro(i,x,y,l) = sprintf('set obj %d rect at %f,%f size char strlen(\"%s\"), char 1 fs solid noborder 01 front fc rgb \"black\" ; set label %d at %f,%f \"%s\" front center tc rgb \"white\" font \"Helvetica-Bold,18\"', i, x, y, l, i, x, y, l)\n\n";
@@ -1904,7 +1910,7 @@ int main( int argc, char ** argv)
 	    cout << "set ylabel 'Y-axis label'\n";
 	    cout << "set xlabel 'X-axis label'\n";
 	    cout << "p '" << cli.meshfile << "' using 1:2:3 with image,\\" << "\n";
-	    cout << "  'contours.dat' w l lt -1 lw 1.3,\\" << "\n";
+	    cout << "  'contours.dat' w l lt -1 lw 1.5,\\" << "\n";
 
 
 	    int icolor = 0;
@@ -1968,7 +1974,7 @@ int main( int argc, char ** argv)
 		    xmgrace << xline.str();
 		  };
 
-		cout << "  '" << p->GetName() << ".2d.dat' w l ls 110,\\" << "\n";
+		cout << "  '" << p->GetName() << ".2d.dat' w l ls " << outline[icolor] << ",\\" << "\n";
 		cout << "  '" << p->GetName() << ".2d.dat' w l ls 100 lc rgb '" << colors[icolor] << "',\\" << "\n";
 	      }
 	    //std::cout << xmgrace.str() << "\n";
