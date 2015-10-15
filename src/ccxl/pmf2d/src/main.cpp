@@ -55,8 +55,33 @@ std::string connection::GetName() const
 
 
 
+struct RefinementPt
+{
+  RefinementPt() : x(0), y(0) {};
+  RefinementPt( double x, double y ) : x(x), y(y) {};
+  double x,y;
+};
+
+bool operator< ( RefinementPt const & lhs, RefinementPt const & rhs )
+{
+  return (lhs.x == rhs.x) ? lhs.y < rhs.y : lhs.x < rhs.x;
+}
+
+bool operator== ( RefinementPt const & lhs, RefinementPt const & rhs )
+{
+  return (lhs.x == rhs.x) and (lhs.y == rhs.y);
+}
 
 
+struct RefinementGrid
+{
+  RefinementGrid( double xlo, double ylo, double dx, double dy, int n ) 
+    : xlo(xlo), ylo(ylo), dx(dx),dy(dy),n(n) {};
+
+  double xlo,ylo;
+  double dx,dy;
+  int n;
+};
 
 
 
@@ -67,6 +92,7 @@ struct cli_options
   cli_options();
   std::vector< endpt > minima,maxima,saddle;
   std::vector< connection > connections;
+  std::tr1::shared_ptr< RefinementGrid > refine;
   std::string meshfile;
   bool rezero;
   bool perx,pery;
@@ -170,6 +196,16 @@ void print_usage()
   std::printf("  --con method=i neb method to use (1 or 2) (default 1)\n");
   std::printf("           \tmethod=1 tends to be better for short paths\n");
   std::printf("         \tmethod=2 tends to be better for long paths\n");
+  std::printf("  --refine x=XLO,y=YLO,dx=DX,dy=DY,n=N\n");
+  std::printf("           \tReturns a set of x,y values whose locations are within\n");
+  std::printf("           \t|x(t)-(XLO+i*DX)| <= 2*N*DX and |y(t)-(YLO+j*DY)| <= 2*N*DY\n");
+  std::printf("           \tof the paths define by the --con commands\n");
+  std::printf("           \tFor example, if you have a coarse-grained guess at the PMF\n");
+  std::printf("           \tand you want create new windows in a box from 1.4 to 4.0,\n");
+  std::printf("           \tseparated by 0.1 Ang, then\n");
+  std::printf("           \t--con min=1,ts=1,min=2 --refine x=1.4,y=1.4,dx=0.1,dy=0.1,n=1\n");
+
+
   std::printf("\n");
   std::printf("\n\nA typical work-flow:\n");
   std::printf("  (1) pmf2d --zero mesh\n");
@@ -218,6 +254,19 @@ cli_options read_options( int argc, char ** argv )
     "method",
     NULL };
 
+  char const * REFINE_opts[] = {
+#define REFINE_X 0
+    "x",
+#define REFINE_Y 1
+    "y",
+#define REFINE_DX 2
+    "dx",
+#define REFINE_DY 3
+    "dy",
+#define REFINE_N 4
+    "n",
+    NULL };
+
   static struct option long_options[] =
     {
       { "help",      no_argument,       NULL, 'h'   },
@@ -226,6 +275,8 @@ cli_options read_options( int argc, char ** argv )
       { "pery",      no_argument,       NULL, 'y'   },
 #define CON     0100
       { "con",       required_argument, NULL, CON   },
+#define REFINE  0200
+      { "refine",    required_argument, NULL, REFINE },
       {NULL,0,NULL,0}
     };
 
@@ -308,6 +359,101 @@ cli_options read_options( int argc, char ** argv )
 		    cli.connections.push_back( c );
 		  };
 	      }
+	    break;
+	  }
+
+	case REFINE:
+	  {
+	    if ( cli.refine )
+	      {
+		std::printf("%s: Only one instance of --refine is possible\n",argv[0]);
+		std::exit(EXIT_FAILURE);
+	      }
+	    bool hasx = false;
+	    bool hasy = false;
+	    double x=0;
+	    double y=0;
+	    double dx=-1;
+	    double dy=-1;
+	    int n = 1;
+            subopts = optarg;
+            while (*subopts != '\0')
+              switch (getsubopt(&subopts, const_cast<char**>(REFINE_opts), &value))
+                {
+                case REFINE_X:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --refine x= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    x = std::atof(value);
+		    hasx=true;
+		    break;
+		  }
+                case REFINE_Y:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --refine y= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    y = std::atof(value);
+		    hasy=true;
+		    break;
+		  }
+                case REFINE_DX:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --refine dx= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    dx = std::atof(value);
+		    break;
+		  }
+                case REFINE_DY:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --refine dy= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    dy = std::atof(value);
+		    break;
+		  }
+                case REFINE_N:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --refine n= expects an int; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    n = std::atoi(value);
+		    break;
+		  }
+		default:
+		  {
+		    std::printf("%s: Unknown subption '%s' given to --refine\n",argv[0],value);
+		    std::exit(EXIT_FAILURE);
+		  }
+		}
+	    {
+	      bool error = false;
+	      if ( dx <= 0 )
+		{
+		  std::printf("%s: invalid value of --refine dx=%.3e\n",argv[0],dx);
+		  error = true;
+		}
+	      if ( dy <= 0 )
+		{
+		  std::printf("%s: invalid value of --refine dy=%.3e\n",argv[0],dy);
+		  error = true;
+		}
+	      if ( ! hasx )
+		{
+		  std::printf("%s: --refine used without specifying x\n",argv[0]);
+		  error = true;
+		}
+	      if ( ! hasy )
+		{
+		  std::printf("%s: --refine used without specifying y\n",argv[0]);
+		  error = true;
+		}
+	      if ( error ) std::exit(EXIT_FAILURE);
+
+	      cli.refine.reset( new RefinementGrid( x,y,dx,dy,n ) );
+	    }
 	    break;
 	  }
 	case '?':
@@ -412,10 +558,13 @@ cli_options read_options( int argc, char ** argv )
 	  if ( p != pend )
 	    {
 	      std::vector<connection>::iterator q = p+1;
-	      if ( q->t0.minimum )
-		nextmin = q->t0;
-	      else if ( q->t0.i == p->t1.i and q->t1.minimum )
-		nextmin = q->t1;
+	      if ( q != pend )
+		{
+		  if ( q->t0.minimum )
+		    nextmin = q->t0;
+		  else if ( q->t0.i == p->t1.i and q->t1.minimum )
+		    nextmin = q->t1;
+		};
 	    };
 	  int i = p->t1.i - 1;
 	  if ( cli.saddle[i].label.size() == 0 )
@@ -1751,6 +1900,56 @@ int main( int argc, char ** argv)
       paths.push_back( std::make_pair( begin, cli.connections.end() ) );
 
 
+      std::vector< RefinementPt > refinept;
+      if ( cli.refine )
+	{
+	  double x0 = cli.refine->xlo;
+	  double y0 = cli.refine->ylo;
+	  double dx = cli.refine->dx;
+	  double dy = cli.refine->dy;
+	  int n = cli.refine->n;
+	  for ( convecit ppath = paths.begin(); ppath != paths.end(); ++ppath )
+	    {
+	      conit path_begin = ppath->first;
+	      conit path_end   = ppath->second;
+	      for ( conit p = path_begin; p != path_end; ++p )
+		{
+		  ccdl::ParametricLegendre & neb = *(p->curve);
+		  int nt = 201;
+		  for ( int i=0; i<nt; ++i )
+		    {
+		      double t = ( i / (double)(nt-1) );
+		      double x,y;
+		      neb.GetXY( t, x, y );
+		      int ixlo = (int)((x - x0) / dx + 0.5) - (n);
+		      int iylo = (int)((y - y0) / dy + 0.5) - (n);
+		      for ( int ix=ixlo; ix < ixlo + 2*n+1; ++ix )
+			for ( int iy=iylo; iy < iylo + 2*n+1; ++iy )
+			  refinept.push_back( RefinementPt( x0 + ix*dx, y0 + iy*dy ) );
+		    }
+		  std::sort( refinept.begin(), refinept.end() );
+		  refinept.erase( std::unique( refinept.begin(), refinept.end() ), refinept.end() );
+		}
+	    }
+	  std::ofstream cout;
+	  cout.open( "refinement.dat" );
+	  for ( std::vector<RefinementPt>::iterator 
+		  pt=refinept.begin(), ptend=refinept.end();
+		pt != ptend; ++pt )
+	    {
+	      //std::printf("%10.3f %10.3f\n",pt->x,pt->y);
+	      cout << std::fixed << std::setw(8) << std::setprecision(3) << pt->x
+		   << std::fixed << std::setw(8) << std::setprecision(3) << pt->y
+		   << "\n";
+	      offlimits.push_back( pt->x );
+	      offlimits.push_back( pt->y );
+	    }
+	}
+    
+
+
+
+
       {
 	std::string gnuplot( cli.meshfile );
 	gnuplot += ".sh";
@@ -1835,6 +2034,9 @@ int main( int argc, char ** argv)
 	    cout << "# tspts" << "\n";
 	    cout << "set style line 4 lc rgb 'black' pt 2 ps 2.  lw 12" << "\n";
 	    cout << "set style line 14 lc rgb 'white' pt 2 ps 1.4  lw 4" << "\n";
+	    cout << "# refinement pts" << "\n";
+	    cout << "set style line 5 lc rgb 'black' pt 1 ps 0.75  lw 1.8" << "\n";
+	    cout << "set style line 15 lc rgb 'white' pt 1 ps 0.5  lw 0.5" << "\n";
 	    cout << "# paths" << "\n";
 	    cout << "set style line 100 lc rgb 'red' lw 8" << "\n";
 	    cout << "set style line 110 lc rgb 'white' lw 16" << "\n";
@@ -1985,7 +2187,17 @@ int main( int argc, char ** argv)
 	    cout << "  'maxpts.dat'   w p ls 3,\\" << "\n";
 	    cout << "  'maxpts.dat'   w p ls 13,\\" << "\n";
 	    cout << "  'tspts.dat'    w p ls 4,\\" << "\n";
-	    cout << "  'tspts.dat'    w p ls 14" << "\n";
+	    cout << "  'tspts.dat'    w p ls 14";
+	    if ( ! cli.refine )
+	      cout << "\n";
+	    else
+	      {
+		cout << ",\\" << "\n";
+		cout << "  'refinement.dat'    w p ls 5,\\" << "\n";
+		cout << "  'refinement.dat'    w p ls 15" << "\n";
+		//cout << "  'refinement.dat'    w p ls 5" << "\n";
+
+	      }
 	    cout << "EOF" << "\n\n";
 
 	  }
@@ -2091,6 +2303,11 @@ int main( int argc, char ** argv)
 		    if ( p->t1.minimum ) enext = p->t1.value;
 		    fwdrev.push_back( std::make_pair( p->t0.value - eprev,  p->t0.value - enext ) );
 		  }
+		else if ( p+1 == path_end )
+		  {
+		    if ( ! p->t1.minimum )
+		      fwdrev.push_back( std::make_pair( p->t1.value - p->t0.value,  1.e+10 ) );
+		  }
 	      };
 
 	    cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n";
@@ -2120,9 +2337,14 @@ int main( int argc, char ** argv)
 		  cout << " $\\cdots$ & $\\cdots$";
 		else
 		  {
-		    double fwd = fwdrev[tscnt].first;
-		    double rev = fwdrev[tscnt].second;
-		    ++tscnt;
+		    double fwd = 1.e+30;
+		    double rev = 1.e+30;
+		    if ( tscnt + 1 <= (int)( fwdrev.size() ) )
+		      {
+			fwd = fwdrev[tscnt].first;
+			rev = fwdrev[tscnt].second;
+			++tscnt;
+		      }
 		    if ( std::abs( fwd ) > 1.e+5 )
 		      cout << " $\\cdots$ &";
 		    else
@@ -2131,6 +2353,7 @@ int main( int argc, char ** argv)
 		      cout << " $\\cdots$";
 		    else
 		      cout << std::fixed << std::setprecision(2) << rev ;
+		  
 		  }
 		cout << " \\\\\\\\" << "\n";
 	      }
@@ -2161,199 +2384,6 @@ int main( int argc, char ** argv)
     }
   
 
-  
-
-  /*
-  bool periodic = false;
-  ccdl::Mesh2d mesh( std::cin, periodic );
-
-
-  typedef std::vector< ccdl::Mesh2dHessian > vec;
-  typedef vec::iterator iter;
-
-  vec minima, maxima, saddle;
-  GetStationaryPts( mesh, minima, maxima, saddle );
-  {
-    std::ofstream cout;
-    cout.open("minpts.dat");
-    for ( iter p = minima.begin(), pend = minima.end(); p!=pend; ++p )
-      cout << FF(p->x) << FF(p->y) 
-	   << " # " << FF(p->f) << FF(p->dfdx) << FF(p->dfdy) 
-	   << FF(p->eval[0]) << FF(p->eval[1]) << "\n";
-  }
-  {
-    std::ofstream cout;
-    cout.open("maxpts.dat");
-    for ( iter p = maxima.begin(), pend = maxima.end(); p!=pend; ++p )
-      cout << FF(p->x) << FF(p->y) 
-	   << " # "  << FF(p->f) << FF(p->dfdx) << FF(p->dfdy) 
-	   << FF(p->eval[0]) << FF(p->eval[1]) << "\n";
-  }
-  {
-    std::ofstream cout;
-    cout.open("tspts.dat");
-    for ( iter p = saddle.begin(), pend = saddle.end(); p!=pend; ++p )
-      cout << FF(p->x) << FF(p->y) 
-	   << " # "  << FF(p->f) << FF(p->dfdx) << FF(p->dfdy) 
-	   << FF(p->eval[0]) << FF(p->eval[1]) << "\n";
-  }
-
-  */
-
-
-  return 0;
-
-
-  /*
-  std::vector< ccdl::Mesh2dValue > minima = mesh.GetMinima();
-  {
-    std::ofstream cout;
-    cout.open("minpts.dat");
-    for ( std::size_t i=0; i<minima.size(); ++i )
-    {
-      ccdl::Mesh2dValue v = minima[i];
-      cout << FF(v.x) << FF(v.y) << "\n";
-    }
-  }
-
-  std::vector< ccdl::Mesh2dValue > maxima = mesh.GetMaxima();
-  {
-   std::ofstream cout;
-    cout.open("maxpts.dat");
-    for ( std::size_t i=0; i<maxima.size(); ++i )
-    {
-      ccdl::Mesh2dValue v = maxima[i];
-      cout << FF(v.x) << FF(v.y) << "\n";
-    }
-  }
-  */
-
-
-
-  /*
-
-  // double SpringWt          = 1.;
-  // double EnergyWt          = 0.05; 
-  // double CurvatureWt       = SpringWt * 0.01;
-  // double TransitionStateWt = EnergyWt * 10000.;
-  // double Temperature       = 1.;
-
-  double SpringWt          = 1.;
-  double EnergyWt          = 0.01; 
-  double CurvatureWt       = 0.01;
-  double TransitionStateWt = 0.01;
-  double Temperature       = 0.01;
-
-
-
-
-  double x0 = minima[4].x;
-  double y0 = minima[4].y;
-  double x1 = minima[7].x;
-  double y1 = minima[7].y;
-
-  ccdl::ParametricLegendre curve( 3, 3, 100 );
-  curve.SetEndptValues( x0,y0, x1,y1 );
-
-  int cnt = 0;
-  //int orders[3] = { 5, 10, 15 };
-  int orders[6] = { 3, 5, 8, 12, 15, 18 };
-  for ( int iorder=0; iorder < 5; iorder++, ++cnt )
-    {
-      double TW = TransitionStateWt;
-      double EW = EnergyWt;
-      double SW = SpringWt;
-
-      //if ( iorder < 3 ) { EW = 0.05; SW = 50.; TW = 250.; }
-      //if ( iorder < 1 ) { EW = 0.1; SW = 100.; TW = 500.; }
-
-
-
-      int order = orders[iorder];
-      ccdl::ParametricLegendre new_curve( order, order, 100 );
-      new_curve.SetEndptValues( x0,y0, x1,y1 );
-      int npt = new_curve.GetNpts();
-      std::vector<double> xt(npt,0.), yt(npt,0.); 
-      if ( cnt == 0 )
-	{
-	  double mx = (x1-x0);
-	  double bx = x0;
-	  double my = (y1-y0);
-	  double by = y0;
-	  for ( int i=0; i<npt; ++i )
-	    {
-	      double t = new_curve.GetQuadPt(i);
-	      xt[i] = mx * t + bx;
-	      yt[i] = my * t + by;
-	      //std::printf("%20.10f %20.10f\n",xt[i],yt[i]);
-	    }
-	}
-      else
-	{
-	  for ( int i=0; i<npt; ++i )
-	    {
-	      double t = new_curve.GetQuadPt(i);
-	      curve.GetXY( t, xt[i], yt[i] );
-	    }
-	}
-      new_curve.SetXY( xt.data(), yt.data() );
-      NudgeElasticBand( mesh, new_curve, SW, CurvatureWt, EW, TW, Temperature );
-      curve = new_curve;
-    };
-
-
-
-  // for ( int i=0; i<curve.GetNpts(); ++i )
-  //   {
-  //     double t = curve.GetQuadPt(i);
-  //     double x,y;
-  //     curve.GetXY( t, x, y );
-  //     std::printf("GREP %20.10f %20.10f\n",x,y);
-  //   }
-  
-  */
-
-
-
-
-
-
-
-
-
-
-
-
-
-  /*
-  ccdl::ParametricLegendre neb1
-    ( NudgeElasticBand_FitMethod1
-      ( mesh,
-	minima[0],minima[7] ) );
-  
-  {
-    std::ofstream xyfile,tfile;
-    xyfile.open( "neb1_0_7_xy.dat" );
-    for ( int i=0; i<501; ++i )
-      {
-	double t = i / 500.;
-	double x,y;
-	neb1.GetXY( t, x, y );
-	ccdl::Mesh2dValue val( mesh.GetValue( x,y ) );
-	xyfile << FF(x) << FF(y) << " # " << FF(val.f) <<  "\n";
-      }
-    tfile.open( "neb1_0_7_t.dat" );
-    for ( int i=0; i<501; ++i )
-      {
-	double t = i / 500.;
-	double x,y;
-	neb1.GetXY( t, x, y );
-	ccdl::Mesh2dValue val( mesh.GetValue( x,y ) );
-	tfile << FF(t) << FF(val.f) << " # " << FF(val.x) << FF(val.y) << "\n";
-      }
-
-  };
-  */
   
   return 0;
 }
