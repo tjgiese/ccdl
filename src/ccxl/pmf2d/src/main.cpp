@@ -84,7 +84,13 @@ struct RefinementGrid
 };
 
 
-
+struct BoxCrd
+{
+  BoxCrd() : xlo(0),ylo(0),xhi(0),yhi(0) {}
+  BoxCrd( double xl, double yl, double xh, double yh )
+    : xlo(xl),ylo(yl),xhi(xh),yhi(yh) {}
+  double xlo,ylo,xhi,yhi;
+};
 
 
 struct cli_options
@@ -93,6 +99,7 @@ struct cli_options
   std::vector< endpt > minima,maxima,saddle;
   std::vector< connection > connections;
   std::tr1::shared_ptr< RefinementGrid > refine;
+  std::vector<BoxCrd> blanks;
   std::string meshfile;
   bool rezero;
   bool perx,pery;
@@ -204,6 +211,8 @@ void print_usage()
   std::printf("           \tand you want create new windows in a box from 1.4 to 4.0,\n");
   std::printf("           \tseparated by 0.1 Ang, then\n");
   std::printf("           \t--con min=1,ts=1,min=2 --refine x=1.4,y=1.4,dx=0.1,dy=0.1,n=1\n");
+  std::printf("  --blank xlo=XLO,ylo=YLO,xhi=XHI,yhi=YHI\n");
+  std::printf("           \tCover the selected area with a white box\n");
 
 
   std::printf("\n");
@@ -267,6 +276,17 @@ cli_options read_options( int argc, char ** argv )
     "n",
     NULL };
 
+  char const * BLANK_opts[] = {
+#define BLANK_XLO 0
+    "xlo",
+#define BLANK_YLO 1
+    "ylo",
+#define BLANK_XHI 2
+    "xhi",
+#define BLANK_YHI 3
+    "yhi",
+    NULL };
+
   static struct option long_options[] =
     {
       { "help",      no_argument,       NULL, 'h'   },
@@ -277,6 +297,8 @@ cli_options read_options( int argc, char ** argv )
       { "con",       required_argument, NULL, CON   },
 #define REFINE  0200
       { "refine",    required_argument, NULL, REFINE },
+#define BLANK   0300
+      { "blank",     required_argument, NULL, BLANK },
       {NULL,0,NULL,0}
     };
 
@@ -456,6 +478,62 @@ cli_options read_options( int argc, char ** argv )
 	    }
 	    break;
 	  }
+
+
+	case BLANK:
+	  {
+	    double xlo=-1.e+10;
+	    double ylo=-1.e+10;
+	    double xhi=1.e+10;
+	    double yhi=1.e+10;
+            subopts = optarg;
+            while (*subopts != '\0')
+              switch (getsubopt(&subopts, const_cast<char**>(BLANK_opts), &value))
+                {
+                case BLANK_XLO:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --blank xlo= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    xlo = std::atof(value);
+		    break;
+		  }
+                case BLANK_YLO:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --blank ylo= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    ylo = std::atof(value);
+		    break;
+		  }
+                case BLANK_XHI:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --blank xhi= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    xhi = std::atof(value);
+		    break;
+		  }
+                case BLANK_YHI:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --blank yhi= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    yhi = std::atof(value);
+		    break;
+		  }
+		default:
+		  {
+		    std::printf("%s: Unknown subption '%s' given to --blank\n",argv[0],value);
+		    std::exit(EXIT_FAILURE);
+		  }
+		}
+
+	    cli.blanks.push_back( BoxCrd( xlo,ylo,xhi,yhi ) );
+
+	    break;
+	  }
+
 	case '?':
 	  {
 	    std::printf("%s: use -h for usage\n",argv[0]);
@@ -1564,7 +1642,7 @@ std::string main_points( char const * meshname, bool periodic, bool rezero )
     cout << "cat <<EOF | gnuplot" << "\n";
     cout << "# make contours" << "\n";
     cout << "set contour base" << "\n";
-    cout << "set cntrparam level incremental 0, 1, 50" << "\n";
+    cout << "set cntrparam level incremental -50, 2.5, 50" << "\n";
     cout << "unset surface" << "\n";
     cout << "set table 'contours.dat'" << "\n";
     cout << "splot '" << fname << "' using 1:2:3" << "\n";
@@ -1754,6 +1832,18 @@ int main( int argc, char ** argv)
 	}
 
       ccdl::Mesh2d mesh( cin, cli.perx or cli.pery );
+
+      for ( std::vector<BoxCrd>::iterator 
+	      p=cli.blanks.begin(), pend=cli.blanks.end(); 
+	    p!=pend; ++p )
+	{
+	  p->xlo = std::max( p->xlo, mesh.GetLowX() );
+	  p->ylo = std::max( p->ylo, mesh.GetLowY() );
+	  p->xhi = std::min( p->xhi, mesh.GetHighX() );
+	  p->yhi = std::min( p->yhi, mesh.GetHighY() );
+	}
+
+
 
       std::vector<double> offlimits;
 
@@ -1974,13 +2064,66 @@ int main( int argc, char ** argv)
 	  }
 	if ( cli.maxima.size() ) 
 	  {
-	    fhi = mesh.GetValue( cli.maxima.back().x, cli.maxima.back().y ).f;
-	    cbhi << FF( fhi );
+	    for ( std::vector<endpt>::reverse_iterator 
+		    pm=cli.maxima.rbegin(), pmend=cli.maxima.rend(); 
+		  pm != pmend; ++pm )
+	      {
+		bool in_blank = false;
+		for ( std::vector<BoxCrd>::iterator 
+			pb=cli.blanks.begin(), pbend=cli.blanks.end();
+		      pb != pbend; ++pb )
+		  {
+		    if ( pm->x >= pb->xlo and pm->x <= pb->xhi and
+			 pm->y >= pb->ylo and pm->y <= pb->yhi )
+		      {
+			in_blank = true;
+			break;
+		      }
+		  }
+		if ( ! in_blank )
+		  {
+		    fhi = mesh.GetValue( pm->x, pm->y ).f;
+		    cbhi.str("");
+		    cbhi.clear();
+		    cbhi << FF( fhi );
+		    break;
+		  }
+	      }
 	  }
-	else if ( cli.saddle.size() ) 
+	if ( cli.saddle.size() ) 
 	  {
-	    fhi = mesh.GetValue( cli.saddle.back().x, cli.saddle.back().y ).f;
-	    cbhi << FF( fhi );
+	    for ( std::vector<endpt>::reverse_iterator 
+		    pm=cli.saddle.rbegin(), pmend=cli.saddle.rend(); 
+		  pm != pmend; ++pm )
+	      {
+		bool in_blank = false;
+		for ( std::vector<BoxCrd>::iterator 
+			pb=cli.blanks.begin(), pbend=cli.blanks.end();
+		      pb != pbend; ++pb )
+		  {
+		    if ( pm->x >= pb->xlo and pm->x <= pb->xhi and
+			 pm->y >= pb->ylo and pm->y <= pb->yhi )
+		      {
+			in_blank = true;
+			break;
+		      }
+		  }
+		if ( ! in_blank )
+		  {
+		    double tmp = mesh.GetValue( pm->x, pm->y ).f;
+		    if ( tmp > fhi )
+		      {
+			fhi = tmp;
+			fhi += 0.275 * ( fhi-flo );
+			cbhi.str("");
+			cbhi.clear();
+			cbhi << FF( fhi );
+			break;
+		      };
+		  }
+	      }
+	    //fhi = mesh.GetValue( cli.saddle.back().x, cli.saddle.back().y ).f;
+	    //cbhi << FF( fhi );
 	  }
 	
 
@@ -2003,7 +2146,7 @@ int main( int argc, char ** argv)
 	    cout << "cat <<EOF | gnuplot" << "\n";
 	    cout << "# make contours" << "\n";
 	    cout << "set contour base" << "\n";
-	    cout << "set cntrparam level incremental 0, 2.5, 50" << "\n";
+	    cout << "set cntrparam level incremental -50, 2.5, 50" << "\n";
 	    cout << "unset surface" << "\n";
 	    cout << "set table 'contours.dat'" << "\n";
 	    cout << "splot '" << cli.meshfile << "' using 1:2:3" << "\n";
@@ -2044,6 +2187,23 @@ int main( int argc, char ** argv)
 
 	    cout << "" << "\n\n\n";
 
+
+	    int iblank=0;
+	    for ( std::vector<BoxCrd>::iterator pb=cli.blanks.begin(), pbend=cli.blanks.end(); pb!=pbend; ++pb )
+	      {
+		++iblank;
+		cout << "set obj " << iblank 
+		     << " rect from "
+		     << std::fixed << std::setprecision(10) << pb->xlo
+		     << ","
+		     << std::fixed << std::setprecision(10) << pb->ylo
+		     << " to "
+		     << std::fixed << std::setprecision(10) << pb->xhi
+		     << ","
+		     << std::fixed << std::setprecision(10) << pb->yhi
+		     << "fs solid noborder fc rgb \"white\" front\n";
+	      }
+
 	    //cout << "labelMacro(i,x,y,l) = sprintf('set obj %d rect at %f,%f size char strlen(\"%s\"), char 1 fs solid noborder 01 front fc rgb \"black\" ; set label %d at %f,%f \"%s\" front center tc rgb \"white\" font \"Helvetica-Bold,18\"', i, x, y, l, i, x, y, l)\n\n";
 	    
 	    cout << "labelMacro(i,x,y,l) = sprintf('set obj %d rect at %f,%f size char 1*(strlen(\"%s\")>2?2.425:strlen(\"%s\")), char 0.9 fs solid noborder 01 front fc rgb \"black\"; set label %d at %f,%f \"%s\" front center tc rgb \"white\" font \"Helvetica-Bold,24\"', i, x, y, l, l, i, x, y, l)\n\n";
@@ -2070,7 +2230,7 @@ int main( int argc, char ** argv)
 
 		  
 
-	    int ilabel = 0;
+	    int ilabel = 10;
 	    for ( std::vector<endpt>::iterator it = myMinima.begin(), itend = myMinima.end();
 		  it != itend; ++it )
 	      {
@@ -2213,6 +2373,8 @@ int main( int argc, char ** argv)
 		   << " -pexec \"page size 612, 612\" -pexec \"view 0.12, 0.11, 0.94, 0.96\" \\\n"
 		   << " -world -1 " << cblo.str() << " " << arclens[icon]+1 << " " << cbhi.str() << " \\\n"
 		   << " -autoscale x \\\n" 
+		   << " -pexec \'yaxis tick major 5\' \\\n"
+		   << " -pexec \'yaxis tick minor ticks 1\' \\\n"
 		   << " -pexec \'xaxis label font 4\' \\\n"
 		   << " -pexec \'xaxis ticklabel font 4\' \\\n"
 		   << " -pexec \'xaxis label \"Arc Length\"\' \\\n"

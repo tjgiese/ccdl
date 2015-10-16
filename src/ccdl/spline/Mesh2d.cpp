@@ -128,10 +128,10 @@ ccdl::Mesh2d::Mesh2d
   bool periodic )
   : nx(0), ny(0), 
     lx(0), ly(0),
-    maxx(0),maxy(0),
+    maxx(-1.e+10),maxy(-1.e+10),
     delx(0),dely(0),
-    xlow(0),
-    ylow(0),
+    xlow(1.e+10),
+    ylow(1.e+10),
     order(4), 
     walled(false),
     periodic(true)
@@ -279,6 +279,9 @@ void ccdl::Mesh2d::SetPeriodic( bool logical )
     };
   delx = maxx/nx;
   dely = maxy/ny;
+
+  //std::printf("maxx delx nx %i %20.5f %20.5f\n",nx,maxx,delx);
+
   //delx = lx/nx;
   //dely = ly/ny;
 }
@@ -294,6 +297,7 @@ int ccdl::Mesh2d::GetSizeY() const { return ny; }
 
 double ccdl::Mesh2d::GetX( int i ) const
 {
+  //std::printf("GetIndex %i %i %13.5f %13.5f\n",i,GetIndex( i, nx ),GetIndex( i, nx ) * delx,xlow);
   return GetIndex( i, nx ) * delx + xlow;
 }
 
