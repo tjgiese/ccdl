@@ -89,8 +89,29 @@ struct BoxCrd
   BoxCrd() : xlo(0),ylo(0),xhi(0),yhi(0) {}
   BoxCrd( double xl, double yl, double xh, double yh )
     : xlo(xl),ylo(yl),xhi(xh),yhi(yh) {}
+
+  bool IsInside( double x, double y ) const;
+
   double xlo,ylo,xhi,yhi;
 };
+
+bool BoxCrd::IsInside( double x, double y ) const
+{
+  return (x>=xlo and x<=xhi and y>=ylo and y<=yhi);
+}
+
+bool IsInside( double x, double y, std::vector<BoxCrd> const & blanks )
+{
+  bool inside = false;
+  for ( std::vector<BoxCrd>::const_iterator 
+	  p=blanks.begin(),pend=blanks.end(); 
+	p!=pend; ++p )
+    {
+      inside = p->IsInside( x,y );
+      if ( inside ) break;
+    };
+  return inside;
+}
 
 
 struct cli_options
@@ -100,6 +121,7 @@ struct cli_options
   std::vector< connection > connections;
   std::tr1::shared_ptr< RefinementGrid > refine;
   std::vector<BoxCrd> blanks;
+  std::vector<RefinementPt> extra_searches;
   std::string meshfile;
   bool rezero;
   bool perx,pery;
@@ -213,6 +235,8 @@ void print_usage()
   std::printf("           \t--con min=1,ts=1,min=2 --refine x=1.4,y=1.4,dx=0.1,dy=0.1,n=1\n");
   std::printf("  --blank xlo=XLO,ylo=YLO,xhi=XHI,yhi=YHI\n");
   std::printf("           \tCover the selected area with a white box\n");
+  std::printf("  --opt x=X,y=Y\n");
+  std::printf("           \tPerform a stationary point search around X,Y\n");
 
 
   std::printf("\n");
@@ -287,6 +311,14 @@ cli_options read_options( int argc, char ** argv )
     "yhi",
     NULL };
 
+
+  char const * OPT_opts[] = {
+#define OPT_X 0
+    "x",
+#define OPT_Y 1
+    "y",
+    NULL };
+
   static struct option long_options[] =
     {
       { "help",      no_argument,       NULL, 'h'   },
@@ -299,6 +331,8 @@ cli_options read_options( int argc, char ** argv )
       { "refine",    required_argument, NULL, REFINE },
 #define BLANK   0300
       { "blank",     required_argument, NULL, BLANK },
+#define OPT     0400
+      { "opt",       required_argument, NULL, OPT },
       {NULL,0,NULL,0}
     };
 
@@ -533,6 +567,55 @@ cli_options read_options( int argc, char ** argv )
 
 	    break;
 	  }
+
+
+	case OPT:
+	  {
+	    bool hasx = false;
+	    bool hasy = false;
+	    double x=0;
+	    double y=0;
+            subopts = optarg;
+            while (*subopts != '\0')
+              switch (getsubopt(&subopts, const_cast<char**>(OPT_opts), &value))
+                {
+                case OPT_X:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --opt x= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    x = std::atof(value);
+		    hasx=true;
+		    break;
+		  }
+                case REFINE_Y:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --opt y= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    y = std::atof(value);
+		    hasy=true;
+		    break;
+		  }
+		default:
+		  {
+		    std::printf("%s: Unknown subption '%s' given to --opt\n",argv[0],value);
+		    std::exit(EXIT_FAILURE);
+		  }
+		}
+
+	    if ( !hasx or !hasy )
+	      {
+		std::printf("%s: --opt expects *both* x and y suboptions\n",argv[0]);
+		std::exit(EXIT_FAILURE);
+	      }
+
+	    cli.extra_searches.push_back( RefinementPt( x, y ) );
+
+	    break;
+	  }
+
+
 
 	case '?':
 	  {
@@ -1369,7 +1452,8 @@ GetTransitionStates( ccdl::Mesh2d & mesh, bool periodic )
 
 
 
-std::vector< ccdl::Mesh2dHessian > LocStationaryPts( ccdl::Mesh2d & mesh, bool periodic )
+std::vector< ccdl::Mesh2dHessian > LocStationaryPts
+( ccdl::Mesh2d & mesh, bool periodic, std::vector<BoxCrd> const & blanks, std::vector<RefinementPt> const & extra_searches )
 {
 
   GradOpt gopt( &mesh );
@@ -1406,10 +1490,14 @@ std::vector< ccdl::Mesh2dHessian > LocStationaryPts( ccdl::Mesh2d & mesh, bool p
 	  int i1 = mesh.GetIndex( i+1, nx );
 	  int j1 = mesh.GetIndex( j+1, ny );
 
+
 	  ccdl::Mesh2dValue & ll = vals[j +i *ny];
 	  ccdl::Mesh2dValue & lr = vals[j +i1*ny];
 	  ccdl::Mesh2dValue & ul = vals[j1+i *ny];
 	  ccdl::Mesh2dValue & ur = vals[j1+i1*ny];
+
+	  if ( IsInside( ll.x, ll.y, blanks ) or IsInside( ur.x, ur.y, blanks ) )
+	    continue;
 
 	  double l2r[2] = { delx, 0. };
 	  double u2l[2] = { 0., dely };
@@ -1444,7 +1532,7 @@ std::vector< ccdl::Mesh2dHessian > LocStationaryPts( ccdl::Mesh2d & mesh, bool p
 
 	  int nsatisfied = (g1<=0) + (g2<=0) + (g3<=0) + (g4<=0) + (g5<=0) + (g6<=0);
 
-	  if ( nsatisfied > 2 )
+	  if ( nsatisfied > 1 )
 	    {
 	      // std::printf("exr %18.10f %18.10f  %13.4e %13.4e\n",
 	      // 		ll.x + 0.5 * delx,
@@ -1452,11 +1540,14 @@ std::vector< ccdl::Mesh2dHessian > LocStationaryPts( ccdl::Mesh2d & mesh, bool p
 	      //   		ll.dfdx, ll.dfdy );
 	      // there is an extremum in this quadrant
 	      //if ( (ll.dfdx < 0 and ll.dfdy < 0) or (  )
+
+
+
 	      {
 
 		std::vector<double> o(2);
-		o[0] = 0.01 * delx;
-		o[1] = 0.01 * dely;
+		o[0] = 0.005 * delx;
+		o[1] = 0.005 * dely;
 
 		nlopt::opt nlo( nlopt::LN_COBYLA, 2 );
 		nlo.set_min_objective( &NLOPT_GradMinimize, &gopt );
@@ -1465,8 +1556,8 @@ std::vector< ccdl::Mesh2dHessian > LocStationaryPts( ccdl::Mesh2d & mesh, bool p
 		nlo.set_maxeval( 5000 );
 		nlo.set_initial_step( o );
 
-		o[0] = ll.x + 0. * delx;
-		o[1] = ll.y + 0. * dely;
+		o[0] = ll.x + 0.25 * delx;
+		o[1] = ll.y + 0.25 * dely;
 
 		double chisq = 0.;
 		//nlopt::result res = 
@@ -1478,6 +1569,7 @@ std::vector< ccdl::Mesh2dHessian > LocStationaryPts( ccdl::Mesh2d & mesh, bool p
 	    }
 	}
     }
+
 
 
   std::sort( balls.begin(), balls.end(), ccdl::sort_hessian_by_position );
@@ -1508,6 +1600,48 @@ std::vector< ccdl::Mesh2dHessian > LocStationaryPts( ccdl::Mesh2d & mesh, bool p
 	++p;
   
 
+  for ( std::vector<RefinementPt>::const_iterator
+	  p = extra_searches.begin(), pend = extra_searches.end();
+	p != pend; ++p )
+    {
+
+      std::vector<double> o(2);
+      o[0] = 0.005;
+      o[1] = 0.005;
+
+      nlopt::opt nlo( nlopt::LN_COBYLA, 2 );
+      nlo.set_min_objective( &NLOPT_GradMinimize, &gopt );
+      nlo.set_xtol_rel( 1.e-12 );
+      nlo.set_ftol_abs( 1.e-15 );
+      nlo.set_maxeval( 5000 );
+      nlo.set_initial_step( o );
+
+      o[0] = p->x;
+      o[1] = p->y;
+
+      double chisq = 0.;
+      nlo.optimize( o, chisq );
+
+      if ( chisq < 0.0001 )
+	{
+	  balls.push_back( mesh.GetHessian( o[0], o[1] ) );
+	  std::cout <<"(Extra search point located @ "
+		    << std::fixed << std::setprecision(3) << std::setw(12) << o[0]
+		    << std::fixed << std::setprecision(3) << std::setw(12) << o[1]
+		    << " )\n";
+	}
+      else
+	{
+	  std::cout <<"(failed to location search point @ "
+		    << std::fixed << std::setprecision(3) << std::setw(12) << p->x
+		    << std::fixed << std::setprecision(3) << std::setw(12) << p->y
+		    << " )\n";
+	}
+    }
+
+  std::sort( balls.begin(), balls.end(), ccdl::sort_hessian_by_position );
+
+
   return balls;
 }
 
@@ -1533,7 +1667,9 @@ bool sort_by_f( ccdl::Mesh2dHessian const & lhs, ccdl::Mesh2dHessian const & rhs
 }
 
 void GetStationaryPts
-( ccdl::Mesh2d & mesh, bool periodic, bool rezero,
+( ccdl::Mesh2d & mesh, bool periodic, std::vector<BoxCrd> const & blanks,
+  std::vector<RefinementPt> const & extra_searches,
+  bool rezero,
   std::vector<ccdl::Mesh2dHessian> & minima,
   std::vector<ccdl::Mesh2dHessian> & maxima,
   std::vector<ccdl::Mesh2dHessian> & saddle )
@@ -1541,7 +1677,7 @@ void GetStationaryPts
   minima.resize(0);
   maxima.resize(0);
   saddle.resize(0);
-  std::vector<ccdl::Mesh2dHessian> all( LocStationaryPts( mesh, periodic ) );
+  std::vector<ccdl::Mesh2dHessian> all( LocStationaryPts( mesh, periodic, blanks, extra_searches ) );
   typedef std::vector<ccdl::Mesh2dHessian>::iterator iter;
   for ( iter p = all.begin(), pend=all.end(); p!=pend; ++p )
     if ( p->eval[0] > 0 and p->eval[1] > 0 )
@@ -1580,7 +1716,11 @@ void GetStationaryPts
 
 
 
-std::string main_points( char const * meshname, bool periodic, bool rezero )
+std::string main_points( char const * meshname, 
+			 bool periodic, 
+			 std::vector<BoxCrd> const & blanks,
+			 std::vector<RefinementPt> const & extra_searches,
+			 bool rezero )
 {
   std::ifstream cin;
   cin.open( meshname );
@@ -1597,7 +1737,7 @@ std::string main_points( char const * meshname, bool periodic, bool rezero )
 
 
   vec minima, maxima, saddle;
-  GetStationaryPts( mesh, periodic, rezero, minima, maxima, saddle );
+  GetStationaryPts( mesh, periodic, blanks, extra_searches, rezero, minima, maxima, saddle );
   std::string fname( meshname );
   if ( rezero )
     {
@@ -1819,7 +1959,11 @@ int main( int argc, char ** argv)
   //std::printf("ncon %i\n",(int)cli.connections.size());
 
   if ( (! cli.connections.size()) or cli.rezero )
-    cli.meshfile = main_points( cli.meshfile.c_str(), cli.perx or cli.pery, cli.rezero );
+    cli.meshfile = main_points( cli.meshfile.c_str(), 
+				cli.perx or cli.pery, 
+				cli.blanks,
+				cli.extra_searches,
+				cli.rezero );
   
   if ( cli.connections.size() > 0 )
     {
@@ -2201,7 +2345,7 @@ int main( int argc, char ** argv)
 		     << std::fixed << std::setprecision(10) << pb->xhi
 		     << ","
 		     << std::fixed << std::setprecision(10) << pb->yhi
-		     << "fs solid noborder fc rgb \"white\" front\n";
+		     << "fs solid border lc rgb \"white\" lw 4 fc rgb \"white\" front\n";
 	      }
 
 	    //cout << "labelMacro(i,x,y,l) = sprintf('set obj %d rect at %f,%f size char strlen(\"%s\"), char 1 fs solid noborder 01 front fc rgb \"black\" ; set label %d at %f,%f \"%s\" front center tc rgb \"white\" font \"Helvetica-Bold,18\"', i, x, y, l, i, x, y, l)\n\n";

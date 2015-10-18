@@ -91,6 +91,7 @@ namespace ccdl
 
     void BsplineTransform( int order = 4 );
 
+    double GetValueOnly( double x, double y ) const;
     ccdl::Mesh2dValue GetValue( double x, double y ) const;
     ccdl::Mesh2dHessian GetHessian( double x, double y ) const;
 

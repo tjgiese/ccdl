@@ -442,6 +442,114 @@ ccdl::Mesh2dValue ccdl::Mesh2d::GetValue( double x, double y ) const
 }
 
 
+
+
+
+
+
+
+
+
+double ccdl::Mesh2d::GetValueOnly( double x, double y ) const
+{
+
+
+  x -= xlow;
+  y -= ylow;
+
+  double xin = x;
+  double yin = y;
+  if ( walled ) // elastic collisions with walls
+    {
+      double xold = x;
+      for ( int i=0; i<100; ++i )
+	{
+	  if ( x > maxx ) x = maxx - ( x-maxx );
+	  if ( x < -0. ) x = -x;
+	  if ( x == xold ) break;
+	  xold = x;
+	};
+      double yold = y;
+      for ( int i=0; i<100; ++i )
+	{
+	  if ( y > maxy ) y = maxy - ( y-maxy );
+	  if ( y < -0. ) y = -y;
+	  if ( y == yold ) break;
+	  yold = y;
+	};
+    }
+  else if ( ! periodic )
+    {
+      if ( x > maxx ) x = maxx;
+      if ( x < 0. ) x = 0.;
+
+      if ( y > maxy ) y = maxy;
+      if ( y < 0. ) y = 0.;
+    };
+
+  std::vector<double> wx( order, 0. ), wy( order, 0. );
+  std::vector<int> gx( order, 0 ), gy( order, 0 );
+  ccdl::bspline_periodic( x, maxx, nx, order, 
+			  wx.data(), gx.data() );
+  ccdl::bspline_periodic( y, maxy, ny, order, 
+			  wy.data(), gy.data() );
+  
+
+
+  double v = 0.;
+  for ( int ii=0; ii<order; ++ii )
+    {
+      int i = gx[ii];
+      for ( int jj=0; jj<order; ++jj )
+	{
+	  int j = gy[jj];
+	  double u = data[ j+i*ny ];
+	  v    += wx[ii] * wy[jj] * u;
+	};
+    }
+  
+
+  x = xin;
+  y = yin;
+
+  if ( ! periodic )
+    {
+      double k = 100.;
+      double DEL = -1.e-8;
+      double d = 0.;
+      if ( x > maxx-DEL ) 
+	{
+	  d = x - (maxx-DEL);
+	  v    += k * d*d;
+	}
+      else if ( x < DEL )
+	{
+	  d = DEL - x;
+	  v    += k * d*d;
+	}
+      if ( y > maxy-DEL ) 
+	{
+	  d = y - (maxy-DEL);
+	  v    += k * d*d;
+	}
+      else if ( y < DEL )
+	{
+	  d = DEL - y;
+	  v    += k * d*d;
+	}
+    }
+  
+  return v;
+}
+
+
+
+
+
+
+
+
+
 /*
 
 std::vector< ccdl::Mesh2dValue > ccdl::Mesh2d::GetMinima( double const TOL )
