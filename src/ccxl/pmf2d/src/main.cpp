@@ -125,11 +125,13 @@ struct cli_options
   std::string meshfile;
   bool rezero;
   bool perx,pery;
+  bool delunused;
+  std::string range_xlo,range_xhi,range_ylo,range_yhi,range_clo,range_chi;
 };
 
 
 cli_options::cli_options()
-  : rezero(false),perx(false), pery(false)
+  : rezero(false),perx(false), pery(false),delunused(false)
 {
   ////////////////////////////////////////
   {
@@ -237,6 +239,11 @@ void print_usage()
   std::printf("           \tCover the selected area with a white box\n");
   std::printf("  --opt x=X,y=Y\n");
   std::printf("           \tPerform a stationary point search around X,Y\n");
+  std::printf("  -d\n");
+  std::printf("  --delete\n");
+  std::printf("           \tExcludes unused stationary points when using --con\n");
+  std::printf("  --range xlo=XLO,ylo=YLO,xhi=XHI,yhi=YHI,clo=CLO,chi=CHI\n");
+  std::printf("           \tSets the contour axis range; unused values use gnuplot defaults\n");
 
 
   std::printf("\n");
@@ -311,6 +318,21 @@ cli_options read_options( int argc, char ** argv )
     "yhi",
     NULL };
 
+  char const * RANGE_opts[] = {
+#define RANGE_XLO 0
+    "xlo",
+#define RANGE_YLO 1
+    "ylo",
+#define RANGE_XHI 2
+    "xhi",
+#define RANGE_YHI 3
+    "yhi",
+#define RANGE_CLO 4
+    "clo",
+#define RANGE_CHI 5
+    "chi",
+    NULL };
+
 
   char const * OPT_opts[] = {
 #define OPT_X 0
@@ -325,6 +347,7 @@ cli_options read_options( int argc, char ** argv )
       { "zero",      no_argument,       NULL, 'z'   },
       { "perx",      no_argument,       NULL, 'x'   },
       { "pery",      no_argument,       NULL, 'y'   },
+      { "delete",    no_argument,       NULL, 'd' },
 #define CON     0100
       { "con",       required_argument, NULL, CON   },
 #define REFINE  0200
@@ -333,6 +356,9 @@ cli_options read_options( int argc, char ** argv )
       { "blank",     required_argument, NULL, BLANK },
 #define OPT     0400
       { "opt",       required_argument, NULL, OPT },
+#define RANGE   0500
+      { "range",     required_argument, NULL, RANGE },
+
       {NULL,0,NULL,0}
     };
 
@@ -340,7 +366,7 @@ cli_options read_options( int argc, char ** argv )
   int long_index = 0;
   char * subopts, * value;
   while ( (opt = getopt_long
-          ( argc, argv, "hxy", 
+          ( argc, argv, "hxyd", 
             long_options, &long_index )) != -1 )
     {
       
@@ -351,6 +377,7 @@ cli_options read_options( int argc, char ** argv )
 	case 'z':     { cli.rezero = true; break; }
         case 'x':     { cli.perx = true; break; }
         case 'y':     { cli.pery = true; break; }
+        case 'd':     { cli.delunused = true; break; }
 	case CON:
 	  {
 	    std::vector<endpt> ts;
@@ -567,6 +594,84 @@ cli_options read_options( int argc, char ** argv )
 
 	    break;
 	  }
+
+
+
+
+
+
+	case RANGE:
+	  {
+            subopts = optarg;
+            while (*subopts != '\0')
+              switch (getsubopt(&subopts, const_cast<char**>(RANGE_opts), &value))
+                {
+                case RANGE_XLO:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --range xlo= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    cli.range_xlo = value;
+		    break;
+		  }
+                case RANGE_YLO:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --range ylo= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    cli.range_ylo = value;
+		    break;
+		  }
+                case RANGE_XHI:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --range xhi= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    cli.range_xhi = value;
+		    break;
+		  }
+                case RANGE_YHI:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --range yhi= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    cli.range_yhi = value;
+		    break;
+		  }
+                case RANGE_CLO:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --range clo= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    cli.range_clo = value;
+		    break;
+		  }
+                case RANGE_CHI:
+		  {
+		    if ( value == NULL ) 
+		      { std::printf("%s: --range chi= expects a float; use -h for usage\n",argv[0]); 
+			std::exit(EXIT_FAILURE); }
+		    cli.range_chi = value;
+		    break;
+		  }
+		default:
+		  {
+		    std::printf("%s: Unknown subption '%s' given to --range\n",argv[0],value);
+		    std::exit(EXIT_FAILURE);
+		  }
+		}
+
+
+	    break;
+	  }
+
+
+
+
+
+
+
+
 
 
 	case OPT:
@@ -1837,6 +1942,7 @@ std::string main_points( char const * meshname,
     else if ( saddle.size() ) cbhi << FF( saddle.back().f );
 
     cout << "set cbrange[" << cblo.str() << ":" << cbhi.str() << "]" << "\n";
+
     cout << "set cblabel 'E (kcal/mol)'\n";
     cout << "set ylabel 'Y-axis label'\n";
     cout << "set xlabel 'X-axis label'\n";
@@ -2194,6 +2300,47 @@ int main( int argc, char ** argv)
 	std::vector<double> offlimits_backup( offlimits );
 
 
+	std::vector<endpt> usedMinima;
+	std::vector<endpt> usedSaddle;
+	{
+	  for ( convecit ppath = paths.begin(); ppath != paths.end(); ++ppath )
+	    {
+	      conit path_begin = ppath->first;
+	      conit path_end   = ppath->second;
+	      
+	      for ( conit p = path_begin; p != path_end; ++p )
+		{
+		  if ( p->t0.minimum )
+		    usedMinima.push_back( p->t0 );
+		  else
+		    usedSaddle.push_back( p->t0 );
+		  if ( p->t1.minimum )
+		    usedMinima.push_back( p->t1 );
+		  else
+		    usedSaddle.push_back( p->t1 );
+		};
+	    };
+	  std::sort( usedMinima.begin(), usedMinima.end(), sort_by_i );
+	  std::sort( usedSaddle.begin(), usedSaddle.end(), sort_by_i );
+	  usedMinima.erase( std::unique( usedMinima.begin(), usedMinima.end() ), usedMinima.end() );
+	  usedSaddle.erase( std::unique( usedSaddle.begin(), usedSaddle.end() ), usedSaddle.end() );
+	  
+	  
+	  std::ofstream fdel;
+	  fdel.open( "minpts_used.dat" );
+	  for ( std::vector<endpt>::iterator 
+		  it = usedMinima.begin(), itend = usedMinima.end();
+		it != itend; ++it )
+	    fdel << FF(it->x) << ", " << FF(it->y) << "\n";
+	  fdel.close();
+	  fdel.open( "tspts_used.dat" );
+	  for ( std::vector<endpt>::iterator 
+		  it = usedSaddle.begin(), itend = usedSaddle.end();
+		it != itend; ++it )
+	    fdel << FF(it->x) << ", " << FF(it->y) << "\n";
+	  fdel.close();
+	  
+	}
 
 	// bounds common to all paths
 
@@ -2203,7 +2350,11 @@ int main( int argc, char ** argv)
 	double fhi = 0.;
 	if ( cli.minima.size() )
 	  {
-	    flo = mesh.GetValue( cli.minima[0].x, cli.minima[0].y ).f;
+	    if ( (! cli.delunused) or (! usedMinima.size()) )
+	      flo = mesh.GetValue( cli.minima[0].x, cli.minima[0].y ).f;
+	    else
+	      flo = mesh.GetValue( usedMinima[0].x, usedMinima[0].y ).f;
+
 	    cblo << FF( flo );
 	  }
 	if ( cli.maxima.size() ) 
@@ -2234,7 +2385,7 @@ int main( int argc, char ** argv)
 		  }
 	      }
 	  }
-	if ( cli.saddle.size() ) 
+	if ( cli.saddle.size() or (! usedSaddle.size() ) ) 
 	  {
 	    for ( std::vector<endpt>::reverse_iterator 
 		    pm=cli.saddle.rbegin(), pmend=cli.saddle.rend(); 
@@ -2269,7 +2420,34 @@ int main( int argc, char ** argv)
 	    //fhi = mesh.GetValue( cli.saddle.back().x, cli.saddle.back().y ).f;
 	    //cbhi << FF( fhi );
 	  }
+	if ( cli.delunused and usedSaddle.size() )
+	  {
+	    fhi = 0.;
+	    for ( std::vector<endpt>::reverse_iterator 
+		    pm=usedSaddle.rbegin(), pmend=usedSaddle.rend(); 
+		  pm != pmend; ++pm )
+	      {
+		double tmp = mesh.GetValue( pm->x, pm->y ).f;
+		if ( tmp > fhi )
+		  {
+		    fhi = tmp;
+		    fhi += 0.275 * ( fhi-flo );
+		    cbhi.str("");
+		    cbhi.clear();
+		    cbhi << FF( fhi );
+		    break;
+		  };
+	      }
+	  }
 	
+
+	if ( cli.range_clo.size() ) cblo.str( cli.range_clo );
+	if ( cli.range_chi.size() ) cbhi.str( cli.range_chi );
+
+
+
+
+
 
 	// collect a list of grace commands as we go -- printed at the end
 	std::vector<std::string> xmgrace_cmds;
@@ -2412,6 +2590,9 @@ int main( int argc, char ** argv)
 
 
 	    cout << "set cbrange[" << cblo.str() << ":" << cbhi.str() << "]" << "\n";
+	    cout << "set xrange[ " << cli.range_xlo << " : " << cli.range_xhi << " ]\n";
+	    cout << "set yrange[ " << cli.range_ylo << " : " << cli.range_yhi << " ]\n";
+
 	    cout << "set cblabel 'E (kcal/mol)'\n";
 	    cout << "set ylabel 'Y-axis label'\n";
 	    cout << "set xlabel 'X-axis label'\n";
@@ -2486,12 +2667,22 @@ int main( int argc, char ** argv)
 	    //std::cout << xmgrace.str() << "\n";
 	    xmgrace_cmds.push_back( xmgrace.str() );
 
-	    cout << "  'minpts.dat'   w p ls 2,\\" << "\n";
-	    cout << "  'minpts.dat'   w p ls 12,\\" << "\n";
-	    cout << "  'maxpts.dat'   w p ls 3,\\" << "\n";
-	    cout << "  'maxpts.dat'   w p ls 13,\\" << "\n";
-	    cout << "  'tspts.dat'    w p ls 4,\\" << "\n";
-	    cout << "  'tspts.dat'    w p ls 14";
+	    if ( ! cli.delunused )
+	      {
+		cout << "  'minpts.dat'   w p ls 2,\\" << "\n";
+		cout << "  'minpts.dat'   w p ls 12,\\" << "\n";
+		cout << "  'maxpts.dat'   w p ls 3,\\" << "\n";
+		cout << "  'maxpts.dat'   w p ls 13,\\" << "\n";
+		cout << "  'tspts.dat'    w p ls 4,\\" << "\n";
+		cout << "  'tspts.dat'    w p ls 14";
+	      }
+	    else
+	      {
+		cout << "  'minpts_used.dat'   w p ls 2,\\" << "\n";
+		cout << "  'minpts_used.dat'   w p ls 12,\\" << "\n";
+		cout << "  'tspts_used.dat'    w p ls 4,\\" << "\n";
+		cout << "  'tspts_used.dat'    w p ls 14";
+	      }
 	    if ( ! cli.refine )
 	      cout << "\n";
 	    else
