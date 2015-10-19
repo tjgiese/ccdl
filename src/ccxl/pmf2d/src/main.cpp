@@ -2523,12 +2523,18 @@ int main( int argc, char ** argv)
 		     << std::fixed << std::setprecision(10) << pb->xhi
 		     << ","
 		     << std::fixed << std::setprecision(10) << pb->yhi
-		     << "fs solid border lc rgb \"white\" lw 4 fc rgb \"white\" front\n";
+		     << " fs solid border lc rgb \"white\" lw 4 fc rgb \"white\" front\n";
 	      }
 
 	    //cout << "labelMacro(i,x,y,l) = sprintf('set obj %d rect at %f,%f size char strlen(\"%s\"), char 1 fs solid noborder 01 front fc rgb \"black\" ; set label %d at %f,%f \"%s\" front center tc rgb \"white\" font \"Helvetica-Bold,18\"', i, x, y, l, i, x, y, l)\n\n";
 	    
-	    cout << "labelMacro(i,x,y,l) = sprintf('set obj %d rect at %f,%f size char 1*(strlen(\"%s\")>2?2.425:strlen(\"%s\")), char 0.9 fs solid noborder 01 front fc rgb \"black\"; set label %d at %f,%f \"%s\" front center tc rgb \"white\" font \"Helvetica-Bold,24\"', i, x, y, l, l, i, x, y, l)\n\n";
+	    cout << "" << "\n\n\n";
+	    cout << "set encoding locale\n";
+	    cout << "set terminal postscript eps enhanced solid color 'Helvetica' 26 size 6,5.4" << "\n";
+	    cout << "set output 'path2d." << ipath << ".eps'" << "\n";
+	    cout << "" << "\n\n\n";
+
+	    cout << "labelMacro(i,x,y,l) = sprintf('set obj %d rect at %f,%f size char 1*(strlen(\"%s\")>2?2.75:strlen(\"%s\")), char 0.9 fs solid noborder 01 front fc rgb \"black\"; set label %d at %f,%f \"%s\" front center tc rgb \"white\" font \"Helvetica-Bold,24\"', i, x, y, l, l, i, x, y, l)\n\n";
 
 
 	    std::vector<endpt> myMinima;
@@ -2584,9 +2590,6 @@ int main( int argc, char ** argv)
 
 	    
 	    cout << "" << "\n\n\n";
-	    cout << "set terminal postscript eps enhanced solid color 'Helvetica' 26 size 6,5.4" << "\n";
-	    cout << "set output 'path2d." << ipath << ".eps'" << "\n";
-	    cout << "" << "\n";
 
 
 	    cout << "set cbrange[" << cblo.str() << ":" << cbhi.str() << "]" << "\n";
@@ -2594,8 +2597,10 @@ int main( int argc, char ** argv)
 	    cout << "set yrange[ " << cli.range_ylo << " : " << cli.range_yhi << " ]\n";
 
 	    cout << "set cblabel 'E (kcal/mol)'\n";
-	    cout << "set ylabel 'Y-axis label'\n";
-	    cout << "set xlabel 'X-axis label'\n";
+	    cout << "set ylabel 'R_{2} ({\\305})' offset 1,0\n";
+	    cout << "set xlabel 'R_{1} ({\\305})' offset 0,0.25\n";
+	    cout << "set bmargin at screen 0.105;\n";
+	    cout << "set rmargin at screen 0.84;\n";
 	    cout << "p '" << cli.meshfile << "' using 1:2:3 with image,\\" << "\n";
 	    cout << "  'contours.dat' w l lt -1 lw 1.5,\\" << "\n";
 
@@ -2712,7 +2717,7 @@ int main( int argc, char ** argv)
 		   << " -pexec \'yaxis tick minor ticks 1\' \\\n"
 		   << " -pexec \'xaxis label font 4\' \\\n"
 		   << " -pexec \'xaxis ticklabel font 4\' \\\n"
-		   << " -pexec \'xaxis label \"Arc Length\"\' \\\n"
+		   << " -pexec \'xaxis label \"Arc Length (\\cE\\C)\"\' \\\n"
 		   << " -pexec \"xaxis label char size 1.20\" \\\n"
 		   << " -pexec \"xaxis ticklabel char size 1.20\" \\\n"
 		   << " -pexec \'yaxis label font 4\' \\\n"
@@ -2809,8 +2814,8 @@ int main( int argc, char ** argv)
 
 	    cout << "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%\n";
 	    cout << "\\begin{figure*}[tb]\n";
-	    cout << "\\includegraphics[clip,width=3.75in]{path2d." << icon+1 << ".eps}\n";
-	    cout << "\\hspace{-0.375in}\n";
+	    cout << "\\includegraphics[clip,width=3.73in]{path2d." << icon+1 << ".eps}\n";
+	    cout << "\\hspace{-0.25in}\n";
 	    cout << "\\includegraphics[clip,width=3.35in]{path1d." << icon+1 << ".eps}\n";
 	    cout << "\\caption{Path " << icon+1 << "}\n";
 	    cout << "\\end{figure*}\n";
@@ -2819,8 +2824,8 @@ int main( int argc, char ** argv)
 	    cout << "\\begin{table*}" << "\n";
 	    cout << "\\begin{tabular}{c r r r r r r}" << "\n";
 	    cout << "\\hline" << "\n";
-	    cout << "Step & x & y & \\$E$ & $\\Delta E_{\\text{path}}$ & $\\Delta E_{\\text{fwd}}$ & $\\Delta E_{\\text{rev}}$ \\\\\\\\" << "\n";
-	    cout << "& Unit & Unit & kcal/mol & kcal/mol & kcal/mol & kcal/mol  \\\\\\\\" << "\n";
+	    cout << "Step & \\$R_1$ & \\$R_2$ & \\$E$ & $\\Delta E_{\\text{path}}$ & $\\Delta E_{\\text{fwd}}$ & $\\Delta E_{\\text{rev}}$ \\\\\\\\" << "\n";
+	    cout << "& \\AA{} & \\AA{} & kcal/mol & kcal/mol & kcal/mol & kcal/mol  \\\\\\\\" << "\n";
 	    cout << "\\hline" << "\n";
 	    int tscnt = 0;
 	    for ( std::vector<endpt>::iterator p=pts.begin(), pend=pts.end(); p!=pend; ++p )
