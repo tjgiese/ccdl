@@ -75,12 +75,13 @@ bool operator== ( RefinementPt const & lhs, RefinementPt const & rhs )
 
 struct RefinementGrid
 {
-  RefinementGrid( double xlo, double ylo, double dx, double dy, int n ) 
-    : xlo(xlo), ylo(ylo), dx(dx),dy(dy),n(n) {};
+  RefinementGrid( double xlo, double ylo, double dx, double dy, int n, bool oned ) 
+    : xlo(xlo), ylo(ylo), dx(dx),dy(dy),n(n),oned(oned) {};
 
   double xlo,ylo;
   double dx,dy;
   int n;
+  bool oned;
 };
 
 
@@ -227,7 +228,7 @@ void print_usage()
   std::printf("  --con method=i neb method to use (1 or 2) (default 1)\n");
   std::printf("           \tmethod=1 tends to be better for short paths\n");
   std::printf("         \tmethod=2 tends to be better for long paths\n");
-  std::printf("  --refine x=XLO,y=YLO,dx=DX,dy=DY,n=N\n");
+  std::printf("  --refine x=XLO,y=YLO,dx=DX,dy=DY,n=N,oned\n");
   std::printf("           \tReturns a set of x,y values whose locations are within\n");
   std::printf("           \t|x(t)-(XLO+i*DX)| <= 2*N*DX and |y(t)-(YLO+j*DY)| <= 2*N*DY\n");
   std::printf("           \tof the paths define by the --con commands\n");
@@ -235,6 +236,10 @@ void print_usage()
   std::printf("           \tand you want create new windows in a box from 1.4 to 4.0,\n");
   std::printf("           \tseparated by 0.1 Ang, then\n");
   std::printf("           \t--con min=1,ts=1,min=2 --refine x=1.4,y=1.4,dx=0.1,dy=0.1,n=1\n");
+  std::printf("           \t--refine oned,n=N\n");
+  std::printf("           \tIf oned option is used, then the refinement ignores the grid\n\tand it instead evenly places N points directly on the path\n");
+
+
   std::printf("  --blank xlo=XLO,ylo=YLO,xhi=XHI,yhi=YHI\n");
   std::printf("           \tCover the selected area with a white box\n");
   std::printf("  --opt x=X,y=Y\n");
@@ -305,6 +310,8 @@ cli_options read_options( int argc, char ** argv )
     "dy",
 #define REFINE_N 4
     "n",
+#define REFINE_ONED 5
+    "oned",
     NULL };
 
   char const * BLANK_opts[] = {
@@ -445,6 +452,7 @@ cli_options read_options( int argc, char ** argv )
 	    break;
 	  }
 
+
 	case REFINE:
 	  {
 	    if ( cli.refine )
@@ -459,6 +467,7 @@ cli_options read_options( int argc, char ** argv )
 	    double dx=-1;
 	    double dy=-1;
 	    int n = 1;
+	    bool oned=false;
             subopts = optarg;
             while (*subopts != '\0')
               switch (getsubopt(&subopts, const_cast<char**>(REFINE_opts), &value))
@@ -505,6 +514,11 @@ cli_options read_options( int argc, char ** argv )
 		    n = std::atoi(value);
 		    break;
 		  }
+		case REFINE_ONED:
+		  {
+		    oned=true;
+		    break;
+		  }
 		default:
 		  {
 		    std::printf("%s: Unknown subption '%s' given to --refine\n",argv[0],value);
@@ -513,29 +527,40 @@ cli_options read_options( int argc, char ** argv )
 		}
 	    {
 	      bool error = false;
-	      if ( dx <= 0 )
+	      if ( ! oned )
 		{
-		  std::printf("%s: invalid value of --refine dx=%.3e\n",argv[0],dx);
-		  error = true;
+		  if ( dx <= 0 )
+		    {
+		      std::printf("%s: invalid value of --refine dx=%.3e\n",argv[0],dx);
+		      error = true;
+		    }
+		  if ( dy <= 0 )
+		    {
+		      std::printf("%s: invalid value of --refine dy=%.3e\n",argv[0],dy);
+		      error = true;
+		    }
+		  if ( ! hasx )
+		    {
+		      std::printf("%s: --refine used without specifying x\n",argv[0]);
+		      error = true;
+		    }
+		  if ( ! hasy )
+		    {
+		      std::printf("%s: --refine used without specifying y\n",argv[0]);
+		      error = true;
+		    }
 		}
-	      if ( dy <= 0 )
+	      else
 		{
-		  std::printf("%s: invalid value of --refine dy=%.3e\n",argv[0],dy);
-		  error = true;
-		}
-	      if ( ! hasx )
-		{
-		  std::printf("%s: --refine used without specifying x\n",argv[0]);
-		  error = true;
-		}
-	      if ( ! hasy )
-		{
-		  std::printf("%s: --refine used without specifying y\n",argv[0]);
-		  error = true;
+		  if ( n < 2 )
+		    {
+		      std::printf("%s: --refine oned, but n is too small\n",argv[0]);
+		      error = true;
+		    };
 		}
 	      if ( error ) std::exit(EXIT_FAILURE);
 
-	      cli.refine.reset( new RefinementGrid( x,y,dx,dy,n ) );
+	      cli.refine.reset( new RefinementGrid( x,y,dx,dy,n,oned ) );
 	    }
 	    break;
 	  }
@@ -2243,47 +2268,124 @@ int main( int argc, char ** argv)
       std::vector< RefinementPt > refinept;
       if ( cli.refine )
 	{
-	  double x0 = cli.refine->xlo;
-	  double y0 = cli.refine->ylo;
-	  double dx = cli.refine->dx;
-	  double dy = cli.refine->dy;
-	  int n = cli.refine->n;
-	  for ( convecit ppath = paths.begin(); ppath != paths.end(); ++ppath )
+	  if ( ! cli.refine->oned )
 	    {
-	      conit path_begin = ppath->first;
-	      conit path_end   = ppath->second;
-	      for ( conit p = path_begin; p != path_end; ++p )
+	      double x0 = cli.refine->xlo;
+	      double y0 = cli.refine->ylo;
+	      double dx = cli.refine->dx;
+	      double dy = cli.refine->dy;
+	      int n = cli.refine->n;
+	      for ( convecit ppath = paths.begin(); ppath != paths.end(); ++ppath )
 		{
-		  ccdl::ParametricLegendre & neb = *(p->curve);
-		  int nt = 201;
-		  for ( int i=0; i<nt; ++i )
+		  conit path_begin = ppath->first;
+		  conit path_end   = ppath->second;
+		  for ( conit p = path_begin; p != path_end; ++p )
 		    {
-		      double t = ( i / (double)(nt-1) );
-		      double x,y;
-		      neb.GetXY( t, x, y );
-		      int ixlo = (int)((x - x0) / dx + 0.5) - (n);
-		      int iylo = (int)((y - y0) / dy + 0.5) - (n);
-		      for ( int ix=ixlo; ix < ixlo + 2*n+1; ++ix )
-			for ( int iy=iylo; iy < iylo + 2*n+1; ++iy )
-			  refinept.push_back( RefinementPt( x0 + ix*dx, y0 + iy*dy ) );
+		      ccdl::ParametricLegendre & neb = *(p->curve);
+		      int nt = 201;
+		      for ( int i=0; i<nt; ++i )
+			{
+			  double t = ( i / (double)(nt-1) );
+			  double x,y;
+			  neb.GetXY( t, x, y );
+			  int ixlo = (int)((x - x0) / dx + 0.5) - (n);
+			  int iylo = (int)((y - y0) / dy + 0.5) - (n);
+			  for ( int ix=ixlo; ix < ixlo + 2*n+1; ++ix )
+			    for ( int iy=iylo; iy < iylo + 2*n+1; ++iy )
+			      refinept.push_back( RefinementPt( x0 + ix*dx, y0 + iy*dy ) );
+			}
+		      std::sort( refinept.begin(), refinept.end() );
+		      refinept.erase( std::unique( refinept.begin(), refinept.end() ), refinept.end() );
 		    }
-		  std::sort( refinept.begin(), refinept.end() );
-		  refinept.erase( std::unique( refinept.begin(), refinept.end() ), refinept.end() );
+		}
+	      std::ofstream cout;
+	      cout.open( "refinement.dat" );
+	      for ( std::vector<RefinementPt>::iterator 
+		      pt=refinept.begin(), ptend=refinept.end();
+		    pt != ptend; ++pt )
+		{
+		  //std::printf("%10.3f %10.3f\n",pt->x,pt->y);
+		  cout << std::fixed << std::setw(8) << std::setprecision(3) << pt->x
+		       << std::fixed << std::setw(8) << std::setprecision(3) << pt->y
+		       << "\n";
+		  offlimits.push_back( pt->x );
+		  offlimits.push_back( pt->y );
 		}
 	    }
-	  std::ofstream cout;
-	  cout.open( "refinement.dat" );
-	  for ( std::vector<RefinementPt>::iterator 
-		  pt=refinept.begin(), ptend=refinept.end();
-		pt != ptend; ++pt )
+	  else // oned refinement
 	    {
-	      //std::printf("%10.3f %10.3f\n",pt->x,pt->y);
-	      cout << std::fixed << std::setw(8) << std::setprecision(3) << pt->x
-		   << std::fixed << std::setw(8) << std::setprecision(3) << pt->y
-		   << "\n";
-	      offlimits.push_back( pt->x );
-	      offlimits.push_back( pt->y );
-	    }
+
+	      std::vector<double> arc_path;
+	      for ( convecit ppath = paths.begin(); ppath != paths.end(); ++ppath )
+		{
+		  conit path_begin = ppath->first;
+		  conit path_end   = ppath->second;
+		  for ( conit p = path_begin; p != path_end; ++p )
+		    {
+		      ccdl::ParametricLegendre & neb = *(p->curve);
+		      int nt = 201;
+		      for ( int i=0; i<nt; ++i )
+			{
+			  double t = ( i / (double)(nt-1) );
+			  double x,y;
+			  neb.GetXY( t, x, y );
+			  if ( arc_path.size() < 1 )
+			    {
+			      arc_path.push_back( 0. );
+			      arc_path.push_back( x );
+			      arc_path.push_back( y );
+			      arc_path.push_back( 0. );
+			    }
+			  else
+			    {
+			      int ipath = (arc_path.size() / 4) - 1;
+			      double dx = x - arc_path[1+ipath*4];
+			      double dy = y - arc_path[2+ipath*4];
+			      double r = std::sqrt( dx*dx + dy*dy ) + arc_path[0+ipath*4];
+			      arc_path.push_back( r );
+			      arc_path.push_back( x );
+			      arc_path.push_back( y );
+			      arc_path.push_back( p->t0.arclen + neb.GetArcLength( 0., t ) );
+			    }
+			};
+		    };
+		};
+
+	      std::ofstream cout;
+	      cout.open( "refinement.dat" );
+	      int npath = arc_path.size() / 4;
+	      int ipath = 0;
+	      int n = cli.refine->n;
+	      double delta_arc = arc_path[0+(npath-1)*4] / (n-1);
+	      for ( int iarc = 0; iarc < n; ++iarc )
+		{
+		  double target_arc = iarc * delta_arc;
+		  for ( ; ipath < npath; ++ipath )
+		    {
+		      if ( arc_path[0+ipath*4] > target_arc or
+			   std::abs( arc_path[0+ipath*4] - target_arc ) < 1.e-8 )
+			{
+			  double x = arc_path[1+ipath*4];
+			  double y = arc_path[2+ipath*4];
+			  double arc = arc_path[3+ipath*4];
+			  ccdl::Mesh2dValue val( mesh.GetValue( x,y ) );
+			  double v = val.f;
+			  
+			  cout << std::fixed << std::setw(8) << std::setprecision(3) << x
+			       << std::fixed << std::setw(8) << std::setprecision(3) << y
+			       << " # " << std::fixed << std::setw(8) << std::setprecision(4) << arc
+			       << " " << std::fixed << std::setw(8) << std::setprecision(4) << v
+			       << "\n";
+			  offlimits.push_back( arc_path[1+ipath*4] );
+			  offlimits.push_back( arc_path[2+ipath*4] );
+			  break;
+			};
+		    }
+		}
+	      cout.close();
+
+	    };
+
 	}
     
 
@@ -2331,13 +2433,13 @@ int main( int argc, char ** argv)
 	  for ( std::vector<endpt>::iterator 
 		  it = usedMinima.begin(), itend = usedMinima.end();
 		it != itend; ++it )
-	    fdel << FF(it->x) << ", " << FF(it->y) << "\n";
+	    fdel << FF(it->x) << " " << FF(it->y) << "\n";
 	  fdel.close();
 	  fdel.open( "tspts_used.dat" );
 	  for ( std::vector<endpt>::iterator 
 		  it = usedSaddle.begin(), itend = usedSaddle.end();
 		it != itend; ++it )
-	    fdel << FF(it->x) << ", " << FF(it->y) << "\n";
+	    fdel << FF(it->x) << " " << FF(it->y) << "\n";
 	  fdel.close();
 	  
 	}
