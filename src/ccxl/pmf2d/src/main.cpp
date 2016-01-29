@@ -2636,7 +2636,7 @@ int main( int argc, char ** argv)
 	    cout << "set output 'path2d." << ipath << ".eps'" << "\n";
 	    cout << "" << "\n\n\n";
 
-	    cout << "labelMacro(i,x,y,l) = sprintf('set obj %d rect at %f,%f size char 1*(strlen(\"%s\")>2?2.75:strlen(\"%s\")), char 0.9 fs solid noborder 01 front fc rgb \"black\"; set label %d at %f,%f \"%s\" front center tc rgb \"white\" font \"Helvetica-Bold,24\"', i, x, y, l, l, i, x, y, l)\n\n";
+	    cout << "labelMacro(i,x,y,l) = sprintf('set obj %d rect at %f,%f size char 1*(strlen(\"%s\")>2?2.75:strlen(\"%s\")), char 0.9 fs solid noborder  front fc rgb \"black\"; set label %d at %f,%f \"%s\" front center tc rgb \"white\" font \"Helvetica-Bold,24\"', i, x, y, l, l, i, x, y, l)\n\n";
 
 
 	    std::vector<endpt> myMinima;
