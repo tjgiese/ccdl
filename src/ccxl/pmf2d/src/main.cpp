@@ -2457,7 +2457,7 @@ int main( int argc, char ** argv)
 	    else
 	      flo = mesh.GetValue( usedMinima[0].x, usedMinima[0].y ).f;
 
-	    cblo << FF( flo );
+	    cblo << std::fixed << std::setprecision(6) << flo - 0.000001;
 	  }
 	if ( cli.maxima.size() ) 
 	  {
@@ -2567,19 +2567,49 @@ int main( int argc, char ** argv)
 
 	    cout << "#\n# BEGIN PATH " << ipath << "\n#\n\n";
 
+
+	    std::stringstream blank_sstr;
+	    if ( cli.blanks.size() == 0 )
+	      blank_sstr << "3";
+	    else
+	      {
+		blank_sstr << "( ";
+		int iblank=0;
+		for ( std::vector<BoxCrd>::iterator pb=cli.blanks.begin(), pbend=cli.blanks.end(); pb!=pbend; ++pb )
+		  {
+		    if ( iblank )
+		      blank_sstr << " || ";
+		    blank_sstr << "( \\$1 >= "
+			       << std::fixed << std::setprecision(10) << pb->xlo
+			       << " && \\$2 >= "
+			       << std::fixed << std::setprecision(10) << pb->ylo
+			       << " && \\$1 <= "
+			       << std::fixed << std::setprecision(10) << pb->xhi
+			       << " && \\$2 <= "
+			       << std::fixed << std::setprecision(10) << pb->yhi
+			       << " ) ";
+		    ++iblank;
+		  };
+		blank_sstr << " ? \"\" : \\$3 )";
+	      }
+	       
+	       
+
+
+	    
 	    cout << "cat <<EOF | gnuplot" << "\n";
 	    cout << "# make contours" << "\n";
 	    cout << "set contour base" << "\n";
 	    cout << "set cntrparam level incremental -50, 2.5, 50" << "\n";
 	    cout << "unset surface" << "\n";
 	    cout << "set table 'contours.dat'" << "\n";
-	    cout << "splot '" << cli.meshfile << "' using 1:2:3" << "\n";
+	    cout << "splot '" << cli.meshfile << "' using 1:2:" << blank_sstr.str() << "\n";
 	    cout << "unset table" << "\n";
 	    cout << "reset" << "\n";
 	    cout << "unset key" << "\n";
 	    cout << "#set palette rgbformulae 33,13,10" << "\n";
 	    cout << "#set palette defined ( 0 '#0034a9', 1 '#1c61ff', 2 '#3371ff', 3 '#009cff', 4 '#00d8ff', 5 '#00ffba', 6 '#00ff6c', 7 '#00ff0c', 8 '#aeff00', 9 '#fff600', 10 '#ffc000', 11 '#ff9600', 12 '#ff6c00', 13 '#ff3c00', 14 '#ff0000', 15 '#7f0000', 16 '#530000')" << "\n";
-	    cout << "set palette defined ( 0 '#0034a9', 1 '#6695ff', 2 '#96e8ff', 3 '#96ffe0', 4 '#60ff73', 5 '#fcff24', 6 '#feffce', 7 '#ffdc99', 8 '#ffa07b', 9 '#ff5353', 10 '#bd0009' )" << "\n";
+	    cout << "set palette defined ( -0.000001 '#ffffff', 0 '#0034a9', 1 '#6695ff', 2 '#96e8ff', 3 '#96ffe0', 4 '#60ff73', 5 '#fcff24', 6 '#feffce', 7 '#ffdc99', 8 '#ffa07b', 9 '#ff5353', 10 '#bd0009' )" << "\n";
 	    
 
 	    cout << "" << "\n";
@@ -2616,7 +2646,7 @@ int main( int argc, char ** argv)
 	    for ( std::vector<BoxCrd>::iterator pb=cli.blanks.begin(), pbend=cli.blanks.end(); pb!=pbend; ++pb )
 	      {
 		++iblank;
-		cout << "set obj " << iblank 
+		cout << "# set obj " << iblank 
 		     << " rect from "
 		     << std::fixed << std::setprecision(10) << pb->xlo
 		     << ","
@@ -2628,6 +2658,8 @@ int main( int argc, char ** argv)
 		     << " fs solid border lc rgb \"white\" lw 4 fc rgb \"white\" front\n";
 	      }
 
+
+	    
 	    //cout << "labelMacro(i,x,y,l) = sprintf('set obj %d rect at %f,%f size char strlen(\"%s\"), char 1 fs solid noborder 01 front fc rgb \"black\" ; set label %d at %f,%f \"%s\" front center tc rgb \"white\" font \"Helvetica-Bold,18\"', i, x, y, l, i, x, y, l)\n\n";
 	    
 	    cout << "" << "\n\n\n";
@@ -2703,7 +2735,7 @@ int main( int argc, char ** argv)
 	    cout << "set xlabel 'R_{1} ({\\305})' offset 0,0.25\n";
 	    cout << "set bmargin at screen 0.105;\n";
 	    cout << "set rmargin at screen 0.84;\n";
-	    cout << "p '" << cli.meshfile << "' using 1:2:3 with image,\\" << "\n";
+	    cout << "p '" << cli.meshfile << "' using 1:2:" << blank_sstr.str() << " with image,\\" << "\n";
 	    cout << "  'contours.dat' w l lt -1 lw 1.5,\\" << "\n";
 
 
