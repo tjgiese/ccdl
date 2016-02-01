@@ -2457,7 +2457,7 @@ int main( int argc, char ** argv)
 	    else
 	      flo = mesh.GetValue( usedMinima[0].x, usedMinima[0].y ).f;
 
-	    cblo << std::fixed << std::setprecision(6) << flo - 0.000001;
+	    cblo << std::fixed << std::setprecision(6) << flo; // - 0.000001;
 	  }
 	if ( cli.maxima.size() ) 
 	  {
@@ -2609,8 +2609,10 @@ int main( int argc, char ** argv)
 	    cout << "unset key" << "\n";
 	    cout << "#set palette rgbformulae 33,13,10" << "\n";
 	    cout << "#set palette defined ( 0 '#0034a9', 1 '#1c61ff', 2 '#3371ff', 3 '#009cff', 4 '#00d8ff', 5 '#00ffba', 6 '#00ff6c', 7 '#00ff0c', 8 '#aeff00', 9 '#fff600', 10 '#ffc000', 11 '#ff9600', 12 '#ff6c00', 13 '#ff3c00', 14 '#ff0000', 15 '#7f0000', 16 '#530000')" << "\n";
-	    cout << "set palette defined ( -0.000001 '#ffffff', 0 '#0034a9', 1 '#6695ff', 2 '#96e8ff', 3 '#96ffe0', 4 '#60ff73', 5 '#fcff24', 6 '#feffce', 7 '#ffdc99', 8 '#ffa07b', 9 '#ff5353', 10 '#bd0009' )" << "\n";
-	    
+	    cout << "#set palette defined ( -0.000001 '#ffffff', 0 '#0034a9', 1 '#6695ff', 2 '#96e8ff', 3 '#96ffe0', 4 '#60ff73', 5 '#fcff24', 6 '#feffce', 7 '#ffdc99', 8 '#ffa07b', 9 '#ff5353', 10 '#bd0009' )" << "\n";
+	    cout << "# set palette defined ( 0 '#ffffff', 1 '#96e8ff', 2 '#96ffe0', 3 '#60ff73', 4 '#fdff70', 5 '#feffce', 6 '#ffdc99', 7 '#ffa07b', 8 '#ff5353', 9 '#bd0009' )" << "\n";
+	    cout << "#set palette defined (0.9999999999999999999999999 '#ffffff',1 '#3d52a1',2 '#008bce',3 '#3a89c9',4 '#77b7e5',5 '#99c7ec',6 '#b4ddf7', 7 '#e6f5fe',8 '#fffad2',9 '#ffe3aa',10 '#f9bd7e',11 '#f5a275',12 '#ed875e',13 '#d24d3e',14 '#d03232',15 '#ae1c3e' )" << "\n";
+	    cout << "set palette defined (1.49999999999999999999999999 '#ffffff',1.5 '#3d52a1',2 '#008bce',3 '#3a89c9',4 '#77b7e5',7 '#99c7ec',9 '#b4ddf7', 12 '#e6f5fe',15 '#fffad2',18 '#ffe3aa',20 '#f9bd7e',21 '#f5a275',22 '#ed875e',23 '#d24d3e',23.5 '#d03232',23.8 '#ae1c3e' )" << "\n";
 
 	    cout << "" << "\n";
 	    // cout << "# minpts" << "\n";
@@ -2623,21 +2625,21 @@ int main( int argc, char ** argv)
 	    // cout << "set style line 5 lc rgb 'red' pt 7 ps 0.7 lw 3" << "\n";
 	    
 	    cout << "# minpts" << "\n";
-	    cout << "set style line 2 lc rgb 'black' pt 7 ps 2.2" << "\n";
-	    cout << "set style line 12 lc rgb 'white' pt 7 ps 1.4" << "\n";
+	    cout << "set style line 2 lc rgb 'black' pt 7 ps 2.8" << "\n";
+	    cout << "set style line 12 lc rgb 'white' pt 7 ps 1.8" << "\n";
 	    cout << "# maxpts" << "\n";
 	    cout << "set style line 3 lc rgb 'black' pt 12 ps 1.8 lw 9" << "\n";
 	    cout << "set style line 13 lc rgb 'white' pt 12 ps 1.2 lw 4" << "\n";
 	    cout << "# tspts" << "\n";
-	    cout << "set style line 4 lc rgb 'black' pt 2 ps 2.  lw 12" << "\n";
-	    cout << "set style line 14 lc rgb 'white' pt 2 ps 1.4  lw 4" << "\n";
+	    cout << "set style line 4 lc rgb 'black' pt 2 ps 2.2  lw 12" << "\n";
+	    cout << "set style line 14 lc rgb 'white' pt 2 ps 1.6  lw 4" << "\n";
 	    cout << "# refinement pts" << "\n";
 	    cout << "set style line 5 lc rgb 'black' pt 1 ps 0.75  lw 1.8" << "\n";
 	    cout << "set style line 15 lc rgb 'white' pt 1 ps 0.5  lw 0.5" << "\n";
 	    cout << "# paths" << "\n";
-	    cout << "set style line 100 lc rgb 'red' lw 8" << "\n";
-	    cout << "set style line 110 lc rgb 'white' lw 16" << "\n";
-	    cout << "set style line 120 lc rgb 'black' lw 16" << "\n";
+	    cout << "set style line 100 lc rgb 'red' lw 4" << "\n";
+	    cout << "set style line 110 lc rgb 'white' lw 8" << "\n";
+	    cout << "set style line 120 lc rgb 'black' lw 12" << "\n";
 
 	    cout << "" << "\n\n\n";
 
@@ -2736,7 +2738,7 @@ int main( int argc, char ** argv)
 	    cout << "set bmargin at screen 0.105;\n";
 	    cout << "set rmargin at screen 0.84;\n";
 	    cout << "p '" << cli.meshfile << "' using 1:2:" << blank_sstr.str() << " with image,\\" << "\n";
-	    cout << "  'contours.dat' w l lt -1 lw 1.5,\\" << "\n";
+	    cout << "  'contours.dat' w l lt -1 lw 1.75,\\" << "\n";
 
 
 	    int icolor = 0;
@@ -2800,6 +2802,7 @@ int main( int argc, char ** argv)
 		    xmgrace << xline.str();
 		  };
 
+		cout << "  '" << p->GetName() << ".2d.dat' w l ls 120,\\" << "\n";
 		cout << "  '" << p->GetName() << ".2d.dat' w l ls " << outline[icolor] << ",\\" << "\n";
 		cout << "  '" << p->GetName() << ".2d.dat' w l ls 100 lc rgb '" << colors[icolor] << "',\\" << "\n";
 	      }
