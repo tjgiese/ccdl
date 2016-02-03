@@ -125,6 +125,7 @@ struct cli_options
   std::vector<RefinementPt> extra_searches;
   std::string meshfile;
   bool rezero;
+  double newzero;
   bool perx,pery;
   bool delunused;
   std::string range_xlo,range_xhi,range_ylo,range_yhi,range_clo,range_chi;
@@ -132,7 +133,7 @@ struct cli_options
 
 
 cli_options::cli_options()
-  : rezero(false),perx(false), pery(false),delunused(false)
+  : rezero(false),newzero(0.),perx(false), pery(false),delunused(false)
 {
   ////////////////////////////////////////
   {
@@ -351,7 +352,7 @@ cli_options read_options( int argc, char ** argv )
   static struct option long_options[] =
     {
       { "help",      no_argument,       NULL, 'h'   },
-      { "zero",      no_argument,       NULL, 'z'   },
+      { "zero",      optional_argument,       NULL, 'z'   },
       { "perx",      no_argument,       NULL, 'x'   },
       { "pery",      no_argument,       NULL, 'y'   },
       { "delete",    no_argument,       NULL, 'd' },
@@ -372,6 +373,8 @@ cli_options read_options( int argc, char ** argv )
   int opt = 0;
   int long_index = 0;
   char * subopts, * value;
+  //const char * tmp_optarg = optarg;
+
   while ( (opt = getopt_long
           ( argc, argv, "hxyd", 
             long_options, &long_index )) != -1 )
@@ -381,7 +384,16 @@ cli_options read_options( int argc, char ** argv )
         {
 	  
         case 'h':     { print_usage(); break; }
-	case 'z':     { cli.rezero = true; break; }
+	case 'z':     
+	  { 
+	    cli.rezero = true;
+	    if ( optarg )
+	      {
+		cli.newzero = std::atof(optarg);
+	      }
+	      std::printf("zeroing to  %.3f\n",cli.newzero);
+	    break; 
+	  }
         case 'x':     { cli.perx = true; break; }
         case 'y':     { cli.pery = true; break; }
         case 'd':     { cli.delunused = true; break; }
@@ -1800,6 +1812,7 @@ void GetStationaryPts
 ( ccdl::Mesh2d & mesh, bool periodic, std::vector<BoxCrd> const & blanks,
   std::vector<RefinementPt> const & extra_searches,
   bool rezero,
+  double newzero,
   std::vector<ccdl::Mesh2dHessian> & minima,
   std::vector<ccdl::Mesh2dHessian> & maxima,
   std::vector<ccdl::Mesh2dHessian> & saddle )
@@ -1821,7 +1834,7 @@ void GetStationaryPts
   std::sort( saddle.begin(), saddle.end(), sort_by_f );
   if ( rezero )
     {
-      mesh.Add( - minima[0].f );
+      mesh.Add( newzero - minima[0].f );
       for ( iter p=minima.begin(), pend=minima.end(); p!=pend; ++p )
 	*p = mesh.GetHessian( p->x, p->y );
       for ( iter p=maxima.begin(), pend=maxima.end(); p!=pend; ++p )
@@ -1850,7 +1863,8 @@ std::string main_points( char const * meshname,
 			 bool periodic, 
 			 std::vector<BoxCrd> const & blanks,
 			 std::vector<RefinementPt> const & extra_searches,
-			 bool rezero )
+			 bool rezero,
+			 double newzero )
 {
   std::ifstream cin;
   cin.open( meshname );
@@ -1867,7 +1881,7 @@ std::string main_points( char const * meshname,
 
 
   vec minima, maxima, saddle;
-  GetStationaryPts( mesh, periodic, blanks, extra_searches, rezero, minima, maxima, saddle );
+  GetStationaryPts( mesh, periodic, blanks, extra_searches, rezero, newzero, minima, maxima, saddle );
   std::string fname( meshname );
   if ( rezero )
     {
@@ -2094,7 +2108,8 @@ int main( int argc, char ** argv)
 				cli.perx or cli.pery, 
 				cli.blanks,
 				cli.extra_searches,
-				cli.rezero );
+				cli.rezero,
+				cli.newzero );
   
   if ( cli.connections.size() > 0 )
     {
