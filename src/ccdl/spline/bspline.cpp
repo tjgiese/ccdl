@@ -751,3 +751,82 @@ void ccdl::bspline_renormalize
   value = NULL;
 }
 
+
+
+
+
+///////////////////////////////////////////////////////////////////
+// renormalizes a uniform grid of data so that b-spline
+// interpolation exactly passes through the data, which itself
+// was b-spline interpolated ONTO the grid
+///////////////////////////////////////////////////////////////////
+void ccdl::bspline_renormalize2
+( double const lx,
+  int const nx,
+  int const order,
+  double * data )
+{
+  int const nfourier      = nx/2+1;
+  
+  //
+  // allocate fft data and plans
+  //
+  double * value = fftw_alloc_real( nx );
+
+  std::complex<double> * fourier 
+    = reinterpret_cast< std::complex<double> * >
+    ( fftw_alloc_complex( nfourier ) );
+
+  fftw_plan * fplan = new fftw_plan
+    ( fftw_plan_dft_r2c_1d
+      ( nx,
+        value, 
+        reinterpret_cast< fftw_complex *>( fourier ), 
+        FFTW_ESTIMATE ) );
+
+  fftw_plan * rplan = new fftw_plan
+    ( fftw_plan_dft_c2r_1d
+      ( nx,
+        reinterpret_cast< fftw_complex *>( fourier ), 
+        value, 
+        FFTW_ESTIMATE ) );
+  //
+  // forward fft of data
+  //
+  for ( int i=0; i<nx; ++i )
+    value[i] = data[i];
+  fftw_execute( *fplan );
+  double const volElement = lx/nx;
+  for ( int i=0; i<nfourier; ++i )
+    fourier[i] *= volElement;
+  //
+  // forward fft of b-splines
+  //
+  std::vector<double> fx( nx, 0. );
+  bspline_fourier_half( nx, order, fx.data() );
+  //
+  // scale the fourier coefs
+  //
+  for ( int i=0; i < nfourier; ++i )
+    fourier[i] /= ( fx[i]*fx[i] );
+  //
+  // reverse fft
+  //
+  fftw_execute( *rplan ); 
+  double const ooV = 1./lx;
+  for ( int i=0; i<nx; ++i )
+    data[i] = ooV * value[i];
+  //
+  // delete
+  //
+  fftw_destroy_plan( *fplan );
+  delete fplan;
+  fplan = NULL;
+  fftw_destroy_plan( *rplan );
+  delete rplan;
+  rplan = NULL;
+  fftw_free(reinterpret_cast< fftw_complex * &>(fourier));
+  fourier = NULL;
+  fftw_free( value );
+  value = NULL;
+}
