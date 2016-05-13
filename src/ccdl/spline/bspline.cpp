@@ -830,3 +830,94 @@ void ccdl::bspline_renormalize2
   fftw_free( value );
   value = NULL;
 }
+
+
+
+
+///////////////////////////////////////////////////////////////////
+// renormalizes a uniform grid of data so that b-spline
+// interpolation exactly passes through the data, which itself
+// was b-spline interpolated ONTO the grid
+///////////////////////////////////////////////////////////////////
+void ccdl::bspline_renormalize2
+( double const lx, double const ly,
+  int const nx, int const ny,
+  int const order,
+  double * data )
+{
+  int const n = nx*ny;
+  int const nfy = ny/2+1;
+  int const nfourier      = nx*nfy;
+  
+  //
+  // allocate fft data and plans
+  //
+  double * value = fftw_alloc_real( n );
+
+  std::complex<double> * fourier 
+    = reinterpret_cast< std::complex<double> * >
+    ( fftw_alloc_complex( nfourier ) );
+
+  fftw_plan * fplan = new fftw_plan
+    ( fftw_plan_dft_r2c_2d
+      ( nx,ny,
+        value, 
+        reinterpret_cast< fftw_complex *>( fourier ), 
+        FFTW_ESTIMATE ) );
+
+  fftw_plan * rplan = new fftw_plan
+    ( fftw_plan_dft_c2r_2d
+      ( nx,ny,
+        reinterpret_cast< fftw_complex *>( fourier ), 
+        value, 
+        FFTW_ESTIMATE ) );
+  //
+  // forward fft of data
+  //
+  for ( int i=0; i<n; ++i )
+    value[i] = data[i];
+  fftw_execute( *fplan );
+  // fourier is now a set of dft coefficients
+  double const volElement = (lx*ly)/n;
+  for ( int i=0; i<nfourier; ++i )
+    fourier[i] *= volElement;
+  // fourier is now a set of fourier coefficients
+
+  //
+  // forward fft of b-splines
+  //
+  std::vector<double> fx( nx, 0. );
+  bspline_fourier_full( nx, order, fx.data() );
+  std::vector<double> fy( nfy, 0. );
+  bspline_fourier_half( ny, order, fy.data() );
+  //
+  // scale the fourier coefs
+  //
+  for ( int i=0, k=0; i < nx; ++i )
+    {
+      double fx2 = fx[i]*fx[i];
+      for ( int j=0; j < nfy; ++j, ++k )
+	fourier[k] /= ( fx2 * fy[j]*fy[j] );
+    };
+  //
+  // reverse fft
+  //
+  fftw_execute( *rplan ); 
+  double const ooV = 1./(lx*ly);
+  for ( int i=0; i<n; ++i )
+    data[i] = ooV * value[i];
+  //
+  // delete
+  //
+  fftw_destroy_plan( *fplan );
+  delete fplan;
+  fplan = NULL;
+  fftw_destroy_plan( *rplan );
+  delete rplan;
+  rplan = NULL;
+  fftw_free(reinterpret_cast< fftw_complex * &>(fourier));
+  fourier = NULL;
+  fftw_free( value );
+  value = NULL;
+}
+
