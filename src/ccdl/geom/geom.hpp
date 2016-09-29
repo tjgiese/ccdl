@@ -8,5 +8,6 @@
 #include "AutoBondFrag.hpp"
 #include "RedundantIC.hpp"
 #include "GeomOpt.hpp"
+#include "spcgrp.hpp"
 
 #endif

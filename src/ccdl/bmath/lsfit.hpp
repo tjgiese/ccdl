@@ -11,14 +11,25 @@ namespace ccdl
     double const * A_obs_by_param,
     double * x_param,
     double const * b_obs,
-    double relative_accuracy_of_the_obs = 1.e-32 );
+    double relative_accuracy_of_the_obs = 1.e-14 );
 
+  
+  int LeastSquaresSvdFit
+  ( int const nobs, int const nparam,
+    double const * A_obs_by_param,
+    double * x_param,
+    double const * b_obs,
+    double TOL = 1.e-14 );
+
+  
   int WeightedLeastSquaresFit
   ( int const nobs, int const nparam,
     double const * A_obs_by_param,
     double * x_param,
     double const * b_obs,
-    double const * w_obs );
+    double const * w_obs,
+    double relative_accuracy_of_the_obs = 1.e-14 );
+  
 
   int ConstrainedLeastSquaresFit
   ( int const nobs, int const nparam,

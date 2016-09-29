@@ -361,7 +361,7 @@ void ccdl::polynomial::fit( int npts, double const * x, double const * y )
   std::vector< double > A( npts * n, 0. );
   for ( int i=0; i<npts; ++i )
     for ( int k=0; k<n; ++k )
-      A[i+k*n] = std::pow(x[i],k);
+      A[i+k*npts] = std::pow(x[i],k);
   ccdl::LeastSquaresFit( npts, n, A.data(), c.data(), y );
 }
 
@@ -392,7 +392,7 @@ void ccdl::polynomial::wfit( int npts, double const * x, double const * y,
   std::vector< double > A( npts * n, 0. );
   for ( int i=0; i<npts; ++i )
     for ( int k=0; k<n; ++k )
-      A[i+k*n] = std::pow(x[i],k);
+      A[i+k*npts] = std::pow(x[i],k);
   ccdl::WeightedLeastSquaresFit( npts, n, A.data(), c.data(), y, wy );
 }
 
@@ -426,7 +426,7 @@ void ccdl::polynomial::fit( int npts, double const * x, double const * y,
   std::vector< double > A( npts * n, 0. );
   for ( int i=0; i<npts; ++i )
     for ( int k=0; k<n; ++k )
-      A[i+k*n] = std::pow(x[i],k);
+      A[i+k*npts] = std::pow(x[i],k);
 
   std::vector<double> cvec( n, 0. ), cval( n, 0. );
   cvec[ck] = 1.;
@@ -470,7 +470,7 @@ void ccdl::polynomial::wfit( int npts, double const * x, double const * y,
   std::vector< double > A( npts * n, 0. );
   for ( int i=0; i<npts; ++i )
     for ( int k=0; k<n; ++k )
-      A[i+k*n] = std::pow(x[i],k);
+      A[i+k*npts] = std::pow(x[i],k);
 
   std::vector<double> cvec( n, 0. ), cval( n, 0. );
   cvec[ck] = 1.;
