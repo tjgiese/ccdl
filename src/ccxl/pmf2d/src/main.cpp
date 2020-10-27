@@ -1834,7 +1834,18 @@ void GetStationaryPts
   std::sort( saddle.begin(), saddle.end(), sort_by_f );
   if ( rezero )
     {
-      mesh.Add( newzero - minima[0].f );
+      if ( minima.size() > 0 )
+	{
+	  mesh.Add( newzero - minima[0].f );
+	}
+      else
+	{
+	  double fmin=1.e+100;
+	  for ( int ix=0; ix<mesh.GetSizeX(); ++ix )
+	    for ( int iy=0; iy<mesh.GetSizeY(); ++iy )
+	      fmin = std::min( fmin, mesh(ix,iy) );
+	  mesh.Add( newzero - fmin );
+	}
       for ( iter p=minima.begin(), pend=minima.end(); p!=pend; ++p )
 	*p = mesh.GetHessian( p->x, p->y );
       for ( iter p=maxima.begin(), pend=maxima.end(); p!=pend; ++p )
@@ -1970,6 +1981,8 @@ std::string main_points( char const * meshname,
 
 
     cout << "" << "\n\n\n";
+
+    
     cout << "set terminal postscript eps enhanced solid color 'Helvetica' 12" << "\n";
     cout << "set output '" << fname << ".eps'" << "\n";
     cout << "" << "\n";
@@ -1979,14 +1992,20 @@ std::string main_points( char const * meshname,
     if ( minima.size() ) cblo << FF( minima[0].f );
     if ( maxima.size() ) cbhi << FF( maxima.back().f );
     else if ( saddle.size() ) cbhi << FF( saddle.back().f );
-
+    
     cout << "set cbrange[" << cblo.str() << ":" << cbhi.str() << "]" << "\n";
 
     cout << "set cblabel 'E (kcal/mol)'\n";
     cout << "set ylabel 'Y-axis label'\n";
     cout << "set xlabel 'X-axis label'\n";
-    cout << "p '" << fname << "' using 1:2:3 with image,\\" << "\n";
-    cout << "  'contours.dat' w l lt -1 lw 0.5,\\" << "\n";
+
+    cout << "" << "\n\n\n";
+    cout << "maskfcn(x,y,z) = (0) ? NaN : z\n";
+    cout << "" << "\n\n\n";
+
+    
+    cout << "p '" << fname << "' using 1:2:(maskfcn(\\$1,\\$2,\\$3)) with image,\\" << "\n";
+    cout << "  'contours.dat' using (maskfcn(\\$1,\\$2,\\$1)):(maskfcn(\\$1,\\$2,\\$2)) w l lt -1 lw 0.5,\\" << "\n";
     cout << "  'minpts.dat'   w p ls 2,\\" << "\n";
     cout << "  'maxpts.dat'   w p ls 3,\\" << "\n";
     cout << "  'tspts.dat'    w p ls 4" << "\n";
@@ -2046,7 +2065,7 @@ void GetValidPosition( ccdl::Mesh2d const & mesh, endpt & pt, std::vector<double
 		       1.9, 2.0 };
   
   for ( int iscale = 0; iscale < 11; ++iscale )
-    for ( int ij=0; ij<19; ++ij )
+    for ( int ij=0; ij<18; ++ij )
       {
 	int i = orders[0+ij*2];
 	int j = orders[1+ij*2];
@@ -2584,6 +2603,7 @@ int main( int argc, char ** argv)
 
 
 	    std::stringstream blank_sstr;
+	    std::stringstream blank_logic;
 	    if ( cli.blanks.size() == 0 )
 	      blank_sstr << "3";
 	    else
@@ -2603,6 +2623,19 @@ int main( int argc, char ** argv)
 			       << " && \\$2 <= "
 			       << std::fixed << std::setprecision(10) << pb->yhi
 			       << " ) ";
+
+		    if ( iblank )
+		      blank_logic << " || ";
+		    blank_logic << "( \\$1 >= "
+			       << std::fixed << std::setprecision(10) << pb->xlo
+			       << " && \\$2 >= "
+			       << std::fixed << std::setprecision(10) << pb->ylo
+			       << " && \\$1 <= "
+			       << std::fixed << std::setprecision(10) << pb->xhi
+			       << " && \\$2 <= "
+			       << std::fixed << std::setprecision(10) << pb->yhi
+			       << " ) ";
+		    
 		    ++iblank;
 		  };
 		blank_sstr << " ? \"\" : \\$3 )";
@@ -2741,7 +2774,17 @@ int main( int argc, char ** argv)
 
 	    
 	    cout << "" << "\n\n\n";
+	    if ( blank_logic.str().size() > 0 )
+	      {
+		cout << "maskfcn(x,y,z) = ( 0 || " << blank_logic.str() << " ) ? NaN : z\n";
+	      }
+	    else
+	      {
+		cout << "maskfcn(x,y,z) = ( 0 ) ? NaN : z\n";
+	      }
+	    cout << "" << "\n\n\n";
 
+    
 
 	    cout << "set cbrange[" << cblo.str() << ":" << cbhi.str() << "]" << "\n";
 	    cout << "set xrange[ " << cli.range_xlo << " : " << cli.range_xhi << " ]\n";
@@ -2752,14 +2795,20 @@ int main( int argc, char ** argv)
 	    cout << "set xlabel 'R_{1} ({\\305})' offset 0,0.25\n";
 	    cout << "set bmargin at screen 0.105;\n";
 	    cout << "set rmargin at screen 0.84;\n";
-	    cout << "p '" << cli.meshfile << "' using 1:2:" << blank_sstr.str() << " with image,\\" << "\n";
-	    cout << "  'contours.dat' w l lt -1 lw 1.75,\\" << "\n";
+	    
+	    //cout << "p '" << cli.meshfile << "' using 1:2:" << blank_sstr.str() << " with image,\\" << "\n";
+	    //cout << "  'contours.dat' w l lt -1 lw 1.75,\\" << "\n";
+	    
+	    cout << "p '" << cli.meshfile << "' using 1:2:(maskfcn(\\$1,\\$2,\\$3))" << " with image,\\" << "\n";
+	    cout << "  'contours.dat' using (maskfcn(\\$1,\\$2,\\$1)):(maskfcn(\\$1,\\$2,\\$2)) w l lt -1 lw 1.75,\\" << "\n";
 
+
+	    
 
 	    int icolor = 0;
 	    int icon = 0;
 	    std::stringstream xmgrace;
-	    xmgrace << "xmgrace";
+	    xmgrace << "gracebat";
 
 	    for ( conit p = path_begin, pend=path_end; p != pend; ++p, ++icon, ++icolor )
 	      {
@@ -2879,7 +2928,7 @@ int main( int argc, char ** argv)
 		   << " -pexec \"yaxis ticklabel char size 1.20\" \\\n"
 		   << " -pexec \"yaxis label place 0.000000, 0.095000\" \\\n"
 		   << " -hardcopy -noprint -saveall path1d." << icon+1 << ".agr\n\n";
-	      cout << "xmgrace -hardcopy -printfile path1d." << icon+1 << ".eps path1d." << icon+1 << ".agr &> /dev/null\n\n";
+	      cout << "gracebat -hardcopy -printfile path1d." << icon+1 << ".eps path1d." << icon+1 << ".agr &> /dev/null\n\n";
 	      
 	      cout << "echo \"Now run: evince  path2d." << icon+1 << ".eps &\"\n\n";
 	      cout << "echo \"Now run: xmgrace path1d." << icon+1 << ".agr &\"\n\n";
