@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from atizer import *
 from atizer.dbase import *
-from ccdl import package as ccdl
+from . ccdl import package as ccdl
 
 package = autopackage(
     "src",
