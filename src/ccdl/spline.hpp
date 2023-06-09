@@ -5,6 +5,8 @@
 #include "spline/MSpline.hpp"
 #include "spline/HarmonicSpline.hpp"
 
+#include "spline/AkimaSpline.hpp"
+
 #include "spline/bspline.hpp"
 
 #include "spline/polynomial.hpp"
